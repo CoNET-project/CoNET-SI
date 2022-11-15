@@ -20,10 +20,15 @@ class conet_si_server {
 		if ( !this.initData?.keychain ) {
 			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI`)
 		}
-		// @ts-ignore: Unreachable code error
-		const password = await waitKeyInput (`Please enter the wallet password: `, true )
 
-		this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, password )
+		if ( !this.password ) {
+			// @ts-ignore: Unreachable code error
+			this.password = await waitKeyInput (`Please enter the wallet password: `, true )
+		}
+		
+		
+
+		this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 
 		this.debug? logger ('Load initData success', inspect (this.initData, false, 3, true )): null
 
@@ -41,7 +46,7 @@ class conet_si_server {
 		//this.startServer ()
 	}
 
-	constructor ( private debug: boolean ) {
+	constructor ( private debug: boolean, private password: string ) {
         this.initSetupData ()
     }
 

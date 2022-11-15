@@ -12,14 +12,16 @@ const [,,...args] = process.argv
 let debug = false
 let version = false
 let help = false
-
-args.forEach ( n => {
+let passwd = ''
+args.forEach ((n, index ) => {
     if (/\-d/.test(n)) {
         debug = true
     } else if ( /\-v|\--version/.test (n)) {
 		version = true
 	} else if (/\-h|\--help/.test (n)) {
 		help = true
+	} else if (/\-p/.test(n)) {
+		passwd = args[index + 1]
 	}
 })
 
@@ -111,11 +113,11 @@ if ( Cluster.isPrimary ) {
 			}
 			// @ts-ignore: Unreachable code error
 			await saveSetup ( setupInfo, debug )
-			return new conet_si_server( debug )
+			return new conet_si_server( debug, passwd )
 		}
 		
 		// debug ? logger (`getSetupInfo has data:\n`, inspect ( setupInfo, false, 4, true )): null
-		return new conet_si_server( debug )
+		return new conet_si_server( debug, passwd )
 	}
 
 	getSetupInfo ()
