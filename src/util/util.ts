@@ -1,17 +1,19 @@
 import Colors from 'colors/safe'
-import { series } from 'async'
 import { stat, mkdir, writeFile } from 'node:fs'
 import { homedir, networkInterfaces } from 'node:os'
 import { join } from 'node:path'
 import { Writable } from 'node:stream'
-import { request } from 'node:http'
+import { request } from 'node:https'
 import { deflate, unzip } from 'node:zlib'
 import { inspect } from 'node:util'
 import Accounts from 'web3-eth-accounts'
 import { createInterface } from 'readline'
+import type { RequestOptions } from 'https'
 import { publicKeyByPrivateKey, encryptWithPublicKey, cipher, sign, hash, hex, publicKey } from 'eth-crypto'
 import { Buffer } from 'buffer'
-import { ulid } from 'ulid'
+import { generateKey, readKey, readPrivateKey, decryptKey, createCleartextMessage, sign as pgpSign } from "openpgp"
+import type { GenerateKeyOptions, Key, PrivateKey } from 'openpgp'
+
 //import hexdump from 'hexdump-nodejs'
 
 
@@ -89,9 +91,11 @@ Commercial support is available at
 
 export const rfc1918 = /(^0\.)|(^10\.)|(^100\.6[4-9]\.)|(^100\.[7-9]\d\.)|(^100\.1[0-1]\d\.)|(^100\.12[0-7]\.)|(^127\.)|(^169\.254\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.0\.0\.)|(^192\.0\.2\.)|(^192\.88\.99\.)|(^192\.168\.)|(^198\.1[8-9]\.)|(^198\.51\.100\.)|(^203.0\.113\.)|(^22[4-9]\.)|(^23[0-9]\.)|(^24[0-9]\.)|(^25[0-5]\.)/
 
+export const setupPath = '.CoNET-SI'
+
 export const getSetup = ( debug: boolean ) => {
 	const homeDir = homedir ()
-	const setupFileDir = join ( homeDir, '.CoNET-SI' )
+	const setupFileDir = join ( homeDir, setupPath )
 	const setupFile = join ( setupFileDir, 'nodeSetup.json')
 	
 	let nodeSetup: ICoNET_NodeSetup
@@ -140,12 +144,30 @@ export const getServerIPV4Address = ( includeLocal: boolean ) => {
 	return results
 }
 
-export const GenerateWalletAddress = ( password: string ) => {
+export const generateWalletAddress = ( password: string ) => {
 	// @ts-ignore: Unreachable code error
 	const accountw: Accounts.Accounts = new Accounts()
-	const acc = accountw.wallet.create(2)
+	const acc = accountw.wallet.create(1)
 	return acc.encrypt ( password )
 }
+
+export const generatePgpKey = async (walletAddr: string, passwd: string ) => {
+	const option: GenerateKeyOptions = {
+        type: 'ecc',
+		passphrase: passwd,
+		userIDs: [{
+			name: walletAddr
+		}],
+		curve: 'curve25519',
+        format: 'armored',
+	}
+	// @ts-ignore: Unreachable code error
+	const { privateKey, publicKey } = await generateKey (option)
+	const keyObj = await readKey ({armoredKey: publicKey})
+	const keyID = keyObj.getKeyID().toHex().toUpperCase ()
+	return ({privateKey, publicKey, keyID})
+}
+
 
 export const loadWalletAddress = ( walletBase: any, password: string ) => {
 	// @ts-ignore: Unreachable code error
@@ -154,26 +176,36 @@ export const loadWalletAddress = ( walletBase: any, password: string ) => {
 	const uu = account.wallet.decrypt ( walletBase, password )
 	// @ts-ignore: Unreachable code error
 	uu[0]['publickey'] = publicKeyByPrivateKey (uu[0].privateKey)
-	// @ts-ignore: Unreachable code error
-	uu[1]['publickey'] = publicKeyByPrivateKey (uu[1].privateKey)
 	return uu
+}
+
+export const makeOpenpgpObj = async ( privateKey: string, publicKey: string, passphrase: string ) => {
+	const publicKeyObj = await readKey ({ armoredKey: publicKey })
+	const privateKeyObj = await decryptKey ({ privateKey: await readPrivateKey ({armoredKey: privateKey}), passphrase })
+	const ret: pgpObj = {
+		publicKeyObj,
+		privateKeyObj
+	}
+	return (ret)
 }
 
 export const saveSetup = ( setup: ICoNET_NodeSetup, debug: boolean ) => {
 	const homeDir = homedir ()
-	const setupFileDir = join ( homeDir, '.CoNET-SI' )
+	const setupFileDir = join ( homeDir, setupPath )
 	const setupFile = join ( setupFileDir, 'nodeSetup.json')
 	
-	return {
-		then ( resolve: any, reject: any ) {
-			return writeFile (setupFile, JSON.stringify (setup), 'utf-8', err => {
-				if ( err ) {
-					throw err
-				}
-				return resolve ()
-			})
-		}
-	}
+	return new Promise(resolve => {
+		logger (`saveSetup`, inspect(setup, false, 3, true))
+		return writeFile (setupFile, JSON.stringify (setup), 'utf-8', err => {
+			if ( err ) {
+				logger (`saveSetup [${setupFile}] Error!`, err )
+				resolve (false)
+			}
+			logger (`saveSetup [${setupFile}] Success!` )
+			return resolve (true)
+		})
+	})
+
 }
 
 export const waitKeyInput = ( query: string, password = false ) => {
@@ -206,31 +238,59 @@ export const waitKeyInput = ( query: string, password = false ) => {
 	}
 }
 
+const conetDLServer = 'openpgp.online'
+const conetDLServerPOST = 443
+const conetDLServerTimeout = 1000 * 60
+
 
 const requestUrl = (option: any, postData: string) => {
-	return {
-		then (resolve: any, inject: any ){
-			const req = request (option, res => {
-				let ret = ''
-				res.setEncoding('utf8')
 
-				res.on('data', chunk => {
-					ret += chunk
-				})
+	return new Promise((resolve: any) => {
+		const req = request (option, res => {
+			clearTimeout (timeout)
+			logger (Colors.blue(`Connect to DL Server [${option.path}]`))
+			if (res.statusCode !== 200 ) {
+				logger (Colors.red(`DL Server response !200 code [${ res.statusCode }]`))
+				return resolve (null)
+			}
+			let ret = ''
+			res.setEncoding('utf8')
 
-				res.once ('end', () => {
-					resolve (ret)
-				})
+			res.on('data', chunk => {
+				ret += chunk
 			})
 
-			req.on ('error', err => {
-				inject (err)
-				return logger (`register_to_DL postToServer [${ option.uri }] error`, err )
+			res.once ('end', () => {
+				let retJson = null
+				try {
+					retJson = JSON.parse (ret)
+				} catch (ex) {
+					logger (Colors.red(`DL Server response no JSON error! [${ ret }]`))
+					return resolve (null)
+				}
+				return resolve (retJson)
 			})
+		})
+
+		req.on ('error', err => {
+			resolve (null)
+			return logger (`register_to_DL postToServer [${ inspect(option, false, 3, true) }] error`, err )
+		})
+
+		if ( postData ) {
 			req.write(postData)
-			return req.end()
 		}
-	}
+
+
+
+		const timeout = setTimeout (() => {
+			logger (Colors.red(`requestUrl on TIMEOUT Error!`))
+			return resolve (null)
+		}, conetDLServerTimeout)
+		
+		return req.end()
+	})
+	
 }
 
 const compressText = ( input: string ) => {
@@ -246,56 +306,94 @@ const compressText = ( input: string ) => {
 	}
 }
 
-export const register_to_DL = ( nodeInit: ICoNET_NodeSetup ) => {
+const signCleartext = async ( signingKeys: PrivateKey, _message: string ) => {
+	const message = await createCleartextMessage ({text: _message})
+	return (await pgpSign ({ message, signingKeys }))
+}
 
-	const DLNode = nodeInit.DL_nodes[0]
+
+
+export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
+	if (!nodeInit) {
+		return false
+	}
 	const data: ICoNET_DL_POST_register_SI = {
-		publicKey: nodeInit.keychain[0].publickey,
+		pgpPublicKey: await signCleartext (nodeInit.pgpKeyObj?.privateKeyObj, nodeInit.pgpKey.publicKey ),
 		ipV4Port: nodeInit.ipV4Port,
 		ipV4: nodeInit.ipV4,
 		storage_price:  nodeInit.storage_price,
 		outbound_price: nodeInit.outbound_price,
-		wallet_CoNET: nodeInit.keychain[0].address,
-		wallet_CNTCash: nodeInit.keychain[1].address
+		wallet_CoNET: '0X' + nodeInit.keychain[0].address.toUpperCase()
 	}
 
 	const dataMessage = JSON.stringify (data)
 
-	const process_sync = async () => {
-		const signature = sign( nodeInit.keyObj[0].privateKey, hash.keccak256 (dataMessage))
-		const payload = {
-			message:dataMessage,
-			signature
-		}
-		const encrypted = await encryptWithPublicKey(DLNode.public, JSON.stringify (payload))
-
-			const hexString = cipher.stringify(encrypted)
-			// @ts-ignore: Unreachable code error
-			const compress = await compressText (hexString)
-
-			//logger (Colors.gray(hexdump(Buffer.from (decompress, 'ucs-2'))))
-
-		const postData = JSON.stringify({
-			payload: compress
-		})
-
-		const option = {
-			host: DLNode.ipAddr,
-			port: DLNode.PORT,
-			path: '/conet-si-node-register',
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				'Content-Length': Buffer.byteLength( postData )
-			}
-		}
-
-		// @ts-ignore: Unreachable code error
-		const response = await requestUrl (option, postData)
-		logger (response)
-	}
+	const signature = sign( nodeInit.keyObj[0].privateKey, hash.keccak256 (dataMessage))
 	
-	process_sync()
+	const payload = {
+		message: dataMessage,
+		signature
+	}
+
+	const postJSON = JSON.stringify(payload)
+
+	const option: RequestOptions = {
+		hostname: conetDLServer,
+		port: conetDLServerPOST,
+		path: '/api/conet-si-node-register',
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Content-Length': Buffer.byteLength( postJSON )
+		},
+		rejectUnauthorized: false
+	}
+	logger (`register_to_DL [${ inspect(option, false, 3, true )}] connect to DL server`)
+	const response: any = await requestUrl (option, postJSON)
+	logger (`register_to_DL response is\n`, response)
+
+	return response
+}
+
+const healthTimeout = 1000 * 60 * 5
+
+export const si_health = async ( nodeInit: ICoNET_NodeSetup ) => {
+	const _payload = {
+		nft_tokenid: nodeInit.DL_registeredData,
+		publickey: nodeInit.pgpKey.keyID
+	}
+
+	const JSONString = JSON.stringify(_payload)
+
+	const signature = sign( nodeInit.keyObj[0].privateKey, hash.keccak256 (JSONString))
+
+	const payload = {
+		message: JSONString,
+		signature
+	}
+
+	logger (`si_health \n`, inspect(payload, false, 3, true ))
+
+	const sendData = JSON.stringify (payload)
+
+	const option: RequestOptions = {
+		hostname: conetDLServer,
+		port: conetDLServerPOST,
+		path: '/api/si-health',
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			'Content-Length': Buffer.byteLength( sendData )
+		},
+		rejectUnauthorized: false
+	}
+	const response: any = await requestUrl (option, sendData)
+
+	logger (`si_health response is\n`, response)
+
+	setTimeout(() => {
+		return si_health (nodeInit)
+	},  healthTimeout)
 }
 
 
@@ -304,7 +402,15 @@ export const register_to_DL = ( nodeInit: ICoNET_NodeSetup ) => {
  * 
  * 		TEST 
  * 
- */
+*/
+
+/*
+const uuuu = async () => {
+	const hhh = await generatePgpKey ('0X2DFEAED46E703F17FADF41C83207B772344F7719', '1')
+	logger (`Success`, inspect (hhh, false, 3, true))
+}
+uuuu ()
+
 /*
  getSetupFile (true, (err, data) => {
 	if (err ) {
@@ -318,13 +424,29 @@ export const register_to_DL = ( nodeInit: ICoNET_NodeSetup ) => {
 logger ( inspect(getServerIPV4Address (false), false, 3, true ))
 
  /** */
+
+ /*
+const kk =  generateWalletAddress ('11111')
+const obj = loadWalletAddress (kk, '11111')
+logger (inspect(obj, false, 3, true))
 /*
-const uu =  GenerateWalletAddress ('')
-logger (inspect (uu, false, 3, true ))
+
 const kk = loadWalletAddress ( uu,'' )
 
 /** */
 /*
+const uu = async () => {
+	const pass = await s3fsPasswd()
+	if ( !pass) {
+		return logger (Colors.red(`pass Error!`))
+	}
+	const kk = await saveRouter (pass, '0X2DFEAED46E703F17FADF41C83207B772344F7719', '74.208.24.74')
+	logger (`success`, kk)
+}
+
+uu()
+/*
+
 const y = ulid()
 const uu = Base32.decode (y, 'Crockford')
 const ss = Buffer.from (uu)

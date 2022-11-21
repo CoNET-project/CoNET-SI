@@ -1,15 +1,21 @@
+
+
 interface ICoNET_NodeSetup {
 	ipV4: string
 	ipV4Port: number
 	ipV6: string
 	ipV6Port: number
 	keychain: any
-	keyObj: any
+	keyObj?: any
 	storage_price: number
 	outbound_price: number
-	setupPath: string
-	DL_nodes: ICoNET_DL[]
-	DL_registeredData: any
+	DL_registeredData?: string
+	pgpKeyObj?: pgpObj
+	pgpKey: {
+		privateKey: string
+		publicKey: string
+		keyID: string
+	}
 }
 
 interface ICoNET_DL {
@@ -21,11 +27,19 @@ interface ICoNET_DL {
 
 interface ICoNET_DL_POST_register_SI {
 	wallet_CoNET: string
-	publicKey: string
+	pgpPublicKey: string
 	ipV4: string
 	storage_price: number
 	outbound_price: number
-	wallet_CNTCash: string
 	ipV4Port: number
+}
 
+interface s3pass {
+	ACCESS_KEY: string
+	SECRET_KEY: string
+}
+
+interface pgpObj {
+	publicKeyObj: any
+	privateKeyObj: any
 }

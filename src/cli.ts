@@ -5,7 +5,7 @@ import { cpus } from 'node:os'
 import { join } from 'node:path'
 import { inspect } from 'node:util'
 
-import { logger, getServerIPV4Address, getSetup, waitKeyInput, GenerateWalletAddress, saveSetup } from './util/util'
+import { logger, getServerIPV4Address, getSetup, waitKeyInput, generateWalletAddress, saveSetup, generatePgpKey, loadWalletAddress } from './util/util'
 
 const [,,...args] = process.argv
 
@@ -96,7 +96,9 @@ if ( Cluster.isPrimary ) {
 			const storage: number =  parseInt(await waitKeyInput (`Please enter the price of storage price USDC/MB every month [default is 0.01]: `)) || 0.01
 			// @ts-ignore: Unreachable code error
 			const outbound: number = parseInt(await waitKeyInput (`Please enter the price of outbound of data price USDC/MB every month [default is 0.00001]: `)) || 0.00001
-			const keychain = GenerateWalletAddress ( password )
+			const keychain =  await generateWalletAddress ( password )
+			const keyObj = await loadWalletAddress ( keychain, password )
+			const pgpKey = await generatePgpKey (keyObj[0].address, password)
 			logger (inspect (keychain, false, 3, true ))
 			setupInfo = {
 				keychain: keychain,
@@ -106,10 +108,8 @@ if ( Cluster.isPrimary ) {
 				ipV6Port: port,
 				storage_price: storage,
 				outbound_price: outbound,
-				DL_nodes: setup.DL_nodes,
-				setupPath: '',
-				DL_registeredData: null,
-				keyObj: null
+				DL_registeredData: '',
+				pgpKey
 			}
 			// @ts-ignore: Unreachable code error
 			await saveSetup ( setupInfo, debug )
