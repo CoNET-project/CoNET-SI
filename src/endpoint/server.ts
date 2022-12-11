@@ -1,74 +1,102 @@
-import Express from 'express'
+
 import { join } from 'node:path'
 import { inspect } from 'node:util'
-import { logger, getSetup, loadWalletAddress, waitKeyInput, return404, returnHome, register_to_DL, saveSetup, si_health, makeOpenpgpObj } from '../util/util'
+import Cluster from 'node:cluster'
+import type { Server } from 'node:http'
+import { logger, getSetup, loadWalletAddress, return404, register_to_DL, saveSetup, si_healthLoop, makeOpenpgpObj, postOpenpgpRoute, proxyRequest,splitIpAddr, getPublicKeyArmoredKeyID } from '../util/util'
+import type {IclientPool} from '../util/util'
 import Colors from 'colors/safe'
+import Express from 'express'
+
 
 const healthTimeout = 1000 * 60 * 5
+const projectMain = 'https://kloak.io/'
+
+const packageFile = join (__dirname, '..', '..','package.json')
+const packageJson = require ( packageFile )
+const version = packageJson.version
+
+let initData:ICoNET_NodeSetup|null
 
 class conet_si_server {
-	// @ts-ignore
-    private localserver: Server
+
+    private localserver: Server| undefined
 	private appsPath =''
 	private PORT=0
-	private keyChain = null
-	private initData: ICoNET_NodeSetup|null = null
-	private s3Pass: null|s3pass = null
+	private password = ''
+	private debug = true
+	private onlineClientPool: IclientPool[] = []
+	private workerNumber = 0
+	private finishRegister = () => {
 
-	private initSetupData = async () => {
-		// @ts-ignore: Unreachable code error
-		this.initData = await getSetup ( this.debug )
-
-		if ( !this.initData?.keychain ) {
-			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI`)
+		if (!initData ) {
+			return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
 		}
 
-		if ( !this.password ) {
-			// @ts-ignore: Unreachable code error
-			this.password = await waitKeyInput (`Please enter the wallet password: `, true )
+		return saveSetup ( initData, this.debug )
+		.then (() => {
+			this.startServer ()
+			if (!initData ) {
+				return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
+			}
+			si_healthLoop ( initData )
+		})
+	}
+
+	private DL_registeredData: () => any = async () => {
+
+		if (! initData ) {
+			return logger (Colors.red(`conet_si_server DL_registeredData have no initData Error!`))
+		}
+		const kkk = await register_to_DL (initData)
+		if ( kkk?.nft_tokenid ) {
+			return this.finishRegister ()
 		}
 		
-		this.initData.pgpKeyObj = await makeOpenpgpObj(this.initData.pgpKey.privateKey, this.initData.pgpKey.publicKey, this.password)
-	
-		this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
+		logger (Colors.red(`register_to_DL response null\n Try Again After 30s`))
 
-		this.PORT = this.initData.ipV4Port
+		return setTimeout (() => {
+			return this.DL_registeredData ()
+		}, 1000 * 30 )
+	}	
 
-		if ( !this.initData.DL_registeredData ) {
-			this.debug ? logger (`This SI node has not registered`): null
-			const kkk = await register_to_DL (this.initData)
-			if ( kkk?.nft_tokenid ) {
-				logger (`register_to_DL success!`, inspect(kkk, false, 3, true))
-				this.initData.DL_registeredData = kkk.nft_tokenid
-				const setupInfo: ICoNET_NodeSetup = {
-					keychain: this.initData.keychain,
-					ipV4: this.initData.ipV4,
-					ipV6: '',
-					ipV4Port: this.initData.ipV4Port,
-					ipV6Port: this.initData.ipV6Port,
-					storage_price: this.initData.storage_price,
-					outbound_price: this.initData.outbound_price,
-					pgpKey: this.initData.pgpKey,
-					DL_registeredData: kkk.nft_tokenid
-				}
-
-				return saveSetup ( setupInfo, this.debug ).then (() => {
-					this.startServer ()
-					setTimeout (()=> {
-						if ( !this.initData ) {
-							return logger ( Colors.red(`setTimeout STOP si_health Error! `))
-						}
-						si_health (this.initData)
-					}, healthTimeout)
-				})
-			}
-			
+	private initSetupData = async () => {
+		
+		initData = await getSetup ()
+		if ( Cluster.isWorker && Cluster?.worker?.id ) {
+			this.workerNumber = Cluster?.worker?.id
 		}
-		si_health (this.initData)
+
+		logger (inspect(initData, false, 3, true))
+
+		if ( !initData?.keychain || !initData.passwd ) {
+			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI !`)
+		}
+
+		this.password = initData.passwd
+
+		initData.pgpKeyObj = await makeOpenpgpObj(initData.pgpKey.privateKey, initData.pgpKey.publicKey, this.password)
+		initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
+
+		this.PORT = initData.ipV4Port
+		
+		if ( !initData.DL_registeredData ) {
+			logger (`This SI node has not registered`)
+			return this.DL_registeredData()
+		}
+
+		const newID = await getPublicKeyArmoredKeyID(initData.pgpKey.publicKey)
+		
+		logger (`this.initData.pgpKey.keyID [${initData.pgpKey.keyID}] <= newID [${newID}]`)
+		initData.pgpKey.keyID = newID
+		initData.platform_verison = version
+		saveSetup ( initData, true )
+		si_healthLoop ( initData )
+
 		this.startServer ()
 	}
 
-	constructor ( private debug: boolean, private password: string ) {
+	constructor () {
         this.initSetupData ()
     }
 
@@ -77,6 +105,7 @@ class conet_si_server {
 		const launcherFolder = join ( this.appsPath, '../launcher' )
 		const app = Express()
 		const Cors = require('cors')
+		app.disable('x-powered-by')
 		app.use( Cors ())
 		app.use ( Express.static ( staticFolder ))
         app.use ( Express.static ( launcherFolder ))
@@ -90,33 +119,66 @@ class conet_si_server {
 		app.once ('end', () => {
 			this.debug ? logger ('server net once END event'): null
 		})
+	//				Support MVP Application *********************************************************************************** */
+			app.get (/^\/$|^\/index.html$|^\/index.htm$/, (req, res) => {
+				logger (Colors.red(`Get HOME url [${ splitIpAddr (req.ip) }] => [http://${ req.headers.host }${ req.url }]`))
+				return proxyRequest (req, res, projectMain)
+			})
 
-		app.get ('/', (req, res) => {
-			res.end (returnHome())
-		})
+			app.get ('/favicon.ico', (req, res) => {
+				return proxyRequest (req, res, `${projectMain}favicon.ico` )
+			})
+
+			app.get ('/static/*', (req, res) => {
+				const staticUrl = req.url.split ('/static/')[1]
+				return proxyRequest (req, res, `${projectMain}static/${staticUrl}` )
+			})
+
+			app.get ('/utilities/*', (req, res) => {
+				const staticUrl = req.url.split ('/utilities/')[1]
+				return proxyRequest (req, res, `${projectMain}utilities/${staticUrl}` )
+			})
+
+			app.get ('/encrypt.js', (req, res) => {
+				return proxyRequest (req, res, `${projectMain}encrypt.js` )
+			})
+	//**************************************************************************************************************************** */
 
 		app.post ('/post', (req, res) => {
-			
-			return res.end (return404 ())
+			const data = req.body.data
+			if (!data || typeof data !== 'string') {
+				logger (Colors.red(`/post have no body ERROR! \n`), inspect(req.body, false, 3, true), '\n')
+				return res.status(400).end ()
+			}
+			if (!initData?.pgpKeyObj?.privateKeyObj) {
+				logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(initData, false, 3, true), '\n')
+				return res.status(503).end ()
+			}
+			logger (Colors.blue(`app.post ('/post') [${splitIpAddr( req.ip )}] goto postOpenpgpRoute`))
+			return postOpenpgpRoute (req, res, req.body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, this.onlineClientPool, null, '')
 		})
 
-		app.get('*', (req, res) => {
-			return res.end (return404 ())
+		app.get ('/publicGpgKey', (req, res ) => {
+
 		})
 
-		app.post('*', (req, res) => {
-			return res.end (return404 ())
+		app.all ('*', (req, res) => {
+			logger (Colors.red(`Get unknow url Error! [${ splitIpAddr (req.ip) }] => ${ req.method }[http://${ req.headers.host }${ req.url }]`))
+			return res.status(404).end (return404 ())
 		})
 
-		this.localserver = app.listen ( this.PORT, 'localhost', () => {
+		this.localserver = app.listen ( this.PORT, () => {
             return console.table([
-                { 'CoNET SI node': `http://localhost:${ this.PORT }, local-path = [${ staticFolder }]` }
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT }, local-path = [${ staticFolder }]` }
             ])
         })
 	}
 
 	public end () {
-        this.localserver.close ()
+		if ( typeof this.localserver?.close === 'function') {
+			this.localserver.close ()
+		}
+        
     }
 }
 
