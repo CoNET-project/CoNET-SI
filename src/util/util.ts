@@ -11,11 +11,11 @@ import { createConnection } from 'node:net'
 import type { NetConnectOpts } from 'node:net'
 import { series } from 'async'
 import { createHash, webcrypto } from 'node:crypto'
-import Accounts from 'web3-eth-accounts'
-import type { WalletBase } from 'web3-core'
+import {Wallet} from 'ethers'
+import type {HDNodeWallet} from 'ethers'
 import { createInterface } from 'readline'
 
-import { publicKeyByPrivateKey, encryptWithPublicKey, cipher, hash, hex, publicKey, createIdentity, recover } from 'eth-crypto'
+import { publicKeyByPrivateKey, encryptWithPublicKey, cipher, hash, hex, publicKey, createIdentity, recover, util } from 'eth-crypto'
 
 //	@ts-ignore
 import {sign} from 'eth-crypto'
@@ -169,15 +169,10 @@ export const getServerIPV4Address = ( includeLocal: boolean ) => {
 	return results
 }
 
-export const generateWalletAddress = ( password: string ) => {
-
-	//	@ts-ignore
-	const accountw: Accounts.Accounts = new Accounts()
-
-	const acc = accountw.wallet.create(1)
-	const uu1 = acc.encrypt ( password )
-
-	return (uu1)
+export const generateWalletAddress = async ( password: string ) => {
+	const accountw = Wallet.createRandom()
+	const acc = await accountw.encrypt (password)
+	return (acc)
 }
 
 export const generatePgpKey = async (walletAddr: string, passwd: string ) => {
@@ -201,15 +196,14 @@ export const generatePgpKey = async (walletAddr: string, passwd: string ) => {
 	return ({privateKey, publicKey, keyID})
 }
 
-export const loadWalletAddress = ( walletBase: any, password: string ) => {
-
-	//	@ts-ignore
-	const account = <Accounts.Accounts> new Accounts()
-
-	const uu = <WalletBase & {publickey: string} []> account.wallet.decrypt ( walletBase, password )
-
-	uu[0].publickey = publicKeyByPrivateKey (uu[0].privateKey)
-	return uu
+export const loadWalletAddress = async ( walletBase: string, password: string ) => {
+	logger (inspect(walletBase, false, 3, true))
+	if (typeof walletBase === 'object') {
+		walletBase = JSON.stringify(walletBase)
+	}
+	const account = await Wallet.fromEncryptedJson (walletBase, password)
+	logger (inspect(account, false, 3, true))
+	return account
 }
 
 export const makeOpenpgpObj = async ( privateKey: string, publicKey: string, passphrase: string ) => {
@@ -255,8 +249,8 @@ export const saveSetup = ( setup: ICoNET_NodeSetup, debug: boolean ) => {
 
 }
 
-export const waitKeyInput: (query: string, password: boolean ) => Promise<string> 
-	= ( query: string, password = false ) => {
+export const waitKeyInput: (query: string, password: boolean ) => Promise<string> = 
+	( query: string, password = false ) => {
 
 	const mutableStdout = <Writable & {muted: boolean} > new Writable ({
 		write: ( chunk, encoding, next ) => {
@@ -304,7 +298,6 @@ export const requestUrl = (option: RequestOptions, postData: string) => {
 			logger (Colors.blue(`Connect to DL Server [${option.path}]`))
 
 			if (res.statusCode !== 200 ) {
-
 				logger (Colors.red(`DL Server response !200 code [${ res.statusCode }]`))
 				return resolve (null)
 			}
@@ -358,8 +351,23 @@ export const proxyRequest = async (clientReq: Request, clientRes: Response, webU
 	return get(webUrl, res => {
 		if (/\.js$/.test(webUrl)) {
 			clientRes.setHeader('Content-Type','text/javascript')
-
 		}
+		if ( res.statusCode != 200 ) {
+			switch (res.statusCode) {
+				case 301: {
+					if (res.headers['location']?.length) {
+						const newUrl = res.headers['location']
+						logger (Colors.blue(`proxyRequest target server [${webUrl}] response a 301 Moved, resirect to [${newUrl}]`))
+						
+						proxyRequest (clientReq, clientRes, newUrl)
+						return
+					}
+				}
+				default: {
+				}
+			}
+		}
+
 		res.pipe (clientRes).once ('close', () => {
 			if (clientRes.writable && typeof clientRes.end === 'function') {
 				logger (Colors.blue (`Close [${splitIpAddr ( clientReq.ip )}] connecting.`))
@@ -397,9 +405,10 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 		return false
 	}
 
-	const wallet = nodeInit.keyObj[0]
-
-
+	const wallet = nodeInit.keyObj
+	// logger ('********************************************************************************************************************************************')
+	// logger (inspect(wallet, false, 3, true))
+	// logger ('********************************************************************************************************************************************')
 	if ( !nodeInit.dl_publicKeyArmored) {
 		nodeInit.dl_publicKeyArmored = await getDLPublicKey()
 	}
@@ -418,7 +427,6 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 		platform_verison: nodeInit.platform_verison,
 		nft_tokenid: createHash('sha256').update(nodeInit.ipV4).digest('hex'),
 		armoredPublicKey: nodeInit.pgpKey.publicKey,
-		//	@ts-ignore
 		walletAddrSign: sign( wallet.privateKey, hash.keccak256(wallet.address))
 	}
 
@@ -453,7 +461,7 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 const healthTimeout = 1000 * 60 * 5
 
 export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup ) => {
-	const wallet = nodeInit.keyObj[0]
+	const wallet = nodeInit.keyObj
 
 	const _payload: ICoNET_DL_POST_health_SI = {
 		nft_tokenid: createHash('sha256').update(nodeInit.ipV4).digest('hex'),
@@ -721,37 +729,37 @@ const getRouterFromKeyID = (keyID: string) => {
 	})
 }
 
-const routerPost = ( url: string, clientReq: Request, clientRes: Response, data: string) => {
-	const option: RequestOptions = {
-		hostname: url,
-		path: '/post',
-		port: 443,
-		method: 'POST'
-	}
-	logger (Colors.blue(`routerPost connect to [https://${ url }/post]`))
-	const req = request (option)
+// const routerPost = ( url: string, clientReq: Request, clientRes: Response, data: string) => {
+// 	const option: RequestOptions = {
+// 		hostname: url,
+// 		path: '/post',
+// 		port: 443,
+// 		method: 'POST'
+// 	}
+// 	logger (Colors.blue(`routerPost connect to [https://${ url }/post]`))
+// 	const req = request (option)
 
-		// if ( res.statusCode === undefined ) {
-		// 	logger (`routerPost to host [${ url }] res.statusCode === undefined Error! STOP client connection!`)
-		// 	return clientRes.sendStatus(503).end()
-		// }
+// 		// if ( res.statusCode === undefined ) {
+// 		// 	logger (`routerPost to host [${ url }] res.statusCode === undefined Error! STOP client connection!`)
+// 		// 	return clientRes.sendStatus(503).end()
+// 		// }
 
-		// clientRes.sendStatus (res.statusCode)
-		// for (let i = 0; i < res.rawHeaders.length; i += 2) {
-		// 	clientRes.setHeader(`"${res.rawHeaders[i]}"`, `"${res.rawHeaders[i+1]}"`)
-		// }
-		// res.pipe (clientRes)
+// 		// clientRes.sendStatus (res.statusCode)
+// 		// for (let i = 0; i < res.rawHeaders.length; i += 2) {
+// 		// 	clientRes.setHeader(`"${res.rawHeaders[i]}"`, `"${res.rawHeaders[i+1]}"`)
+// 		// }
+// 		// res.pipe (clientRes)
 		
-	.once ('error', err => {
-		logger (`routerPost req once ('error')`, err )
-	})
-	req.socket?.pipe (clientRes).once('close', () => {
-		logger (Colors.blue (`routerPost [${ url }] once end, close clientRes`))
-		clientRes.end()
-	})
+// 	.once ('error', err => {
+// 		logger (`routerPost req once ('error')`, err )
+// 	})
+// 	req.socket?.pipe (clientRes).once('close', () => {
+// 		logger (Colors.blue (`routerPost [${ url }] once end, close clientRes`))
+// 		clientRes.end()
+// 	})
 
-	req.write (data+'\r\n\r\n')
-}
+// 	req.write (data+'\r\n\r\n')
+// }
 
 const socketPost = (ipAddr: string, port: number, clientRes: Response, data: string) => {
 	const postData = JSON.stringify({data})
@@ -1184,8 +1192,29 @@ export const decryptPgpMessage = async ( pgpMessage: string, pgpPrivateObj: Priv
  * 
 												TEST 
  */
-
-
+	// const oo = {
+	// 	version: 3,
+	// 	id: 'cb3a4d60-3796-4e17-98fc-4d2e15c148c1',
+	// 	address: 'c489e1a86ccc14b3b0f6b31afc52521ea1ccad9c',
+	// 	crypto: {
+	// 	  ciphertext: '2be676dd9193bfc5d0e412bedd67bac42b3cccd75b093d8ab61a196f000ed642',
+	// 	  cipherparams: [Object],
+	// 	  cipher: 'aes-128-ctr',
+	// 	  kdf: 'scrypt',
+	// 	  kdfparams: [Object],
+	// 	  mac: 'deaff79d3dddd6c5c591c4d9788ddad5f4677a3dbb6d21f11f7073748e482393'
+	// 	}
+	//   }
+	// const start = async () => {
+	// 	const passwd = 'erewfwref'
+	// 	const kk = await generateWalletAddress(passwd)
+	// 	const ss = await loadWalletAddress (kk, passwd)
+	// 	logger (inspect(kk, false, 3, true))
+	// 	logger (typeof ss)
+	// 	logger (ss)
+	// }
+	// start()
+	
 /**
  * 
  * 		TEST 

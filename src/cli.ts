@@ -11,6 +11,7 @@ import colors from 'colors/safe'
 import { logger, getServerIPV4Address, getSetup, waitKeyInput, generateWalletAddress, saveSetup, generatePgpKey, loadWalletAddress, startPackageSelfVersionCheckAndUpgrade, regiestPrivateKey } from './util/util'
 import conet_si_server from './endpoint/server'
 
+import type {HDNodeWallet} from 'ethers'
 
 if ( Cluster.isPrimary ) {
 
@@ -169,8 +170,9 @@ if ( Cluster.isPrimary ) {
 
 			const outbound: number = parseInt(await waitKeyInput (`Please enter the price of outbound of data price USDC/MB every month [default is 0.00001]: `, false )) || 0.00001
 			const keychain =  await generateWalletAddress ( password )
+			
 			const keyObj = await loadWalletAddress ( keychain, password )
-			const pgpKey = await generatePgpKey (keyObj[0].address, password)
+			const pgpKey = await generatePgpKey (keyObj.address, password)
 			logger (inspect (keychain, false, 3, true ))
 			setupInfo = {
 				keychain: keychain,

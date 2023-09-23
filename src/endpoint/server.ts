@@ -3,9 +3,10 @@ import { join } from 'node:path'
 import { inspect } from 'node:util'
 import Cluster from 'node:cluster'
 import type { Server } from 'node:http'
-import { logger, getSetup, loadWalletAddress, return404, register_to_DL, saveSetup, si_healthLoop, makeOpenpgpObj, postOpenpgpRoute, proxyRequest,splitIpAddr, getPublicKeyArmoredKeyID } from '../util/util'
+import { logger, getSetup, loadWalletAddress, return404, register_to_DL, saveSetup, si_healthLoop, makeOpenpgpObj, postOpenpgpRoute, proxyRequest,splitIpAddr, getPublicKeyArmoredKeyID, generateWalletAddress } from '../util/util'
 import type {IclientPool} from '../util/util'
 import Colors from 'colors/safe'
+import type { HDNodeWallet } from 'ethers'
 import Express from 'express'
 
 
@@ -76,8 +77,13 @@ class conet_si_server {
 		this.password = initData.passwd
 
 		initData.pgpKeyObj = await makeOpenpgpObj(initData.pgpKey.privateKey, initData.pgpKey.publicKey, this.password)
-		initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
-
+		try {
+			initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
+		} catch (ex) {
+			initData.keychain = await generateWalletAddress (this.password)
+			initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
+		}
+		
 		this.PORT = initData.ipV4Port
 		
 		if ( !initData.DL_registeredData ) {
