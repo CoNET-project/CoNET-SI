@@ -1,5 +1,5 @@
 import type { RequestOptions } from 'https'
-import {logger, requestUrl} from './util'
+import {logger, requestHttpsUrl} from './util'
 
 const conetDLServer = 'openpgp.online'
 const conetDLServerPOST = 443
@@ -19,7 +19,7 @@ export const getCoNETCashBalance = async (id: string) => {
 		},
 		rejectUnauthorized: false
 	}
-	const response = await requestUrl (option, postJSON)
+	const response = await requestHttpsUrl (option, postJSON)
 	return response
 }
 
@@ -39,7 +39,7 @@ const regiestCustomsProfileRoute = async (profileObj: ICoNET_Router) => {
 		rejectUnauthorized: false
 	}
 
-	const response: any = await requestUrl (option, sendData)
+	const response: any = await requestHttpsUrl (option, sendData)
 
 	logger (`regiestCustomsProfileRoute response is\n`, response)
 
