@@ -72,7 +72,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'getCoNETCashAccount'|'regiestRecipient'
+	command: 'getCoNETCashAccount'|'regiestRecipient'|'connecting'|'SaaS_Proxy'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
