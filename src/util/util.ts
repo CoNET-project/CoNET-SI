@@ -1297,7 +1297,7 @@ class encrypteStreamGCM extends Transform {
     }
 }
 
-const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, password: string, requestHeaders:  { [key: string]: string }, reDirectCount = 0) => {
+const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Response, password: string, requestHeaders:  { [key: string]: string }, reDirectCount = 0) => {
     let requestOrgnalUrl: URL
 	const disConnect = () => {
 		clientRes.status(400).json().end()
@@ -1306,10 +1306,10 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
 		}
 	}
     try {
-        requestOrgnalUrl = new URL(requestOrgnal.href)
+        requestOrgnalUrl = new URL(requestOrgnal1.href)
     }
     catch (ex) {
-        logger (Colors.red(`connectWithHttp invalid requestOrgnal.href [${inspect(requestOrgnal.href, false, 3, true)}] STOP Connecting!`))
+        logger (Colors.red(`connectWithHttp invalid requestOrgnal.href [${inspect(requestOrgnal1.href, false, 3, true)}] STOP Connecting!`))
         return clientRes.status(404).end()
     }
     const listenHttp = (_res: IncomingMessage) => {
@@ -1320,13 +1320,19 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
             for (let i = 0; i < _res.rawHeaders.length; i += 2) {
                 const kkk = _res.rawHeaders[i] + ': ' + _res.rawHeaders[i + 1]
                 headerLine.push(kkk)
+				
             }
+			
+			if (reDirectCount>0) {
+				headerLine.push(`location: ${requestOrgnalUrl.origin}`)
+			}
             /**
              * header("Access-Control-Allow-Origin: http://localhost:4200");
                 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
                 header("Access-Control-Allow-Headers: Content-Type, Authorization");
              */
             clientRes.status(200)
+			
             clientRes.setHeader('Access-Control-Allow-Origin', '*')
             // clientRes.setHeader('Access-Control-Allow-Origin','GET, POST, OPTIONS')
             // clientRes.setHeader('Access-Control-Allow-Headers','Content-Type, Authorization')
@@ -1350,13 +1356,14 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
         }
 
         _res.on('error', err => {
-            logger (Colors.red(`listenHttp url${requestOrgnal.href} ERROR!`))
+            logger (Colors.red(`listenHttp url${requestOrgnalUrl.href} ERROR!`))
             logger (Colors.red(err.message))
             return disConnect ()
         })
 
         switch (_res.statusCode) {
             case 200: {
+				
                 logger (`connectWithHttp target server response 200 OK`)
                 return processStream()
             }
@@ -1364,6 +1371,7 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
             case 307:
             case 302:
             case 301: {
+				logger(Colors.red(`connectWithHttp get statusCode [${_res.statusCode}]!`))
                 if (++reDirectCount > 5) {
                     logger (Colors.red(`connectWithHttp reDirect over [${reDirectCount}] time STOP reDirect`))
                     return processStream()
@@ -1372,11 +1380,11 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
                 if (!reDirect) {
                     return processStream()
                 }
-
-                let reDirectUrl
-                const reUrl = new URL(/http/i.test(reDirect) ? reDirect : requestOrgnalUrl.origin + reDirect)
+				_res.destroy()
+                let reUrl
+				
                 try {
-                    reDirectUrl = new URL(reUrl)
+					reUrl = new URL(/http/i.test(reDirect) ? reDirect : requestOrgnalUrl.origin + reDirect)
                 }
                 catch (ex) {
                     return processStream()
@@ -1401,9 +1409,11 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
                     }
                     requestHeaders['Cookie'] = cookieNew.join(';')
                 }
-                logger (Colors.blue(`connectWithHttp got redirection [${_res.statusCode}] response from [${requestOrgnalUrl.origin}] to new Location[${reUrl}] with cookies `), inspect(requestHeaders, false, 3, true))
-                requestOrgnal.href = requestOrgnal.href.replace(orgnalDomainRex, reDirectUrl.origin)
-                return connectWithHttp(requestOrgnal, clientRes, password, requestHeaders, reDirectCount)
+
+                logger (Colors.blue(`connectWithHttp got redirection [${_res.statusCode}] response from [${requestOrgnalUrl.origin}] to new Location [${reUrl}] with cookies! reDirect[${reDirect}] `), inspect(requestHeaders, false, 3, true))
+                requestOrgnal1.href = reUrl.href
+
+                return connectWithHttp(requestOrgnal1, clientRes, password, requestHeaders, reDirectCount)
             }
             default: {
                 return processStream()
@@ -1413,30 +1423,31 @@ const connectWithHttp = (requestOrgnal: RequestOrgnal, clientRes: Response, pass
 
 
     const httpConnecting = () => {
-        logger (Colors.blue(`connectWithHttp connecting reDirectCount = [${reDirectCount}]`), inspect(requestOrgnal, false, 3, true))
+        logger (Colors.blue(`connectWithHttp connecting reDirectCount = [${reDirectCount}]`), inspect(requestOrgnalUrl, false, 3, true))
         delete requestHeaders['referer']
         delete requestHeaders['host']
         const option = {
             host: requestOrgnalUrl.host,
             servername: requestOrgnalUrl.host,
-            method: requestOrgnal.method,
-            port: requestOrgnal.port,
+            method: requestOrgnal1.method,
+            port: requestOrgnalUrl.port,
             path: requestOrgnalUrl.pathname + requestOrgnalUrl.search,
             headers: {
                 ...requestHeaders
             }
-        };
+        }
+
         return /^http\:$/i.test(requestOrgnalUrl.protocol) ? requestHttp (option, listenHttp) : requestHttps(option, listenHttp)
-    };
+    }
     const serverReq = httpConnecting()
 
     serverReq.on('error', (err: Error ) => {
-        logger (Colors.red(`serverReq on Error url${requestOrgnal.href}`), err)
+        logger (Colors.red(`serverReq on Error url[${requestOrgnalUrl.href}]`), err)
         return disConnect ()
     })
 
-    if (requestOrgnal.json) {
-        return serverReq.end(requestOrgnal.json)
+    if (requestOrgnal1.json) {
+        return serverReq.end(requestOrgnal1.json)
     }
 
     serverReq.end()
