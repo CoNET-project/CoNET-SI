@@ -1,5 +1,6 @@
 import type { RequestOptions } from 'https'
-import {logger, requestHttpsUrl} from './util'
+import {logger, } from './logger'
+import {requestHttpsUrl} from './localNodeCommand'
 
 const conetDLServer = 'openpgp.online'
 const conetDLServerPOST = 443

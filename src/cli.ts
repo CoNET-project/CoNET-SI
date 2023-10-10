@@ -6,10 +6,10 @@ import { inspect } from 'node:util'
 import Cluster from 'node:cluster'
 import type { Worker } from 'node:cluster'
 import {exec} from 'node:child_process'
-
 import colors from 'colors/safe'
-import { logger, getServerIPV4Address, getSetup, waitKeyInput, generateWalletAddress, saveSetup, generatePgpKey, loadWalletAddress, startPackageSelfVersionCheckAndUpgrade, regiestPrivateKey } from './util/util'
+import { getServerIPV4Address, getSetup, waitKeyInput, generateWalletAddress, saveSetup, generatePgpKey, loadWalletAddress, startPackageSelfVersionCheckAndUpgrade, regiestPrivateKey } from './util/localNodeCommand'
 import conet_si_server from './endpoint/server'
+import {logger} from './util/logger'
 
 import type {HDNodeWallet} from 'ethers'
 
@@ -111,7 +111,10 @@ if ( Cluster.isPrimary ) {
 			fork.once ('exit', (code: number, signal: string) => {
 				logger (colors.red(`Worker [${ fork.id }] Exit with code[${ code }] signal[${ signal }]!\n Restart after 30 seconds!`))
 				if ( !signal ) {
-					return logger (`Worker [${ fork.id }] signal = NEW_VERSION do not restart!`)
+					//		exit with error!
+					return setTimeout (() => {
+						return _forkWorker ()
+					}, 1000 * 0.5 )
 				}
 				return setTimeout (() => {
 					return _forkWorker ()
