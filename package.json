@@ -1,24 +1,23 @@
 {
 	"name": "@conet.project/mvp-si",
-	"version": "0.0.268",
+	"version": "0.1.2",
 	"author": {
 		"name": "CoNET Project",
 		"email": "info@conet.network"
 	},
-	"description": "The CoNET project provides Innate in digital privacy from the network layer to the application layer.",
+	"description": "The CONET project provides Innate in digital privacy from the network layer to the application layer.",
 	"license": "MIT",
 	"files": [
 		"./dist/**/*"
 	],
 	"bugs": {
-		"url": "https://github.com/CoNET-project/mvp-SI/issues"
+		"url": "https://github.com/CoNET-project/CoNET-SI/issues"
 	},
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/CoNET-project/mvp-SI.git"
 	},
 	"homepage": "https://conet.network",
-	"main": "./src/electron/electron.js",
 	"scripts": {
 		"build": "tsc --project tsconfig.json"
 	},
@@ -63,8 +62,8 @@
 	},
 	"devDependencies": {
 		"@types/async": "^3.2.21",
-		"@types/express": "^4.17.17",
-		"@types/uuid": "^9.0.4",
+		"@types/express": "^4.17.18",
+		"@types/uuid": "^9.0.5",
 		"@types/web3": "^1.2.2",
 		"@openpgp/web-stream-tools": "^0.0.14"
 	}

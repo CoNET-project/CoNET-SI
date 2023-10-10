@@ -72,7 +72,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'getCoNETCashAccount'|'regiestRecipient'|'connecting'|'SaaS_Proxy'
+	command: 'getCoNETCashAccount'|'regiestRecipient'|'connecting'|'SaaS_Proxy'|'SaaS_Sock5'|'SaaS_Sock5_Data_Entry'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
@@ -143,3 +143,27 @@ interface CoNETCashBalanceResponse {
 	balance: number
 	owner: string
 }
+
+interface VE_IPptpStream {
+    type?: string
+    buffer: string
+    host: string|null
+    port: number
+    cmd: string
+    //ATYP: number
+    uuid?: string
+    length?:number
+    randomBuffer?: Buffer
+    ssl: boolean
+    hostIPAddress: string|null
+    hostName?: string       //      for test gateway from client
+	order: number
+}
+
+type RequestOrgnal = {
+	href: string
+	method: string
+	port: number
+	json: string
+}
+

@@ -19,3 +19,4 @@ package-lock.json
 _config.yml
 proxy*.json
 home*.json
+src/cmd.sh

@@ -1,24 +1,76 @@
 
 import { join } from 'node:path'
-import { inspect } from 'node:util'
+import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
+import Net from 'node:net'
+import { Transform } from 'node:stream'
 import type { Server } from 'node:http'
-import { logger, getSetup, loadWalletAddress, return404, register_to_DL, saveSetup, si_healthLoop, makeOpenpgpObj, postOpenpgpRoute, proxyRequest,splitIpAddr, getPublicKeyArmoredKeyID, generateWalletAddress } from '../util/util'
-import type {IclientPool} from '../util/util'
+import {logger} from '../util/logger'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, si_healthLoop, register_to_DL} from '../util/localNodeCommand'
 import Colors from 'colors/safe'
 import type { HDNodeWallet } from 'ethers'
 import Express from 'express'
-
+import  { distorySocket } from '../util/htmlResponse'
+import dgram from 'node:dgram'
+//@ts-ignore
+import hexdump from 'hexdump-nodejs'
 
 const healthTimeout = 1000 * 60 * 5
-const projectMain = 'https://kloak.io/'
+const projectMain = 'https://app.conet.network/'
 
 const packageFile = join (__dirname, '..', '..','package.json')
 const packageJson = require ( packageFile )
 const version = packageJson.version
-
+const onlineClientPool: IclientPool[] = []
 let initData:ICoNET_NodeSetup|null
 
+const packagePGP = (data:string) => {
+	return `-----BEGIN PGP MESSAGE-----\n\n${data}-----END PGP MESSAGE-----\n`
+}
+
+
+export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
+    console.log(Colors.underline(Colors.green(`TOTAL LENGTH [${ buffer.length }]`)))
+    console.log(Colors.grey( hexdump( buffer.slice( 0, length ))))
+}
+
+// const udpListening = () => {
+// 	const server = dgram.createSocket('udp4')
+// 	server.on('error', (err) => {
+// 		console.error(`server error:\n${err.stack}`)
+// 		server.close()
+// 		udpListening()
+// 	})
+	
+// 	server.on('message', (msg, rinfo) => {
+		
+// 		console.log(Colors.red(`UDP server got Message [${ msg.length }] from ${rinfo.address}:${rinfo.port}`))
+// 		if (!initData) {
+// 			return 
+// 		}
+		
+// 		postFromUDP (msg.toString(), initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '')
+// 	})
+	
+// 	server.on('listening', () => {
+// 		const address = server.address()
+// 		console.log(Colors.blue(`UDP server listening ${address.address}:${address.port}`))
+		
+// 	})
+	
+// 	server.bind(41234)
+// }
+
+const getLengthHander = (headers: string[]) => {
+	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
+	if (index < 0) {
+		logger (inspect(headers, false, 3, true))
+		return -1
+	}
+	const length = headers[index].split(/^Content-Length\: /i)[1]
+	const ret = parseInt(length)
+	return isNaN(ret) ? -1 : ret
+}
 class conet_si_server {
 
     private localserver: Server| undefined
@@ -26,7 +78,6 @@ class conet_si_server {
 	private PORT=0
 	private password = ''
 	private debug = true
-	private onlineClientPool: IclientPool[] = []
 	private workerNumber = 0
 	private finishRegister = () => {
 
@@ -104,88 +155,99 @@ class conet_si_server {
 
 	constructor () {
         this.initSetupData ()
+		// udpListening()
     }
 
 	private startServer = () => {
-		const staticFolder = join ( this.appsPath, 'workers' )
-		const launcherFolder = join ( this.appsPath, '../launcher' )
-		const app = Express()
-		const Cors = require('cors')
-		app.disable('x-powered-by')
-		app.use( Cors ())
-		app.use ( Express.static ( staticFolder ))
-        app.use ( Express.static ( launcherFolder ))
-        app.use ( Express.json() )
+		
+		const server = new Net.Server( socket => {
 
-		app.once ( 'error', ( err: any ) => {
-            logger (err)
-            logger (`Si node on ERROR!`)
-        })
+			socket.once('data', data => {
 
-		app.once ('end', () => {
-			this.debug ? logger ('server net once END event'): null
+				const request = data.toString()
+				
+				const request_line = request.split('\r\n\r\n')
+				
+				if (request_line.length < 2) {
+					return distorySocket(socket)
+				}
+
+				const htmlHeaders = request_line[0].split('\r\n')
+				const requestProtocol = htmlHeaders[0]
+
+				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
+					logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+					const bodyLength = getLengthHander (htmlHeaders)
+
+					if (bodyLength < 0) {
+						logger (Colors.red(`startServer get header has no bodyLength [${bodyLength}] destory CONNECT!`))
+						return distorySocket(socket)
+					}
+
+					const getData = () => {
+
+						if (!initData || !initData?.pgpKeyObj?.privateKeyObj) {
+							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(initData, false, 3, true), '\n')
+							return distorySocket(socket)
+						}
+						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						let body
+						try {
+							body = JSON.parse(request_line[1])
+						} catch (ex) {
+							logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+							return distorySocket(socket)
+						}
+						if (!body.data || typeof body.data !== 'string') {
+							logger (Colors.magenta(`startServer HTML body format error!`))
+							return distorySocket(socket)
+						}
+						
+						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '')
+					}
+
+					const readMore = () => {
+						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						socket.once('data', _data => {
+							
+							request_line[1] += _data
+							if (request_line[1].length < bodyLength) {
+								logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+								return readMore ()
+							}
+							
+							getData ()
+						})
+					}
+
+					if (request_line[1].length < bodyLength) {
+
+						return readMore ()
+					}
+
+					return getData ()
+					
+				}
+				
+				return distorySocket(socket)
+			})
+
 		})
-	//				Support MVP Application *********************************************************************************** */
-			app.get (/^\/$|^\/index.html$|^\/index.htm$/, (req, res) => {
-				logger (Colors.red(`Get HOME url [${ splitIpAddr (req.ip) }] => [http://${ req.headers.host }${ req.url }]`))
-				return proxyRequest (req, res, projectMain)
-			})
 
-			app.get ('/favicon.ico', (req, res) => {
-				return proxyRequest (req, res, `${projectMain}favicon.ico` )
-			})
-
-			app.get ('/static/*', (req, res) => {
-				const staticUrl = req.url.split ('/static/')[1]
-				return proxyRequest (req, res, `${projectMain}static/${staticUrl}` )
-			})
-
-			app.get ('/utilities/*', (req, res) => {
-				const staticUrl = req.url.split ('/utilities/')[1]
-				return proxyRequest (req, res, `${projectMain}utilities/${staticUrl}` )
-			})
-
-			app.get ('/encrypt.js', (req, res) => {
-				return proxyRequest (req, res, `${projectMain}encrypt.js` )
-			})
-	//**************************************************************************************************************************** */
-
-		app.post ('/post', (req, res) => {
-			const data = req.body.data
-			if (!data || typeof data !== 'string') {
-				logger (Colors.red(`/post have no body ERROR! \n`), inspect(req.body, false, 3, true), '\n')
-				return res.status(400).end ()
-			}
-			if (!initData?.pgpKeyObj?.privateKeyObj) {
-				logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(initData, false, 3, true), '\n')
-				return res.status(503).end ()
-			}
-			logger (Colors.blue(`app.post ('/post') [${splitIpAddr( req.ip )}] goto postOpenpgpRoute`))
-			return postOpenpgpRoute (req, res, req.body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, this.onlineClientPool, null, '')
+		server.on('error', err => {
+			logger(Colors.red(`conet_si_server server on Error! ${err.message}`))
 		})
 
-		app.get ('/publicGpgKey', (req, res ) => {
-
-		})
-
-		app.all ('*', (req, res) => {
-			logger (Colors.red(`Get unknow url Error! [${ splitIpAddr (req.ip) }] => ${ req.method }[http://${ req.headers.host }${ req.url }]`))
-			return res.status(404).end (return404 ())
-		})
-
-		this.localserver = app.listen ( this.PORT, () => {
-            return console.table([
-                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT }, local-path = [${ staticFolder }]` }
+		server.listen(80, () => {
+			return console.table([
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT }` }
             ])
-        })
-	}
+		})
 
-	public end () {
-		if ( typeof this.localserver?.close === 'function') {
-			this.localserver.close ()
-		}
-        
-    }
+	}
 }
+
+
+
 
 export default conet_si_server
