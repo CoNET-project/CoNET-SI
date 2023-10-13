@@ -20,7 +20,7 @@ import {Wallet} from 'ethers'
 import { exec } from 'node:child_process'
 import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
-
+import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
 
 const KB = 1000
@@ -39,7 +39,6 @@ const conetDLServerPOST = 443
 const conetDLServerTimeout = 1000 * 60
 const healthTimeout = 1000 * 60 * 5
 export const rfc1918 = /(^0\.)|(^10\.)|(^100\.6[4-9]\.)|(^100\.[7-9]\d\.)|(^100\.1[0-1]\d\.)|(^100\.12[0-7]\.)|(^127\.)|(^169\.254\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.0\.0\.)|(^192\.0\.2\.)|(^192\.88\.99\.)|(^192\.168\.)|(^198\.1[8-9]\.)|(^198\.51\.100\.)|(^203.0\.113\.)|(^22[4-9]\.)|(^23[0-9]\.)|(^24[0-9]\.)|(^25[0-5]\.)/
-
 
 export const generateWalletAddress = async ( password: string ) => {
 	const accountw = Wallet.createRandom()
@@ -166,7 +165,6 @@ export const regiestPrivateKey = ( privateKey: string, password: string ) => {
 	})
 
 }
-
 
 export const generatePgpKey = async (walletAddr: string, passwd: string ) => {
 	const option: GenerateKeyOptions = {
@@ -396,6 +394,7 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 
 	return response
 }
+
 
 export const saveSetup = ( setup: ICoNET_NodeSetup, debug: boolean ) => {
 
@@ -889,6 +888,22 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 	}
 
 }
+
+class BandwidthCount extends Transform {
+	private count = 0
+	constructor(){
+		super()
+	}
+	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
+		this.count += chunk.length
+		callback ()
+	}
+	public _final(callback: (error?: Error | null | undefined) => void): void {
+		callback
+	}
+}
+
+
 
 const socks5Connect = (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
 
