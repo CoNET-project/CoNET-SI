@@ -283,7 +283,8 @@ export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup ) => {
 	}
 	logger (_payload)
 	const payload = {
-		pgpMessage:  await EncryptePGPMessage (_payload, nodeInit.dl_publicKeyArmored, nodeInit.pgpKeyObj?.privateKeyObj)
+		pgpMessage: await EncryptePGPMessage (_payload, nodeInit.dl_publicKeyArmored, nodeInit.pgpKeyObj?.privateKeyObj),
+		//data: _payload
 	}
 
 	const postJSON = JSON.stringify(payload)
@@ -346,13 +347,10 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 	// logger ('********************************************************************************************************************************************')
 	// logger (inspect(wallet, false, 3, true))
 	// logger ('********************************************************************************************************************************************')
-	if ( !nodeInit.dl_publicKeyArmored) {
-		nodeInit.dl_publicKeyArmored = await getDLPublicKey()
-	}
 
-	if ( !nodeInit.dl_publicKeyArmored ) {
-		return null
-	}
+	nodeInit.dl_publicKeyArmored = await getDLPublicKey()
+	
+
 
 	const data: ICoNET_DL_POST_register_SI = {
 		ipV4Port: nodeInit.ipV4Port,
