@@ -20,3 +20,4 @@ _config.yml
 proxy*.json
 home*.json
 src/cmd.sh
+/*.conf
