@@ -308,6 +308,7 @@ export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup ) => {
 		if ( response === null ) {
 			logger (Colors.red(`si_health DL return 404 try to regiest again!`))
 			await register_to_DL (nodeInit)
+			saveSetup (nodeInit, false)
 		}
 
 		setTimeout( async () => {
@@ -349,8 +350,7 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 	// logger ('********************************************************************************************************************************************')
 
 	nodeInit.dl_publicKeyArmored = await getDLPublicKey()
-	
-
+	logger (`dl_publicKeyArmored = `, nodeInit.dl_publicKeyArmored)
 
 	const data: ICoNET_DL_POST_register_SI = {
 		ipV4Port: nodeInit.ipV4Port,
@@ -430,7 +430,10 @@ export const saveSetup = ( setup: ICoNET_NodeSetup, debug: boolean ) => {
 
 export const makeOpenpgpObj = async ( privateKey: string, publicKey: string, passphrase: string ) => {
 	const publicKeyObj = await readKey ({ armoredKey: publicKey })
-	const privateKeyObj = await decryptKey ({ privateKey: await readPrivateKey ({armoredKey: privateKey}), passphrase })
+    let privateKeyObj = await readPrivateKey ({armoredKey: privateKey})
+    if (!privateKeyObj.isDecrypted()) {
+        privateKeyObj = await decryptKey ({ privateKey: privateKeyObj, passphrase })
+    }
 	const ret: pgpObj = {
 		publicKeyObj,
 		privateKeyObj
@@ -1221,3 +1224,27 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 	return socketForward( router1.ipv4, 80, socket, encryptedText)
 
 }
+
+const pgpTest = async () => {
+	const password = 'ddd'
+	const { privateKey, publicKey, revocationCertificate } = await generateKey({
+        type: 'ecc', // Type of the key, defaults to ECC
+        curve: 'curve25519', // ECC curve name, defaults to curve25519
+        userIDs: [{ name: 'Jon Smith', email: 'jon@example.com' }], // you can pass multiple user IDs
+        passphrase: password, // protects the private key
+        format: 'armored' // output key format, defaults to 'armored' (other options: 'binary' or 'object')
+    })
+	const message = await createMessage({ text: 'hello' })
+	const _key = await readKey({armoredKey: publicKey})
+	const encrypted = await encrypt({
+        message,
+		encryptionKeys:[_key],
+        format: 'armored' // don't ASCII armor (for Uint8Array output)
+    })
+	const enessage = await readMessage({
+        armoredMessage: encrypted // parse armored message
+    })
+	const keys = await enessage.getEncryptionKeyIDs()
+}
+
+pgpTest()

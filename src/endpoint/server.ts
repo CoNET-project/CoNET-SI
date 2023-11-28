@@ -121,9 +121,12 @@ class conet_si_server {
 
 		logger (inspect(initData, false, 3, true))
 
-		if ( !initData?.keychain || !initData.passwd ) {
+		if ( !initData?.keychain || initData?.passwd === undefined) {
+            logger ('initData?.keychain = ',initData?.keychain,'initData.passwd = ', initData?.passwd)
 			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI !`)
 		}
+
+        logger (`initSetupData initData.passwd = [${initData.passwd}]`)
 
 		this.password = initData.passwd
 
