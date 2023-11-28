@@ -49,6 +49,7 @@ if ( Cluster.isPrimary ) {
 			singleCPU = true
 		}
 	})
+    
 	const packageFile = join (__dirname, '..', 'package.json')
 	debug ? logger (`packageFile = ${ packageFile }`): null
 
