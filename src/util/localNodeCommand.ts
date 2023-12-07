@@ -22,6 +22,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
+import type server from '../endpoint/server'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -30,7 +31,7 @@ const homeDir = homedir ()
 const setupFileDir = join ( homeDir, setupPath )
 const CoNetCashDataPath = join (setupFileDir,'.CoNETCashData')
 const forwardCache: Map<string, ICoNET_Router> = new Map()
-const publicRouteURL = `https://s3.us-east-1.wasabisys.com/conet-mvp/router/`
+
 const ByteToMByte = 0.000001
 const CoNetCashClientCachePath = join (setupFileDir, '.Cache')
 const setupFile = join ( setupFileDir, 'nodeSetup.json')
@@ -271,7 +272,7 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 	return (true)
 }
 
-export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup ) => {
+export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup, server: server ) => {
 	const wallet = nodeInit.keyObj
 
 	const _payload: ICoNET_DL_POST_health_SI = {
@@ -302,10 +303,11 @@ export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup ) => {
 	}
 
 	const _si_healthLoop = async () => {
-		const response: any = await requestHttpsUrl (option, postJSON)
-		logger (`si_health response is\n`, response)
+		//	@ts-ignore
+		server.nodePool = await requestHttpsUrl (option, postJSON)
+		logger (`si_health response is\n`, server.nodePool)
 	
-		if ( response === null ) {
+		if ( server.nodePool?.length) {
 			logger (Colors.red(`si_health DL return 404 try to regiest again!`))
 			await register_to_DL (nodeInit)
 			saveSetup (nodeInit, false)
@@ -1040,7 +1042,7 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 	return connect.clientSocket.write(`data: ${encryptedText}\n\n`)
 }
 
-export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, privateKeyArmored: string, password: string, outbound_price: number, storage_price: number, selfIpv4: string,  onlineClientPool: IclientPool[], preDecryptedObj: IdecryptedObjText | null, encryptedByPublicKeyID: string = '' ) => {
+export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, privateKeyArmored: string, password: string, outbound_price: number, storage_price: number, selfIpv4: string,  onlineClientPool: IclientPool[], preDecryptedObj: IdecryptedObjText | null, encryptedByPublicKeyID: string = '', server: server) => {
 
 	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ))
 
@@ -1067,8 +1069,8 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	try {
 		decryptedObj = await decryptMessage ( messObj, privateKeyArmored, password )
 	} catch (ex) {
-		//logger (Colors.blue(`customerKeyID [${customerKeyID}] decryptMessage ERROR, goto forwardEncryptedText!`), ex)
-		forwardEncryptedSocket(socket, pgpData, customerKeyID, onlineClientPool,outbound_price, storage_price, selfIpv4 )
+		logger (Colors.red(`customerKeyID [${customerKeyID}] decryptMessage ERROR, goto forwardEncryptedText!`))
+		forwardEncryptedSocket(socket, pgpData, customerKeyID, onlineClientPool,outbound_price, storage_price, selfIpv4, server.nodePool )
 		return
 	}
 
@@ -1099,7 +1101,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	command.algorithm = 'aes-256-cbc'
 
 	if (/^-----BEGIN PGP MESSAGE-----\n/.test (cmdStr)) {
-		postOpenpgpRouteSocket (socket, headers, cmdStr, privateKeyArmored, password, outbound_price, storage_price, selfIpv4, onlineClientPool, _preDecryptedObj, customerKeyID )
+		postOpenpgpRouteSocket (socket, headers, cmdStr, privateKeyArmored, password, outbound_price, storage_price, selfIpv4, onlineClientPool, _preDecryptedObj, customerKeyID, server )
 		return
 	}
 	//			Forward encrypted text have not STOP in ths node so it allow have no signature
@@ -1113,47 +1115,53 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 }
 
 
-const getRouterFromKeyID : (keyid: string) => Promise<ICoNET_Router|false>= (keyID: string) => {
-	return new Promise (resolve => {
-		const node = forwardCache.get(keyID)
-		if (node) {
-			return resolve (node)
-		}
+const getRouterFromKeyID = (keyID: string, nodePool: any[])  => {
+	const index = nodePool.findIndex( n => n.pgp_publickey_id === keyID)
+	if (index < 0) {
+		logger (Colors.red(`getRouterFromKeyID got null from nodePool keyID = ${keyID} nodePool length = [${nodePool.length}] keyIDs [${nodePool.map(n => n.pgp_publickey_id)}]`))
+		return null
+	}
+	return nodePool[index]
+	// return new Promise (resolve => {
+	// 	const node = forwardCache.get(keyID)
+	// 	if (node) {
+	// 		return resolve (node)
+	// 	}
 
-		const url = `${publicRouteURL}${keyID}`
-		return get(url, res => {
-			if( res.statusCode === 404) {
-				logger (Colors.grey(`getRouterFromKeyID [${ url }] return 404 not found `))
-				res.emit ('end')
-				return resolve (false)
-			}
-			if (res.statusCode !== 200) {
-				res.emit ('end')
-				return (null)
-			}
-			let ret = ''
-			res.on ('data', _data => {
-				ret += _data
-			})
-			res.once ('end', () => {
-				logger (`res.once ('end') code=[${res.statusCode}]`)
-				if (res.statusCode === 200) {
-					let retJson: ICoNET_Router
-					try {
-						retJson = JSON.parse(ret)
-					} catch (ex) {
-						return resolve (false)
-					}
-					forwardCache.set (keyID, retJson)
-					return resolve (retJson)
-				}
-			})
+	// 	const url = `${publicRouteURL}${keyID}`
+	// 	return get(url, res => {
+	// 		if( res.statusCode === 404) {
+	// 			logger (Colors.grey(`getRouterFromKeyID [${ url }] return 404 not found `))
+	// 			res.emit ('end')
+	// 			return resolve (false)
+	// 		}
+	// 		if (res.statusCode !== 200) {
+	// 			res.emit ('end')
+	// 			return (null)
+	// 		}
+	// 		let ret = ''
+	// 		res.on ('data', _data => {
+	// 			ret += _data
+	// 		})
+	// 		res.once ('end', () => {
+	// 			logger (`res.once ('end') code=[${res.statusCode}]`)
+	// 			if (res.statusCode === 200) {
+	// 				let retJson: ICoNET_Router
+	// 				try {
+	// 					retJson = JSON.parse(ret)
+	// 				} catch (ex) {
+	// 					return resolve (false)
+	// 				}
+	// 				forwardCache.set (keyID, retJson)
+	// 				return resolve (retJson)
+	// 			}
+	// 		})
 
-		}).once ('error', error => {
-			logger (Colors.red (`getRouterFromKeyID connest to [${ url }] Error`), error )
-			return resolve (false)
-		})
-	})
+	// 	}).once ('error', error => {
+	// 		logger (Colors.red (`getRouterFromKeyID connest to [${ url }] Error`), error )
+	// 		return resolve (false)
+	// 	})
+	// })
 }
 
 
@@ -1192,11 +1200,11 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 	})
 }
 
-const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, onlineClientPool: IclientPool[], outbound_price: number, storage_price: number, selfIpv4: string ) => {
+const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, onlineClientPool: IclientPool[], outbound_price: number, storage_price: number, selfIpv4: string, nodePool: any[] ) => {
 
 
 	//			forward encrypted text
-	const _route = await getRouterFromKeyID (gpgPublicKeyID)
+	const _route = getRouterFromKeyID (gpgPublicKeyID, nodePool)
 	if ( !_route ) {
 		const client = await getCoNETCashData (gpgPublicKeyID)
 
@@ -1211,17 +1219,17 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 
 	const router1: ICoNET_Router = _route
 
-	if ( router1.ipv4 === selfIpv4 ) {
-		logger (Colors.red(`forwardEncryptedText customer used old GPG Public key`))
+	if ( router1.ip_addr === selfIpv4 ) {
+		logger (Colors.red(`forwardEncryptedText customer used old GPG Public key! router1=${router1.ip_addr} selfIpv4 = [${selfIpv4}]`))
 		return distorySocket(socket)
 	}
 
-	if (!router1.ipv4 ) {
+	if (!router1.ip_addr ) {
 		logger (`forwardEncryptedText got ICoNET_Router but have not ip address router1 =[${ inspect(router1, false, 3, true) }]`)
 		return distorySocket(socket)
 	}
 
-	return socketForward( router1.ipv4, 80, socket, encryptedText)
+	return socketForward( router1.ip_addr, 80, socket, encryptedText)
 
 }
 
@@ -1245,6 +1253,15 @@ const pgpTest = async () => {
         armoredMessage: encrypted // parse armored message
     })
 	const keys = await enessage.getEncryptionKeyIDs()
+	logger (keys)
 }
 
+
+/**
+ * 			TEST
+ */
+
+/*
 pgpTest()
+
+/** */

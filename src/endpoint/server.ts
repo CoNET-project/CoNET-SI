@@ -71,6 +71,7 @@ const getLengthHander = (headers: string[]) => {
 	const ret = parseInt(length)
 	return isNaN(ret) ? -1 : ret
 }
+
 class conet_si_server {
 
     private localserver: Server| undefined
@@ -79,6 +80,7 @@ class conet_si_server {
 	private password = ''
 	private debug = true
 	private workerNumber = 0
+	public nodePool = []
 	private finishRegister = () => {
 
 		if (!initData ) {
@@ -91,7 +93,7 @@ class conet_si_server {
 			if (!initData ) {
 				return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
 			}
-			si_healthLoop ( initData )
+			si_healthLoop ( initData, this )
 		})
 	}
 
@@ -151,8 +153,7 @@ class conet_si_server {
 		initData.pgpKey.keyID = newID
 		initData.platform_verison = version
 		saveSetup ( initData, true )
-		si_healthLoop ( initData )
-
+		si_healthLoop(initData, this)
 		this.startServer ()
 	}
 
@@ -205,8 +206,8 @@ class conet_si_server {
 							logger (Colors.magenta(`startServer HTML body format error!`))
 							return distorySocket(socket)
 						}
-						
-						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '')
+						logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '', this)
 					}
 
 					const readMore = () => {
@@ -249,8 +250,5 @@ class conet_si_server {
 
 	}
 }
-
-
-
 
 export default conet_si_server

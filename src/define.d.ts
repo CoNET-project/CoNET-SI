@@ -127,6 +127,7 @@ interface ICoNET_Router {
 	profileImg?: string
 	emailAddr?: string
 	forward?: string
+	ip_addr: string
 }
 
 interface ethSignedObj {
