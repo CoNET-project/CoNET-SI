@@ -16,7 +16,7 @@ import type {IncomingMessage} from 'node:http'
 import {Transform} from 'node:stream'
 import type { KeyID as typeOpenPGPKeyID } from 'openpgp'
 import type { GenerateKeyOptions, Key, PrivateKey, Message, MaybeStream, Data, DecryptMessageResult, WebStream, NodeStream } from 'openpgp'
-import {Wallet} from 'ethers'
+import { Wallet } from 'ethers'
 import { exec } from 'node:child_process'
 import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
@@ -35,8 +35,8 @@ const forwardCache: Map<string, ICoNET_Router> = new Map()
 const ByteToMByte = 0.000001
 const CoNetCashClientCachePath = join (setupFileDir, '.Cache')
 const setupFile = join ( setupFileDir, 'nodeSetup.json')
-const conetDLServer = 'openpgp.online'
-const conetDLServerPOST = 443
+const conetDLServer = 'api.openpgp.online'
+const conetDLServerPOST = 4001
 const conetDLServerTimeout = 1000 * 60
 const healthTimeout = 1000 * 60 * 5
 export const rfc1918 = /(^0\.)|(^10\.)|(^100\.6[4-9]\.)|(^100\.[7-9]\d\.)|(^100\.1[0-1]\d\.)|(^100\.12[0-7]\.)|(^127\.)|(^169\.254\.)|(^172\.1[6-9]\.)|(^172\.2[0-9]\.)|(^172\.3[0-1]\.)|(^192\.0\.0\.)|(^192\.0\.2\.)|(^192\.88\.99\.)|(^192\.168\.)|(^198\.1[8-9]\.)|(^198\.51\.100\.)|(^203.0\.113\.)|(^22[4-9]\.)|(^23[0-9]\.)|(^24[0-9]\.)|(^25[0-5]\.)/
@@ -307,8 +307,8 @@ export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup, server: server 
 		server.nodePool = await requestHttpsUrl (option, postJSON)
 		logger (`si_health response is\n`, server.nodePool)
 	
-		if ( server.nodePool?.length) {
-			logger (Colors.red(`si_health DL return 404 try to regiest again!`))
+		if ( !server.nodePool?.length ) {
+			logger (Colors.red(`si_health DL return 404 try to regiest again!`), )
 			await register_to_DL (nodeInit)
 			saveSetup (nodeInit, false)
 		}
@@ -352,8 +352,14 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 	// logger ('********************************************************************************************************************************************')
 
 	nodeInit.dl_publicKeyArmored = await getDLPublicKey()
-	logger (`dl_publicKeyArmored = `, nodeInit.dl_publicKeyArmored)
 
+
+	if (nodeInit.dl_publicKeyArmored === null) {
+		
+		return logger (Colors.red(`register_to_DL got null return try late again!`))
+	}
+
+	logger (`dl_publicKeyArmored = `, nodeInit.dl_publicKeyArmored)
 	const data: ICoNET_DL_POST_register_SI = {
 		ipV4Port: nodeInit.ipV4Port,
 		ipV4: nodeInit.ipV4,

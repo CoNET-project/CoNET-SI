@@ -16,7 +16,6 @@ import dgram from 'node:dgram'
 import hexdump from 'hexdump-nodejs'
 
 const healthTimeout = 1000 * 60 * 5
-const projectMain = 'https://app.conet.network/'
 
 const packageFile = join (__dirname, '..', '..','package.json')
 const packageJson = require ( packageFile )
@@ -103,6 +102,7 @@ class conet_si_server {
 			return logger (Colors.red(`conet_si_server DL_registeredData have no initData Error!`))
 		}
 		const kkk = await register_to_DL (initData)
+		
 		if ( kkk?.nft_tokenid ) {
 			return this.finishRegister ()
 		}
