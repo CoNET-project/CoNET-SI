@@ -1,6 +1,6 @@
 {
 	"name": "@conet.project/mvp-si",
-	"version": "0.1.23",
+	"version": "0.1.29",
 	"author": {
 		"name": "CoNET Project",
 		"email": "info@conet.network"
@@ -58,7 +58,8 @@
 		"uuid": "^9.0.1",
 		"web3": "^4.3.0",
 		"openpgp": "^5.11.0",
-		"ethers": "^6.9.0"
+		"ethers": "^6.9.1",
+		"@conet.project/mvp-si": "^0.1.29"
 	},
 	"devDependencies": {
 		"@types/async": "^3.2.24",

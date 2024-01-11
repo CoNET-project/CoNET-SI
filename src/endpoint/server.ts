@@ -11,6 +11,7 @@ import Colors from 'colors/safe'
 import type { HDNodeWallet } from 'ethers'
 import Express from 'express'
 import  { distorySocket } from '../util/htmlResponse'
+
 import dgram from 'node:dgram'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -21,7 +22,7 @@ const packageFile = join (__dirname, '..', '..','package.json')
 const packageJson = require ( packageFile )
 const version = packageJson.version
 const onlineClientPool: IclientPool[] = []
-let initData:ICoNET_NodeSetup|null
+
 
 const packagePGP = (data:string) => {
 	return `-----BEGIN PGP MESSAGE-----\n\n${data}-----END PGP MESSAGE-----\n`
@@ -80,31 +81,34 @@ class conet_si_server {
 	private debug = true
 	private workerNumber = 0
 	public nodePool = []
-	private finishRegister = () => {
-
-		if (!initData ) {
+	public initData:ICoNET_NodeSetup|null = null
+	private finishRegister = (id: string) => {
+		logger(Colors.blue(`finishRegister nft_tokenid = [${id}]`))
+		if (!this.initData ) {
 			return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
 		}
 
-		return saveSetup ( initData, this.debug )
-		.then (() => {
-			this.startServer ()
-			if (!initData ) {
-				return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
-			}
-			si_healthLoop ( initData, this )
-		})
+		return saveSetup ( this.initData, this.debug )
+			.then (() => {
+				this.startServer ()
+				if (!this.initData ) {
+					return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
+				}
+				si_healthLoop ( this )
+			})
 	}
 
 	private DL_registeredData: () => any = async () => {
 
-		if (! initData ) {
+		if (! this.initData ) {
 			return logger (Colors.red(`conet_si_server DL_registeredData have no initData Error!`))
 		}
-		const kkk = await register_to_DL (initData)
+		const kkk = await register_to_DL (this.initData)
 		
+
 		if ( kkk?.nft_tokenid ) {
-			return this.finishRegister ()
+
+			return this.finishRegister (kkk.nft_tokenid)
 		}
 		
 		logger (Colors.red(`register_to_DL response null\n Try Again After 30s`))
@@ -116,44 +120,44 @@ class conet_si_server {
 
 	private initSetupData = async () => {
 		
-		initData = await getSetup ()
+		this.initData = await getSetup ()
 		if ( Cluster.isWorker && Cluster?.worker?.id ) {
 			this.workerNumber = Cluster?.worker?.id
 		}
 
-		logger (inspect(initData, false, 3, true))
+		logger (inspect(this.initData, false, 3, true))
 
-		if ( !initData?.keychain || initData?.passwd === undefined) {
-            logger ('initData?.keychain = ',initData?.keychain,'initData.passwd = ', initData?.passwd)
+		if ( !this.initData?.keychain || this.initData?.passwd === undefined) {
+            logger ('initData?.keychain = ',this.initData?.keychain,'initData.passwd = ', this.initData?.passwd)
 			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI !`)
 		}
 
-        logger (`initSetupData initData.passwd = [${initData.passwd}]`)
+        logger (`initSetupData initData.passwd = [${this.initData.passwd}]`)
 
-		this.password = initData.passwd
+		this.password = this.initData.passwd
 
-		initData.pgpKeyObj = await makeOpenpgpObj(initData.pgpKey.privateKey, initData.pgpKey.publicKey, this.password)
+		this.initData.pgpKeyObj = await makeOpenpgpObj(this.initData.pgpKey.privateKey, this.initData.pgpKey.publicKey, this.password)
 		try {
-			initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
+			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		} catch (ex) {
-			initData.keychain = await generateWalletAddress (this.password)
-			initData.keyObj = await loadWalletAddress ( initData.keychain, this.password )
+			this.initData.keychain = await generateWalletAddress (this.password)
+			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		}
 		
-		this.PORT = initData.ipV4Port
+		this.PORT = this.initData.ipV4Port
 		
-		if ( !initData.DL_registeredData ) {
+		if ( !this.initData.DL_registeredData ) {
 			logger (`This SI node has not registered`)
 			return this.DL_registeredData()
 		}
 
-		const newID = await getPublicKeyArmoredKeyID(initData.pgpKey.publicKey)
+		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
 		
-		logger (`this.initData.pgpKey.keyID [${initData.pgpKey.keyID}] <= newID [${newID}]`)
-		initData.pgpKey.keyID = newID
-		initData.platform_verison = version
-		saveSetup ( initData, true )
-		si_healthLoop(initData, this)
+		logger (`this.initData.pgpKey.keyID [${this.initData.pgpKey.keyID}] <= newID [${newID}]`)
+		this.initData.pgpKey.keyID = newID
+		this.initData.platform_verison = version
+		saveSetup ( this.initData, true )
+		si_healthLoop(this)
 		this.startServer ()
 	}
 
@@ -190,8 +194,8 @@ class conet_si_server {
 
 					const getData = () => {
 
-						if (!initData || !initData?.pgpKeyObj?.privateKeyObj) {
-							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(initData, false, 3, true), '\n')
+						if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
+							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
 							return distorySocket(socket)
 						}
 						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
@@ -207,7 +211,7 @@ class conet_si_server {
 							return distorySocket(socket)
 						}
 						logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '', this)
+						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKey.privateKey, this.initData.passwd? this.initData.passwd: '', this.initData.outbound_price, this.initData.storage_price, this.initData.ipV4, onlineClientPool, null, '', this)
 					}
 
 					const readMore = () => {

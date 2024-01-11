@@ -97,7 +97,10 @@ export const requestHttpsUrl = (option: RequestOptions, postData: string) => {
 		})
 
 		req.on ('error', (err: Error) => {
-			resolve (null)
+			setTimeout (() => {
+				resolve (null)
+			}, 30000)
+			
 			return logger (`register_to_DL postToServer [${ inspect(option, false, 3, true) }] error`, err )
 		})
 
@@ -272,19 +275,24 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 	return (true)
 }
 
-export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup, server: server ) => {
-	const wallet = nodeInit.keyObj
+export const si_healthLoop = async ( server: server ) => {
+	if (!server?.initData) {
+		return logger (Colors.red(`si_healthLoop server?.initData is NULL Error!`))
+	}
+	const wallet = server.initData.keyObj
 
 	const _payload: ICoNET_DL_POST_health_SI = {
-		nft_tokenid: createHash('sha256').update(nodeInit.ipV4).digest('hex'),
-		armoredPublicKey: nodeInit.pgpKey.publicKey,
-		platform_verison: nodeInit.platform_verison,
+		nft_tokenid: '',
+		armoredPublicKey: server.initData.pgpKey.publicKey,
+		platform_verison: server.initData.platform_verison,
 		walletAddr: wallet.address,
 		walletAddrSign: sign( wallet.privateKey, hash.keccak256(wallet.address)),
 	}
+	_payload.nft_tokenid = createHash('sha256').update(_payload.walletAddr.toLowerCase()).digest('hex'),
+	
 	logger (_payload)
 	const payload = {
-		pgpMessage: await EncryptePGPMessage (_payload, nodeInit.dl_publicKeyArmored, nodeInit.pgpKeyObj?.privateKeyObj),
+		pgpMessage: await EncryptePGPMessage (_payload, server.initData.dl_publicKeyArmored, server.initData.pgpKeyObj?.privateKeyObj),
 		//data: _payload
 	}
 
@@ -309,8 +317,11 @@ export const si_healthLoop = async ( nodeInit: ICoNET_NodeSetup, server: server 
 	
 		if ( !server.nodePool?.length ) {
 			logger (Colors.red(`si_health DL return 404 try to regiest again!`), )
-			await register_to_DL (nodeInit)
-			saveSetup (nodeInit, false)
+			await register_to_DL (server.initData)
+			saveSetup (server.initData, false)
+			_si_healthLoop()
+
+			return 
 		}
 
 		setTimeout( async () => {
@@ -341,7 +352,7 @@ const getDLPublicKey = async () => {
 	return response.publishGPGKey
 }
 
-export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
+export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup|null ) => {
 	if (!nodeInit) {
 		return false
 	}
@@ -402,26 +413,31 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup ) => {
 }
 
 
-export const saveSetup = ( setup: ICoNET_NodeSetup, debug: boolean ) => {
-
+export const saveSetup = ( setup: ICoNET_NodeSetup|null, debug: boolean ) => {
+	
 	const setupFile = join ( setupFileDir, 'nodeSetup.json')
-	const setupInfo: ICoNET_NodeSetup = {
-		keychain: setup.keychain,
-		ipV4: setup.ipV4,
-		ipV6: '',
-		ipV4Port: setup.ipV4Port,
-		ipV6Port: setup.ipV6Port,
-		storage_price: setup.storage_price,
-		outbound_price: setup.outbound_price,
-		pgpKey: setup.pgpKey,
-		DL_registeredData: setup.DL_registeredData,
-		cpus: cpus().length,
-		passwd: setup.passwd,
-		platform_verison: setup.platform_verison,
-		dl_publicKeyArmored: setup.dl_publicKeyArmored
-	}
+	
 
 	return new Promise(resolve => {
+		if (!setup) {
+			resolve(false)
+			return logger (Colors.red(`saveSetup setup: ICoNET_NodeSetup|null === NULL Error`))
+		}
+		const setupInfo: ICoNET_NodeSetup = {
+			keychain: setup.keychain,
+			ipV4: setup.ipV4,
+			ipV6: '',
+			ipV4Port: setup.ipV4Port,
+			ipV6Port: setup.ipV6Port,
+			storage_price: setup.storage_price,
+			outbound_price: setup.outbound_price,
+			pgpKey: setup.pgpKey,
+			DL_registeredData: setup.DL_registeredData,
+			cpus: cpus().length,
+			passwd: setup.passwd,
+			platform_verison: setup.platform_verison,
+			dl_publicKeyArmored: setup.dl_publicKeyArmored
+		}
 
 		return writeFile (setupFile, JSON.stringify (setupInfo), 'utf-8', err => {
 			if ( err ) {
