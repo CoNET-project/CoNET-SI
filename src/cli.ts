@@ -103,7 +103,7 @@ if ( Cluster.isPrimary ) {
 	// }
 	const forkWorker = () => {
 		
-		let numCPUs = cpus ().length
+		let numCPUs = cpus().length
 		
 		debug ? logger (`Cluster.isPrimary node have ${ numCPUs } cpus\n`): null
 	
@@ -204,6 +204,7 @@ if ( Cluster.isPrimary ) {
 		if (!singleCPU) {
 			return forkWorker()
 		}
+		
 		new conet_si_server ()
 	}
 

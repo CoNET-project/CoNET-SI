@@ -3,16 +3,11 @@ import { join } from 'node:path'
 import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
 import Net from 'node:net'
-import { Transform } from 'node:stream'
-import type { Server } from 'node:http'
 import {logger} from '../util/logger'
-import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, si_healthLoop, register_to_DL} from '../util/localNodeCommand'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from '../util/localNodeCommand'
 import Colors from 'colors/safe'
-import type { HDNodeWallet } from 'ethers'
-import Express from 'express'
 import  { distorySocket } from '../util/htmlResponse'
 
-import dgram from 'node:dgram'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -22,12 +17,6 @@ const packageFile = join (__dirname, '..', '..','package.json')
 const packageJson = require ( packageFile )
 const version = packageJson.version
 const onlineClientPool: IclientPool[] = []
-
-
-const packagePGP = (data:string) => {
-	return `-----BEGIN PGP MESSAGE-----\n\n${data}-----END PGP MESSAGE-----\n`
-}
-
 
 export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
     console.log(Colors.underline(Colors.green(`TOTAL LENGTH [${ buffer.length }]`)))
@@ -74,49 +63,12 @@ const getLengthHander = (headers: string[]) => {
 
 class conet_si_server {
 
-    private localserver: Server| undefined
-	private appsPath =''
 	private PORT=0
 	private password = ''
 	private debug = true
 	private workerNumber = 0
 	public nodePool = []
 	public initData:ICoNET_NodeSetup|null = null
-	private finishRegister = (id: string) => {
-		logger(Colors.blue(`finishRegister nft_tokenid = [${id}]`))
-		if (!this.initData ) {
-			return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
-		}
-
-		return saveSetup ( this.initData, this.debug )
-			.then (() => {
-				this.startServer ()
-				if (!this.initData ) {
-					return logger (Colors.red(`conet_si_server finishRegister have no initData Error!`))
-				}
-				si_healthLoop ( this )
-			})
-	}
-
-	private DL_registeredData: () => any = async () => {
-
-		if (! this.initData ) {
-			return logger (Colors.red(`conet_si_server DL_registeredData have no initData Error!`))
-		}
-		const kkk = await register_to_DL (this.initData)
-		
-
-		if ( kkk?.nft_tokenid ) {
-
-			return this.finishRegister (kkk.nft_tokenid)
-		}
-		
-		logger (Colors.red(`register_to_DL response null\n Try Again After 30s`))
-
-		return setTimeout (() => {
-			return this.DL_registeredData ()
-		}, 1000 * 30 )
-	}	
 
 	private initSetupData = async () => {
 		
@@ -145,11 +97,6 @@ class conet_si_server {
 		}
 		
 		this.PORT = this.initData.ipV4Port
-		
-		if ( !this.initData.DL_registeredData ) {
-			logger (`This SI node has not registered`)
-			return this.DL_registeredData()
-		}
 
 		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
 		
@@ -157,7 +104,6 @@ class conet_si_server {
 		this.initData.pgpKey.keyID = newID
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
-		si_healthLoop(this)
 		this.startServer ()
 	}
 
@@ -187,8 +133,8 @@ class conet_si_server {
 					logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 					const bodyLength = getLengthHander (htmlHeaders)
 
-					if (bodyLength < 0) {
-						logger (Colors.red(`startServer get header has no bodyLength [${bodyLength}] destory CONNECT!`))
+					if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
+						logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
 						return distorySocket(socket)
 					}
 
@@ -198,6 +144,7 @@ class conet_si_server {
 							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
 							return distorySocket(socket)
 						}
+
 						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 						let body
 						try {
@@ -206,6 +153,7 @@ class conet_si_server {
 							logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
 							return distorySocket(socket)
 						}
+						
 						if (!body.data || typeof body.data !== 'string') {
 							logger (Colors.magenta(`startServer HTML body format error!`))
 							return distorySocket(socket)
@@ -236,6 +184,8 @@ class conet_si_server {
 					return getData ()
 					
 				}
+
+
 				
 				return distorySocket(socket)
 			})

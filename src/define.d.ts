@@ -77,9 +77,9 @@ interface SICommandObj {
 	responseError: string|null
 	responseData: any[]
 	algorithm: 'aes-256-cbc'
-	iv: string
 	Securitykey: string
 	requestData: any[]
+	wallet: string
 }
 
 

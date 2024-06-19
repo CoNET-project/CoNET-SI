@@ -1,10 +1,9 @@
-# CoNET "Stealth Internet" Infrastructure
+# CoNET "Layer Minus protocol" node
 
 ## Description
 
-CoNET “Stealth Internet” Infrastructure (CoNET-SI) is a peer-to-peer computer network which uses traffic type obfuscation based HTML protocol to build at the top of the Open Systems Interconnection (OSI) communications model. CoNET-SI lets both parties of the communication use wallet addresses rather than IP addresses and a pair of public and private keys using asymmetric encryption technology to encrypt the communication content.
-
-Traditional tools based on changing clients IP addresses like VPN and Tor can no longer meet people’s increasing emphasis on privacy. Although the wallet address of the blockchain can also be used to achieve private communication, both parties in the communication need to wait for the generation of new blocks and cannot achieve instant communication. It cannot be applied in the client-server model of the Internet.
+The New Era of the Internet
+with a new generation of Transmission Protocols
 
 ## INSTALL
 1. Install NodeJS
@@ -18,7 +17,7 @@ npm i @conet.project/mvp-si -g
 
 ## SETUP
 
-### start CoNET "Stealth Internet" node
+### start CoNET "Layer Minus protocol" node
 
 ```bash
 conet-mvp-si

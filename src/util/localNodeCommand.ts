@@ -23,6 +23,7 @@ import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
 import type server from '../endpoint/server'
+import {checkPayment} from './util'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -273,63 +274,6 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 	}
 	logger (Colors.blue(`startPackageSelfVersionCheckAndUpgrade ${packageName} have new version and upgrade success!`))
 	return (true)
-}
-
-export const si_healthLoop = async ( server: server ) => {
-	if (!server?.initData) {
-		return logger (Colors.red(`si_healthLoop server?.initData is NULL Error!`))
-	}
-	const wallet = server.initData.keyObj
-
-	const _payload: ICoNET_DL_POST_health_SI = {
-		nft_tokenid: '',
-		armoredPublicKey: server.initData.pgpKey.publicKey,
-		platform_verison: server.initData.platform_verison,
-		walletAddr: wallet.address,
-		walletAddrSign: sign( wallet.privateKey, hash.keccak256(wallet.address)),
-	}
-	_payload.nft_tokenid = createHash('sha256').update(_payload.walletAddr.toLowerCase()).digest('hex'),
-	
-	logger (_payload)
-	const payload = {
-		pgpMessage: await EncryptePGPMessage (_payload, server.initData.dl_publicKeyArmored, server.initData.pgpKeyObj?.privateKeyObj),
-		//data: _payload
-	}
-
-	const postJSON = JSON.stringify(payload)
-
-	const option: RequestOptions = {
-		hostname: conetDLServer,
-		port: conetDLServerPOST,
-		path: '/api/si-health',
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			'Content-Length': Buffer.byteLength( postJSON )
-		},
-		rejectUnauthorized: false
-	}
-
-	const _si_healthLoop = async () => {
-		//	@ts-ignore
-		server.nodePool = await requestHttpsUrl (option, postJSON)
-		logger (`si_health response is\n`, server.nodePool)
-	
-		if ( !server.nodePool?.length ) {
-			logger (Colors.red(`si_health DL return 404 try to regiest again!`), )
-			await register_to_DL (server.initData)
-			saveSetup (server.initData, false)
-			_si_healthLoop()
-
-			return 
-		}
-
-		setTimeout( async () => {
-			_si_healthLoop ()
-		},  healthTimeout )
-	}
-		
-	_si_healthLoop ()
 }
 
 const getDLPublicKey = async () => {
@@ -816,73 +760,11 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], decryptedObj: IdecryptedObjText, command: SICommandObj,onlineClientPool: IclientPool[], outbound_price: number, storage_price: number ) => {
 
 
-	//				have no publicKeyArmored included
-	if ( typeof command?.publicKeyArmored !== 'string' || !command.publicKeyArmored.length || !decryptedObj.signatures.length ) {
-		logger (Colors.red(`postOpenpgpRoute localNodeCommand decrypted Obj SICommandObj have no signatures key information ERROR!\n`), inspect(command, false, 3, true))
-		return distorySocket(socket)
-	}
-	//			Check signatures, publicGpgKey match
-	const _clientKeyID = decryptedObj.signatures[0].keyID.toHex().toUpperCase ()
-	
-	if ( ! checkSignMatchPublicKeyArmored ( _clientKeyID, command.publicKeyArmored )) {
-		logger (Colors.red(`postOpenpgpRoute localNodeCommand SICommandObj signatures key [${_clientKeyID}] different getPublicKeyArmoredKeyID ERROR!\n`), inspect(command, false, 3, true))
-		return distorySocket(socket)
-	}
-
-	if ( !command?.Securitykey?.length ) {
-		logger (Colors.red(`postOpenpgpRoute localNodeCommand command format ERROR!\n`), inspect(command, false, 3, true ), '\n')
-		return distorySocket(socket)
-	}
-
-	logger (Colors.blue(`postOpenpgpRoute get request from customer [${ _clientKeyID }]`), inspect (command, false, 3, true))
-	const _clientKeyID_linked = await getPublicKeyArmoredKeyID(command.publicKeyArmored)
 
 	switch (command.command) {
-		case 'getCoNETCashAccount': {
-			const acc = createIdentity ()
-
-			const data: eth_crypto_key_obj = {
-				privateKey: acc.privateKey,
-				publicKey: acc.publicKey,
-				address: acc.address,
-				balance: 0,
-				amount: 0
-			}
-
-			let historyData: SI_Client_CoNETCashData|null = await getCoNETCashData(_clientKeyID)
-
-			if (! historyData) {
-				logger (Colors.blue (`Client [${_clientKeyID}] is firest time user`))
-				historyData =  {walletKeyArray: [data], publicKeyArmored: command.publicKeyArmored}
-			} else {
-				historyData.walletKeyArray.unshift (data)
-			}
-
-			logger (inspect(historyData, false, 3, true))
-
-			command.responseError = null
-			command.responseData = [data.address]
-			let keyJSON
-			try {
-				keyJSON = JSON.parse(command.Securitykey)
-			} catch (ex) {
-				logger (Colors.red(`localNodeCommand getCoNETCashAccount JSON.parse Securitykey Error! [${inspect(command, false, 3, true)}]`))
-				return distorySocket(socket)
-			}
-
-			command.responseError = null
-			command.publicKeyArmored = ''
-			command.responseData = [data.address]
-			const response = await encryptWebCryptCommand (keyJSON, command.iv, command)
-
-			logger (Colors.blue(`getCoNETCashAccount [${ _clientKeyID }] success!`), inspect(response, false, 3, true))
-
-			response200Html(socket, JSON.stringify({data: response}))
-
-			return await saveCoNETCashData (_clientKeyID, _clientKeyID_linked, historyData)
-		}
 
 		case 'SaaS_Sock5': {
+			
 			const prosyData = command.requestData[0]
 			return socks5Connect(prosyData, socket)
 		}
@@ -1083,6 +965,8 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger (Colors.red(`postOpenpgpRoute readMessage has no keys ERROR end connecting!\n`))
 		return distorySocket(socket)
 	}
+
+	logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID LENGTH = [${encrypKeyID.length }] 0 = [${encrypKeyID[0].toHex().toLowerCase()}]`))
 
 	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
 
