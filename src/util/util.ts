@@ -160,7 +160,7 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	const transObj = await provider.getTransactionReceipt(tx)
 	const toAddr = transObj?.to
 	if (!toAddr || toAddr.toLowerCase() !== cCNTPAddr||transObj?.logs?.length !== 1) {
-		return logger(Colors.gray(`Skip tx ${tx}`))
+		return //logger(Colors.gray(`Skip tx ${tx}`))
 	}
 
 	let uu: ethers.LogDescription|null
