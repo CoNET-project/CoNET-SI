@@ -6,3 +6,5 @@ const test = async () => {
 }
 
 test()
+
+//			curl -4 --socks5 "127.0.0.1:3003" "https://www.google.com/"

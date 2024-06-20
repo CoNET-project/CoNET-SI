@@ -11,7 +11,7 @@ const conetHoleskyRPC = 'https://rpc.conet.network'
 
 const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
-const GuardianNodesInfoV3 = '0x73e315e66F6a34ceA059257e1CE56D9FA2D2d47e'.toLowerCase()
+const GuardianNodesInfoV4 = '0x264ea87162463165101A500a6Bf8755b91220350'.toLowerCase()
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
 
@@ -35,7 +35,7 @@ interface NodList {
 const initGuardianNodes = async () => {
 	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
-	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV3, openPGPContractAbi, CONETProvider)
+	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV4, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
 		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
@@ -271,7 +271,7 @@ export const startEventListening = async () => {
 	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 	currentEpoch = await CONETProvider.getBlockNumber()
 	
-	// await initGuardianNodes()
+	await initGuardianNodes()
 
 	CONETProvider.on('block', async block => {
 		currentEpoch = block
