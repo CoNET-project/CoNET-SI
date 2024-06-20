@@ -206,7 +206,7 @@ export const getRoute = (keyID: string) => {
 }
 
 
-export const checkPayment = async (fromAddr: string) => {
+export const checkPayment = (fromAddr: string) => {
 	const nodes = useNodeReceiptList.get(fromAddr.toLowerCase())
 	if (!nodes) {
 		logger(Colors.blue(`checkPayment [${fromAddr}] has none in list!`))
