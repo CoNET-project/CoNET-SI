@@ -21,21 +21,6 @@ const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/Fragment
 const useNodeReceiptList: Map<string, NodList> = new Map()
 const routerInfo: Map<string, nodeInfo> = new Map()
 
-interface nodeInfo {
-	ipaddress: string
-	regionName: string
-	pgpArmored: string
-	pgpKeyID: string
-}
-
-interface NodList {
-	isGuardianNode: boolean
-	wallet: string
-	nodeInfo: nodeInfo|null
-	nodeID: number
-	Expired: number
-	value?: number
-}
 
 
 
@@ -232,8 +217,6 @@ export const checkPayment = async (fromAddr: string) => {
 	}
 	return true
 }
-
-
 
 
 const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {

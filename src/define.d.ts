@@ -168,3 +168,33 @@ type RequestOrgnal = {
 	json: string
 }
 
+
+interface nodeInfo {
+	ipaddress: string
+	regionName: string
+	pgpArmored: string
+	pgpKeyID: string
+}
+
+interface NodList {
+	isGuardianNode: boolean
+	wallet: string
+	nodeInfo: nodeInfo|null
+	nodeID: number
+	Expired: number
+	value?: number
+}
+
+
+interface minerObj {
+	walletAddress: string
+	walletAddress1:string
+	ipAddress: string
+	weidth: number
+	blockNumber?:string
+	referrer?:string
+	fork: any
+	hash?: string
+	data?: any
+	allWallets?: string[]
+}

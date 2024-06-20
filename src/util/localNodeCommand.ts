@@ -24,6 +24,7 @@ import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
 import type server from '../endpoint/server'
 import {checkPayment, getRoute } from './util'
+import { ethers } from 'ethers'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -957,16 +958,29 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		return forwardEncryptedSocket(socket, pgpData, customerKeyID)
 	}
 
-	let decryptedObj
+	let content
 
 	try {
-		decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
+		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
+		content = JSON.parse(Buffer.from(decryptedObj.data.toString(),'base64').toString())
 	} catch (ex) {
-		logger (Colors.red(`customerKeyID [${customerKeyID}] decryptMessage ERROR, goto forwardEncryptedText!`))
+		logger (Colors.red(` decryptMessage EX ERROR, distorySocket!`))
 		return distorySocket(socket)
 	}
 
-	logger(inspect(decryptedObj, false, 3, true))
+	if (!content.message ||!content.signMessage) {
+		logger (Colors.red(`Command format Error`))
+		logger(inspect(content, false,3, true))
+		return distorySocket(socket)
+	}
+	const command = checkSignObj (content.message, content.signMessage)
+
+	if (!command) {
+		logger(Colors.red(`checkSignObj Error!`))
+		return distorySocket(socket)
+	}
+
+	logger(inspect(command, false, 3, true))
 	
 }
 
@@ -1019,6 +1033,37 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 	}
 
 	return socketForward( _route, 80, socket, encryptedText)
+
+}
+
+export const checkSignObj = (message: string, signMess: string) => {
+	if (!message || !signMess) {
+		return null
+	}
+	let obj: minerObj
+	try {
+		obj = JSON.parse(message)
+	} catch (ex) {
+		logger (Colors.red(`checkSignObj JSON.parse(message) Error`), message)
+		return null
+	}
+
+	let digest, recoverPublicKey, _digest
+	try {
+		digest = ethers.id(message)
+		recoverPublicKey = ethers.recoverAddress(digest, signMess)
+		ethers.getAddress(recoverPublicKey)
+	} catch (ex) {
+		// logger (colors.red(`checkSignObj recoverPublicKey ERROR digest = ${digest} signMess = ${signMess}`))
+		return null
+	}
+	
+	if (!recoverPublicKey || !obj?.walletAddress || recoverPublicKey.toLowerCase() !== obj?.walletAddress?.toLowerCase()) {
+		logger (Colors.red(`checkSignObj obj Error! !recoverPublicKey[${!recoverPublicKey}] !obj?.walletAddress[${!obj?.walletAddress}] recoverPublicKey.toLowerCase() [${recoverPublicKey.toLowerCase()}]!== obj?.walletAddress?.toLowerCase() [${recoverPublicKey.toLowerCase() !== obj?.walletAddress?.toLowerCase()}]`),inspect(obj, false, 3, true) )
+		return null
+	}
+	obj.walletAddress = recoverPublicKey.toLowerCase()
+	return obj
 
 }
 

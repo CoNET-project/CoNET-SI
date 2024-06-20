@@ -5,7 +5,7 @@ import hexdump from 'hexdump-nodejs'
 export  const logger = (...argv: any ) => {
     const date = new Date ()
     const dateStrang = `%c [CONET-worker INFO ${ date.getHours() }:${ date.getMinutes() }:${ date.getSeconds() }:${ date.getMilliseconds ()}]`
-    return console.log ( dateStrang, 'color: #dcde56',  ...argv)
+    return console.log ( colors.yellow(`${dateStrang}`),...argv)
 }
 
 export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
