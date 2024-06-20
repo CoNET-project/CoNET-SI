@@ -985,6 +985,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
 		return distorySocket(socket, '403')
 	}
+	
 	return localNodeCommandSocket(socket, headers, command )
 	
 }

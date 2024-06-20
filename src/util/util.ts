@@ -209,9 +209,11 @@ export const getRoute = (keyID: string) => {
 export const checkPayment = async (fromAddr: string) => {
 	const nodes = useNodeReceiptList.get(fromAddr.toLowerCase())
 	if (!nodes) {
+		logger(Colors.blue(`checkPayment [${fromAddr}] has none in list!`))
 		return false
 	}
 	if (nodes.Expired < currentEpoch) {
+		logger(Colors.blue(`checkPayment [${fromAddr}] Expired!`))
 		useNodeReceiptList.delete (fromAddr.toLowerCase())
 		return false
 	}
