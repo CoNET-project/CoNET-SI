@@ -7,14 +7,19 @@ import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import P from 'phin'
 import { mapLimit } from 'async'
+import {readKey} from 'openpgp'
+import { getServerIPV4Address } from './localNodeCommand'
+
 const conetHoleskyRPC = 'https://rpc.conet.network'
 
 const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
 const GuardianNodesInfoV4 = '0x264ea87162463165101A500a6Bf8755b91220350'.toLowerCase()
+const GlobalIpAddress = getServerIPV4Address ( false )
+const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/FragmentOcean/`
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
-
+const routerInfo: Map<string, nodeInfo> = new Map()
 
 interface nodeInfo {
 	ipaddress: string
@@ -31,6 +36,8 @@ interface NodList {
 	Expired: number
 	value?: number
 }
+
+
 
 const initGuardianNodes = async () => {
 	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
@@ -64,7 +71,7 @@ const initGuardianNodes = async () => {
 			pgpKeyID: ''
 		}
 		const _nodeInfo = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
-		if (_nodeInfo?.ipaddress) {
+		if (_nodeInfo?.ipaddress && _nodeInfo.ipaddress !== GlobalIpAddress) {
 			nodeInfo.ipaddress = _nodeInfo.ipaddress
 			nodeInfo.regionName = _nodeInfo.regionName
 			nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
@@ -88,8 +95,13 @@ const initGuardianNodes = async () => {
 		}
 	})
 
-	await mapLimit(useNodeReceiptList.entries(), 12, async ([n, v], next) => {
-		v.nodeInfo = await getNodeInfo(v.nodeID)
+	await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
+		const kk = v.nodeInfo = await getNodeInfo(v.nodeID)
+		if (v.nodeInfo && v.nodeInfo.pgpArmored){
+			const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
+			v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
+			routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+		}
 	})
 	
 }
@@ -198,7 +210,14 @@ const cleanupUseNodeReceiptList = (epoch: number) => {
 			useNodeReceiptList.delete(key)
 		}
 	})
+}
 
+export const getRoute = (keyID: string) => {
+	const node = routerInfo.get(keyID.toUpperCase())
+	if (!node) {
+		return null
+	}
+	return node.ipaddress
 }
 
 
@@ -216,8 +235,6 @@ export const checkPayment = async (fromAddr: string) => {
 
 
 
-
-const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/FragmentOcean/`
 
 const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
 	const url = `${wasabiUrl}${epoch}_free`

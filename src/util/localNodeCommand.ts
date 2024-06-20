@@ -23,7 +23,7 @@ import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
 import type server from '../endpoint/server'
-import {checkPayment} from './util'
+import {checkPayment, getRoute } from './util'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -847,28 +847,10 @@ const socks5Connect = (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
     })
 }
 
-const decryptMessage = async (encryptedText: string|Message<MaybeStream<Data>>, privateKeyObj: PrivateKey|string, passed:string ) => {
-	let decryptionKeys = privateKeyObj
-
-	if ( typeof decryptionKeys === 'string') {
-		const privateKey = await readPrivateKey ({armoredKey: decryptionKeys})
-		if (!privateKey.isDecrypted()) {
-			decryptionKeys = await decryptKey({
-				privateKey,
-				passphrase: passed
-			})
-		} else {
-			decryptionKeys = privateKey
-		}
-	}
-	let message = encryptedText
-	if ( typeof encryptedText === 'string') {
-		message = await readMessage({armoredMessage: encryptedText})
-	}
-
+const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
+	
 	const decrypted = await decrypt ({
-		//	@ts-ignore
-		message,
+		message: encryptedText,
 		decryptionKeys
 	})
 
@@ -946,9 +928,10 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 	return connect.clientSocket.write(`data: ${encryptedText}\n\n`)
 }
 
-export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, privateKeyArmored: string, password: string, outbound_price: number, storage_price: number, selfIpv4: string,  onlineClientPool: IclientPool[], preDecryptedObj: IdecryptedObjText | null, encryptedByPublicKeyID: string = '', server: server) => {
+export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
 
 	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ))
+	
 
 	let messObj
 	
@@ -966,108 +949,25 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		return distorySocket(socket)
 	}
 
-	logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID LENGTH = [${encrypKeyID.length }] 0 = [${encrypKeyID[0].toHex().toLowerCase()}]`))
-
 	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
+
+	
+	if (customerKeyID !== pgpPublicKeyID) {
+		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key forward to destination node!`))
+		return forwardEncryptedSocket(socket, pgpData, customerKeyID)
+	}
 
 	let decryptedObj
 
 	try {
-		decryptedObj = await decryptMessage ( messObj, privateKeyArmored, password )
+		decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
 	} catch (ex) {
 		logger (Colors.red(`customerKeyID [${customerKeyID}] decryptMessage ERROR, goto forwardEncryptedText!`))
-		forwardEncryptedSocket(socket, pgpData, customerKeyID, onlineClientPool,outbound_price, storage_price, selfIpv4, server.nodePool )
-		return
-	}
-
-	if ( typeof decryptedObj.data !== 'string') {
-		logger (Colors.red(`postOpenpgpRoute decryptMessage data has not string format ERROR\n`), inspect(decryptedObj, false, 3, true), '\n')
 		return distorySocket(socket)
 	}
 
-	//		already once russian doll
-	if ( preDecryptedObj && encryptedByPublicKeyID) {
-		logger (Colors.red(`postOpenpgpRoute had many russian doll ERROR\n`), inspect(decryptedObj, false, 3, true), '\n')
-		return distorySocket(socket)
-	}
-
-
-	const _preDecryptedObj = <IdecryptedObjText> decryptedObj
-	let command;
-    try {
-        command = JSON.parse(Buffer.from(decryptedObj.data, 'base64').toString());
-    }
-    catch (ex) {
-		logger (Colors.red(`postOpenpgpRoute localNodeCommand decrypted Obj JSON ERROR!\n`))
-        return distorySocket(socket)
-    }
-
-	//				have no publicKeyArmored included
-	const cmdStr = command
-	command.algorithm = 'aes-256-cbc'
-
-	if (/^-----BEGIN PGP MESSAGE-----\n/.test (cmdStr)) {
-		postOpenpgpRouteSocket (socket, headers, cmdStr, privateKeyArmored, password, outbound_price, storage_price, selfIpv4, onlineClientPool, _preDecryptedObj, customerKeyID, server )
-		return
-	}
-	//			Forward encrypted text have not STOP in ths node so it allow have no signature
-	if (!decryptedObj.signatures?.length) {
-		logger (Colors.red(`localNodeCommand Have no signatures ERROR!\n`))
-		return distorySocket(socket)
-	}
-
-	localNodeCommandSocket(socket, headers, _preDecryptedObj, command, onlineClientPool, outbound_price, storage_price)
-
-}
-
-
-const getRouterFromKeyID = (keyID: string, nodePool: any[])  => {
-	const index = nodePool.findIndex( n => n.pgp_publickey_id === keyID)
-	if (index < 0) {
-		logger (Colors.red(`getRouterFromKeyID got null from nodePool keyID = ${keyID} nodePool length = [${nodePool.length}] keyIDs [${nodePool.map(n => n.pgp_publickey_id)}]`))
-		return null
-	}
-	return nodePool[index]
-	// return new Promise (resolve => {
-	// 	const node = forwardCache.get(keyID)
-	// 	if (node) {
-	// 		return resolve (node)
-	// 	}
-
-	// 	const url = `${publicRouteURL}${keyID}`
-	// 	return get(url, res => {
-	// 		if( res.statusCode === 404) {
-	// 			logger (Colors.grey(`getRouterFromKeyID [${ url }] return 404 not found `))
-	// 			res.emit ('end')
-	// 			return resolve (false)
-	// 		}
-	// 		if (res.statusCode !== 200) {
-	// 			res.emit ('end')
-	// 			return (null)
-	// 		}
-	// 		let ret = ''
-	// 		res.on ('data', _data => {
-	// 			ret += _data
-	// 		})
-	// 		res.once ('end', () => {
-	// 			logger (`res.once ('end') code=[${res.statusCode}]`)
-	// 			if (res.statusCode === 200) {
-	// 				let retJson: ICoNET_Router
-	// 				try {
-	// 					retJson = JSON.parse(ret)
-	// 				} catch (ex) {
-	// 					return resolve (false)
-	// 				}
-	// 				forwardCache.set (keyID, retJson)
-	// 				return resolve (retJson)
-	// 			}
-	// 		})
-
-	// 	}).once ('error', error => {
-	// 		logger (Colors.red (`getRouterFromKeyID connest to [${ url }] Error`), error )
-	// 		return resolve (false)
-	// 	})
-	// })
+	logger(inspect(decryptedObj, false, 3, true))
+	
 }
 
 
@@ -1106,36 +1006,19 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 	})
 }
 
-const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, onlineClientPool: IclientPool[], outbound_price: number, storage_price: number, selfIpv4: string, nodePool: any[] ) => {
+const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string) => {
 
 
 	//			forward encrypted text
-	const _route = getRouterFromKeyID (gpgPublicKeyID, nodePool)
-	if ( !_route ) {
-		const client = await getCoNETCashData (gpgPublicKeyID)
+	const _route = getRoute (gpgPublicKeyID)
 
-		//			is the keyID client in node
-		if ( client ) {
-			return customerDataSocket (socket, encryptedText, gpgPublicKeyID, client, onlineClientPool, outbound_price,storage_price)
-		}
+	if ( !_route ) {
 		
-		logger (`forwardEncryptedText can not find router [${ gpgPublicKeyID }]`)
+		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
 		return response200Html(socket, JSON.stringify({}))
 	}
 
-	const router1: ICoNET_Router = _route
-
-	if ( router1.ip_addr === selfIpv4 ) {
-		logger (Colors.red(`forwardEncryptedText customer used old GPG Public key! router1=${router1.ip_addr} selfIpv4 = [${selfIpv4}]`))
-		return distorySocket(socket)
-	}
-
-	if (!router1.ip_addr ) {
-		logger (`forwardEncryptedText got ICoNET_Router but have not ip address router1 =[${ inspect(router1, false, 3, true) }]`)
-		return distorySocket(socket)
-	}
-
-	return socketForward( router1.ip_addr, 80, socket, encryptedText)
+	return socketForward( _route, 80, socket, encryptedText)
 
 }
 

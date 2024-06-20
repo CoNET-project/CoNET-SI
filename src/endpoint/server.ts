@@ -69,6 +69,7 @@ class conet_si_server {
 	private debug = true
 	private workerNumber = 0
 	public nodePool = []
+	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
 
 	private initSetupData = async () => {
@@ -96,7 +97,7 @@ class conet_si_server {
 			this.initData.keychain = await generateWalletAddress (this.password)
 			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		}
-		
+		this.publicKeyID = this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 		this.PORT = this.initData.ipV4Port
 
 		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
@@ -161,7 +162,7 @@ class conet_si_server {
 							return distorySocket(socket)
 						}
 						logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKey.privateKey, this.initData.passwd? this.initData.passwd: '', this.initData.outbound_price, this.initData.storage_price, this.initData.ipV4, onlineClientPool, null, '', this)
+						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
 					}
 
 					const readMore = () => {
