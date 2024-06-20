@@ -15,7 +15,7 @@ const conetHoleskyRPC = 'https://rpc.conet.network'
 const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
 const GuardianNodesInfoV4 = '0x264ea87162463165101A500a6Bf8755b91220350'.toLowerCase()
-const GlobalIpAddress = getServerIPV4Address ( false )
+let GlobalIpAddress = ''
 const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/FragmentOcean/`
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
@@ -287,7 +287,10 @@ const scanPassedEpoch = async ( CONETProvider: ethers.JsonRpcProvider) => {
 export const startEventListening = async () => {
 	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 	currentEpoch = await CONETProvider.getBlockNumber()
-	
+	const ip = getServerIPV4Address ( false )
+	if (ip && ip.length) {
+		GlobalIpAddress = ip[0]
+	}
 	await initGuardianNodes()
 
 	CONETProvider.on('block', async block => {
