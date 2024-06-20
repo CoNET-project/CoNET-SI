@@ -163,7 +163,7 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	const startEpoch = transObj.blockNumber
 	const value = parseFloat(ethers.formatEther(args[2]))
 	const wallet = args[0].toLowerCase()
-	const _rate = await getEpochRate(startEpoch)
+	const _rate = await getEpochRate(currentEpoch - transObj.blockNumber < 5 ? currentEpoch - 5 : transObj.blockNumber)
 	
 	const rate = (typeof _rate !== 'string'||_rate === '') ? lastrate : parseFloat(_rate)
 	lastrate = rate
