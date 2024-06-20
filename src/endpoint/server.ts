@@ -5,6 +5,7 @@ import Cluster from 'node:cluster'
 import Net from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from '../util/localNodeCommand'
+import {startEventListening} from '../util/util'
 import Colors from 'colors/safe'
 import  { distorySocket } from '../util/htmlResponse'
 
@@ -105,6 +106,7 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 		this.startServer ()
+		startEventListening()
 	}
 
 	constructor () {
