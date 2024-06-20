@@ -758,7 +758,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 }
 
 
-export const localNodeCommandSocket = async (socket: Socket, headers: string[], decryptedObj: IdecryptedObjText, command: SICommandObj,onlineClientPool: IclientPool[], outbound_price: number, storage_price: number ) => {
+export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: SICommandObj) => {
 
 
 
@@ -979,8 +979,13 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(Colors.red(`checkSignObj Error!`))
 		return distorySocket(socket)
 	}
+	const payment = checkPayment(command.walletAddress)
 
-	logger(inspect(command, false, 3, true))
+	if (!payment) {
+		logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+		return distorySocket(socket, '403')
+	}
+	return localNodeCommandSocket(socket, headers, command )
 	
 }
 

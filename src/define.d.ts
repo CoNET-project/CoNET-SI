@@ -79,7 +79,6 @@ interface SICommandObj {
 	algorithm: 'aes-256-cbc'
 	Securitykey: string
 	requestData: any[]
-	wallet: string
 }
 
 
@@ -186,9 +185,8 @@ interface NodList {
 }
 
 
-interface minerObj {
+interface minerObj extends SICommandObj{
 	walletAddress: string
-	walletAddress1:string
 	ipAddress: string
 	weidth: number
 	blockNumber?:string
