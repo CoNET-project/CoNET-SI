@@ -931,7 +931,7 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
 
 	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ))
-	
+	logger(inspect(pgpData, false, 3, true))
 
 	let messObj
 	
