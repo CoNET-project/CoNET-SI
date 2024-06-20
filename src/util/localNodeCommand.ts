@@ -979,13 +979,14 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(Colors.red(`checkSignObj Error!`))
 		return distorySocket(socket)
 	}
+
 	const payment = checkPayment(command.walletAddress)
 
 	if (!payment) {
 		logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
 		return distorySocket(socket, '403')
 	}
-	
+	logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
 	return localNodeCommandSocket(socket, headers, command )
 	
 }

@@ -161,7 +161,7 @@ class conet_si_server {
 							logger (Colors.magenta(`startServer HTML body format error!`))
 							return distorySocket(socket)
 						}
-						logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+						//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
 					}
 
