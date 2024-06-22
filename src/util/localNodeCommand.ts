@@ -1009,7 +1009,7 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 		sourceSocket.once ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			conn.destroy()
+			// conn.destroy()
 		})
 
 		conn.pipe (sourceSocket).pipe(conn).on('error', err => {
