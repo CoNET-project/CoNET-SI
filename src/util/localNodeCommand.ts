@@ -825,7 +825,9 @@ const socks5Connect = (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
 
 	const socket = createConnection ( port, host, () => {
 
-        socket.pipe(resoestSocket).pipe(socket)
+        socket.pipe(resoestSocket).pipe(socket).on('error', err => {
+			logger(Colors.red(`socks5Connect pipe on Error`), err)
+		})
 
         const data = Buffer.from(prosyData.buffer, 'base64')
         socket.write (data)
