@@ -1012,7 +1012,9 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 			conn.destroy()
 		})
 
-		conn.pipe (sourceSocket).pipe(conn)
+		conn.pipe (sourceSocket).pipe(conn).on('error', err => {
+			logger(`postOpenpgpRouteSocket createConnection conn.pipe on error`, err)
+		})
 		
 		conn.write (rawHttpRequest)
 
