@@ -85,6 +85,7 @@ const initGuardianNodes = async () => {
 		if (v.nodeInfo && v.nodeInfo.pgpArmored){
 			const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
 			v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
+			logger(Colors.blue(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
 			routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
 		}
 	})
