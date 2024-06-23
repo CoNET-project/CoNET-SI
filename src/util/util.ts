@@ -80,7 +80,7 @@ const initGuardianNodes = async () => {
 		}
 	})
 
-	await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
+	await mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
 		const kk = v.nodeInfo = await getNodeInfo(v.nodeID)
 		if (v.nodeInfo && v.nodeInfo.pgpArmored){
 			const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
@@ -201,6 +201,7 @@ const cleanupUseNodeReceiptList = (epoch: number) => {
 export const getRoute = (keyID: string) => {
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
+		initGuardianNodes()
 		return null
 	}
 	return node.ipaddress
