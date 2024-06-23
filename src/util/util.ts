@@ -141,11 +141,20 @@ const iface = new ethers.Interface(cCNTPABI)
 let currentEpoch: number
 let lastrate: number
 
+const GuardianNodesInfoV4Contract = '0x264ea87162463165101A500a6Bf8755b91220350'.toLocaleLowerCase()
+
+
 const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
 	const transObj = await provider.getTransactionReceipt(tx)
-	const toAddr = transObj?.to
-	if (!toAddr || toAddr.toLowerCase() !== cCNTPAddr||transObj?.logs?.length !== 1) {
+
+	const toAddr = transObj?.to?.toLowerCase()
+	
+	if ( GuardianNodesInfoV4Contract === toAddr) {
+		return await initGuardianNodes()
+	}
+
+	if (!toAddr || toAddr !== cCNTPAddr || transObj?.logs?.length !== 1 ) {
 		return //logger(Colors.gray(`Skip tx ${tx}`))
 	}
 
@@ -298,3 +307,4 @@ export const startEventListening = async () => {
 	
 	await scanPassedEpoch(CONETProvider)
 }
+
