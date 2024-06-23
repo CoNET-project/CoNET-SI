@@ -830,12 +830,15 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 	if (!host) {
 		return distorySocket(resoestSocket)
 	}
-	const ipStyle = IP.isPublic(host)
-	
-	if (!ipStyle) {
+	try {
+		const ipStyle = IP.isPublic(host)
+		if (!ipStyle) {
+			return distorySocket(resoestSocket)
+		}
+	} catch (ex){
 		host = await getHostIpv4(host)
-		
 	}
+	
 
 	if ( port < 1 || port > 65535  || !prosyData.uuid || !host) {
 		return distorySocket(resoestSocket)
