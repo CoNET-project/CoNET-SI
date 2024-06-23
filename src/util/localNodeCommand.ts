@@ -22,9 +22,10 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import type server from '../endpoint/server'
 import {checkPayment, getRoute } from './util'
 import { ethers } from 'ethers'
+import IP from 'ip'
+import {resolve4} from 'node:dns'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -811,17 +812,35 @@ class BandwidthCount extends Transform {
 	}
 }
 
+const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Promise(resolve => {
+	return resolve4(host, (err, ipv4s) => {
+		if (err||!ipv4s?.length) {
+			return resolve ('')
+		}
 
+		return resolve(ipv4s[0])
+	})
+})
 
-const socks5Connect = (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
+const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
 
     logger (Colors.blue (`socks5Connect connect to [${prosyData.host}:${prosyData.port}]`))
 	const port = prosyData.port
-	const host = prosyData.host
-
-	if ( port < 1 || port > 65535 || typeof host !== 'string' || !host || !prosyData.uuid) {
+	let host = prosyData.host
+	if (!host) {
 		return distorySocket(resoestSocket)
 	}
+	const ipStyle = IP.isPublic(host)
+	
+	if (!ipStyle) {
+		host = await getHostIpv4(host)
+		
+	}
+
+	if ( port < 1 || port > 65535  || !prosyData.uuid || !host) {
+		return distorySocket(resoestSocket)
+	}
+
 
 	const socket = createConnection ( port, host, () => {
 
