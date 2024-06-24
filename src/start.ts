@@ -3,7 +3,7 @@ import {cpus} from 'node:os'
 import conet_si_server from './endpoint/server'
 
 if (Cluster.isPrimary) {
-	for (let i = 0; i < cpus().length; i ++) {
+	for (let i = 0; i < cpus().length/2; i ++) {
 		Cluster.fork()
 	}
 	
