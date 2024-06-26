@@ -277,6 +277,7 @@ const scanPassedEpoch = async ( CONETProvider: ethers.JsonRpcProvider) => {
 	for (let i = startEpoch; i <= endEpoch; i ++) {
 		execPool.push(i)
 	}
+
 	await mapLimit(execPool,1, async (n, next) => {
 		await checkBlock(n, CONETProvider)
 	})
@@ -298,10 +299,13 @@ export const startEventListening = async () => {
 		if (!blockDetail?.transactions) {
 			return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
 		}
+		//@ts-ignore
+		const transactions: string[] = blockDetail.transactions
 
-		for (let u of blockDetail.transactions) {
-			await detailTransfer(u, CONETProvider)
-		}
+		await mapLimit(transactions, 1, async (n, next) => {
+			await detailTransfer(n, CONETProvider)
+		})
+		
 
 	})
 	

@@ -3,10 +3,15 @@ import {cpus} from 'node:os'
 import conet_si_server from './endpoint/server'
 
 if (Cluster.isPrimary) {
-	for (let i = 0; i < cpus().length/2; i ++) {
-		Cluster.fork()
+	const worker = Math.floor(cpus().length/2)
+	if (worker<2) {
+		new conet_si_server()
+	} else {
+		for (let i = 0; i < worker; i ++) {
+			Cluster.fork()
+		}
 	}
-	
+
 } else {
 	new conet_si_server()
 }

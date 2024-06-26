@@ -856,19 +856,17 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
         resoestSocket.resume()
     })
 
-	socket.once ( 'end', () => {
+	socket.on ( 'end', () => {
 		logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
-		resoestSocket.end()
 	})
 
-	socket.once ( 'error', err => {
+	socket.on ( 'error', err => {
 		logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
-		resoestSocket.end()
+
 	})
 
     resoestSocket.on('error', err => {
         logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
-        socket.destroy()
     })
 }
 
@@ -955,15 +953,14 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 
 export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
 
-	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ))
-	logger(inspect(pgpData, false, 3, true))
+	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [$${pgpData?.length}]`))
 
 	let messObj
 	
 	try {
 		messObj = await readMessage ({armoredMessage: pgpData})
 	} catch (ex) {
-		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error !\n`), Colors.grey (pgpData), '\n')
+		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error !\n`))
 		return distorySocket(socket)
 	}
 
