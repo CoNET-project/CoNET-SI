@@ -858,6 +858,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 
 	socket.on ( 'end', () => {
 		logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
+		resoestSocket.end().destroy()
 	})
 
 	socket.on ( 'error', err => {
