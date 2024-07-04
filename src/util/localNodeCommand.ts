@@ -1029,7 +1029,7 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 		sourceSocket.once ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			conn.destroy()
+			conn.end().destroy()
 		})
 
 		conn.pipe (sourceSocket).pipe(conn).on('error', err => {
@@ -1043,12 +1043,12 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 	
 	conn.on ('error', err => {
 		logger (Colors.red(`Fardward node ${ ipAddr }:${port} on error [${err.message}] STOP connect \n`) )
-		sourceSocket.end().destroy()
+		sourceSocket.destroy()
 	})
 
 	conn.once ('close', () => {
 		logger(Colors.magenta(`Fardward node ${ ipAddr }:${port} on Close!`))
-		sourceSocket.end().destroy()
+		sourceSocket.destroy()
 	})
 }
 

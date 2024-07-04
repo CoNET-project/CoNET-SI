@@ -43,7 +43,7 @@ const initGuardianNodes = async () => {
 	try {
 		NFTAssets = await guardianSmartContract.balanceOfBatch(_nodesAddress, NFTIds)
 	} catch (ex: any) {
-		return logger(Colors.red(`nodesAirdrop guardianSmartContract.balanceOfBatch() Error! STOP`), ex.mesage)
+		return logger(Colors.red(`nodesAirdrop guardianSmartContract.balanceOfBatch(${_nodesAddress},${NFTIds}) Error! STOP`), ex.mesage)
 	}
 	
 
