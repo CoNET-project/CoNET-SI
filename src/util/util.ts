@@ -81,13 +81,20 @@ const initGuardianNodes = async () => {
 	})
 
 	await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
-		const kk = v.nodeInfo = await getNodeInfo(v.nodeID)
-		if (v.nodeInfo && v.nodeInfo.pgpArmored){
-			const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
-			v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
-			logger(Colors.blue(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
-			routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+		try {
+			v.nodeInfo = await getNodeInfo(v.nodeID)
+			if (v.nodeInfo && v.nodeInfo.pgpArmored){
+				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
+				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
+				logger(Colors.blue(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
+				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+			} else {
+				next(new Error(`SPIP scan!`))
+			}
+		} catch (ex) {
+			logger(`STOP scan!`)
 		}
+		
 	})
 	
 }
