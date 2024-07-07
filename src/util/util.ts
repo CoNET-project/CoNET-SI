@@ -14,7 +14,7 @@ const conetHoleskyRPC = 'https://rpc.conet.network'
 
 const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
-const GuardianNodesInfoV4 = '0x264ea87162463165101A500a6Bf8755b91220350'.toLowerCase()
+const GuardianNodesInfoV5 = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
 let GlobalIpAddress = ''
 const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/FragmentOcean/`
 
@@ -27,7 +27,7 @@ const routerInfo: Map<string, nodeInfo> = new Map()
 const initGuardianNodes = async () => {
 	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
-	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV4, openPGPContractAbi, CONETProvider)
+	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV5, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
 		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
@@ -141,8 +141,6 @@ const iface = new ethers.Interface(cCNTPABI)
 let currentEpoch: number
 let lastrate: number
 
-const GuardianNodesInfoV4Contract = '0x264ea87162463165101A500a6Bf8755b91220350'.toLocaleLowerCase()
-
 
 const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
@@ -150,7 +148,7 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 
 	const toAddr = transObj?.to?.toLowerCase()
 	
-	if ( GuardianNodesInfoV4Contract === toAddr) {
+	if ( GuardianNodesInfoV5 === toAddr) {
 		return await initGuardianNodes()
 	}
 
