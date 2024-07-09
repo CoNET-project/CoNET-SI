@@ -11,21 +11,20 @@ import {readKey} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
 
 const conetHoleskyRPC = 'https://rpc.conet.network'
-
+const ipfsEndpoint = `https://ipfs.conet.network/api/`
 const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
 const GuardianNodesInfoV5 = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
 let GlobalIpAddress = ''
-const wasabiUrl = `https://s3.us-east-1.wasabisys.com/conet-mvp/storage/FragmentOcean/`
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
 const routerInfo: Map<string, nodeInfo> = new Map()
 
 
-
+const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 
 const initGuardianNodes = async () => {
-	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
+	
 	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
 	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV5, openPGPContractAbi, CONETProvider)
 	let nodes
@@ -241,10 +240,10 @@ export const checkPayment = (fromAddr: string) => {
 
 
 const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
-	const url = `${wasabiUrl}${epoch}_free`
+	const cloudStorageEndpointUrl = `${ipfsEndpoint}getFragment/${epoch}_free`
 	
 		P({
-			url,
+			url: cloudStorageEndpointUrl,
 			parse: 'json'
 		}).then (res => {
 			if (res?.body) {
@@ -261,7 +260,7 @@ const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) =
 	
 })
 
-const checkBlock = async (block: number, CONETProvider: ethers.JsonRpcProvider) => {
+const checkBlock = async (block: number) => {
 	logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
 	const blockDetail = await CONETProvider.getBlock(block)
 	if (!blockDetail?.transactions) {
@@ -276,7 +275,7 @@ const checkBlock = async (block: number, CONETProvider: ethers.JsonRpcProvider) 
 	await Promise.all([...execPoll])
 }
 
-const scanPassedEpoch = async ( CONETProvider: ethers.JsonRpcProvider) => {
+const scanPassedEpoch = async () => {
 	const endEpoch = currentEpoch
 	const startEpoch = currentEpoch - (5*60) * 3
 	const execPool: number[] = []
@@ -285,12 +284,11 @@ const scanPassedEpoch = async ( CONETProvider: ethers.JsonRpcProvider) => {
 	}
 
 	await mapLimit(execPool,1, async (n, next) => {
-		await checkBlock(n, CONETProvider)
+		await checkBlock(n)
 	})
 }
 
 export const startEventListening = async () => {
-	const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 	currentEpoch = await CONETProvider.getBlockNumber()
 	const ip = getServerIPV4Address ( false )
 	if (ip && ip.length) {
@@ -315,6 +313,5 @@ export const startEventListening = async () => {
 
 	})
 	
-	await scanPassedEpoch(CONETProvider)
+	await scanPassedEpoch()
 }
-
