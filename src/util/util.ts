@@ -55,11 +55,12 @@ const initGuardianNodes = async () => {
 			pgpArmored: '',
 			pgpKeyID: ''
 		}
-		const _nodeInfo = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
-		if (_nodeInfo?.ipaddress && _nodeInfo.ipaddress !== GlobalIpAddress) {
-			nodeInfo.ipaddress = _nodeInfo.ipaddress
-			nodeInfo.regionName = _nodeInfo.regionName
-			nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
+		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
+		if (ipaddress && ipaddress !== GlobalIpAddress) {
+			nodeInfo.ipaddress = ipaddress
+			nodeInfo.regionName = regionName
+			nodeInfo.pgpArmored = pgp
+			// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
 			return nodeInfo
 		}
 		return null
