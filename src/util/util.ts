@@ -83,6 +83,7 @@ const initGuardianNodes = async () => {
 	return await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
 		
 			v.nodeInfo = await getNodeInfo(v.nodeID)
+			logger(inspect(v.nodeInfo, false, 3, true))
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
