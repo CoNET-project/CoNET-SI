@@ -93,7 +93,7 @@ const initGuardianNodes = async () => {
 			}
 		
 	}, err => {
-		logger(`mapLimit scan STOPed!`)
+		logger(`mapLimit scan STOPed!`, err)
 	})
 	
 }
