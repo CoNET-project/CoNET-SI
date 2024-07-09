@@ -22,15 +22,20 @@ const routerInfo: Map<string, nodeInfo> = new Map()
 
 
 const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
+let getNodeInfoProssing = false
 
 const initGuardianNodes = async () => {
-	
+	if (getNodeInfoProssing) {
+		return logger(`initGuardianNodes already running!`)
+	}
+	getNodeInfoProssing = true
 	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
 	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV5, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
 		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
 	} catch (ex: any) {
+		getNodeInfoProssing = false
 		return console.error(Colors.red(`guardianReferrals guardianSmartContract.getAllIdOwnershipAndBooster() Error!`), ex.mesage)
 	}
 
@@ -42,11 +47,13 @@ const initGuardianNodes = async () => {
 	try {
 		NFTAssets = await guardianSmartContract.balanceOfBatch(_nodesAddress, NFTIds)
 	} catch (ex: any) {
+		getNodeInfoProssing = false
 		return logger(Colors.red(`nodesAirdrop guardianSmartContract.balanceOfBatch(${_nodesAddress},${NFTIds}) Error! STOP`), ex.mesage)
 	}
 	
 
 	const getNodeInfo = async (nodeID: number) => {
+
 		logger(Colors.gray(`getNodeInfo [${nodeID}]`))
 		const nodeInfo = {
 			ipaddress: '',
@@ -105,6 +112,7 @@ const initGuardianNodes = async () => {
 			
 		
 	}, err => {
+		getNodeInfoProssing = false
 		logger(`mapLimit scan STOPed!`, err)
 	})
 	
