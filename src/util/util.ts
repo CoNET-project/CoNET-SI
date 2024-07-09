@@ -54,14 +54,20 @@ const initGuardianNodes = async () => {
 			pgpArmored: '',
 			pgpKeyID: ''
 		}
+
 		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
-		if (ipaddress && ipaddress !== GlobalIpAddress) {
-			nodeInfo.ipaddress = ipaddress
-			nodeInfo.regionName = regionName
-			nodeInfo.pgpArmored = pgp
-			// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
-			return nodeInfo
+
+		if (ipaddress) {
+			if (ipaddress !== GlobalIpAddress) {
+				nodeInfo.ipaddress = ipaddress
+				nodeInfo.regionName = regionName
+				nodeInfo.pgpArmored = pgp
+				// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
+				return nodeInfo
+			}
+			return true
 		}
+
 		return null
 	}
 
@@ -82,15 +88,20 @@ const initGuardianNodes = async () => {
 
 	return await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
 		
-			v.nodeInfo = await getNodeInfo(v.nodeID)
-			logger(inspect(v.nodeInfo, false, 3, true))
+			const result = await getNodeInfo(v.nodeID)
+			if (!result) {
+				next(new Error(`SPIP scan!`))
+			}
+
+			if (result === true) {
+				return
+			}
+			v.nodeInfo = result
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				logger(Colors.blue(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
-			} else {
-				next(new Error(`SPIP scan!`))
 			}
 		
 	}, err => {
