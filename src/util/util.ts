@@ -80,8 +80,8 @@ const initGuardianNodes = async () => {
 		}
 	})
 
-	await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
-		try {
+	return await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
+		
 			v.nodeInfo = await getNodeInfo(v.nodeID)
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
@@ -91,10 +91,9 @@ const initGuardianNodes = async () => {
 			} else {
 				next(new Error(`SPIP scan!`))
 			}
-		} catch (ex) {
-			logger(`STOP scan!`)
-		}
 		
+	}, err => {
+		logger(`mapLimit scan STOPed!`)
 	})
 	
 }
