@@ -2,6 +2,11 @@ import Cluster from 'node:cluster'
 import {cpus} from 'node:os'
 import conet_si_server from './endpoint/server'
 
+process.on ('uncaughtException', (err) => {
+	console.error(err.stack)
+	console.log("Node NOT Exiting...")
+})
+
 if (Cluster.isPrimary) {
 	const worker = Math.floor(cpus().length/2)
 	if (worker<2) {
