@@ -830,6 +830,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 	if (!host) {
 		return distorySocket(resoestSocket)
 	}
+
 	try {
 		const ipStyle = IP.isPublic(host)
 		if (!ipStyle) {
@@ -844,31 +845,36 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 		return distorySocket(resoestSocket)
 	}
 
+	try {
+		const socket = createConnection ( port, host, () => {
 
-	const socket = createConnection ( port, host, () => {
-
-        socket.pipe(resoestSocket).pipe(socket).on('error', err => {
-			logger(Colors.red(`socks5Connect pipe on Error`), err)
+			socket.pipe(resoestSocket).pipe(socket).on('error', err => {
+				logger(Colors.red(`socks5Connect pipe on Error`), err)
+			})
+	
+			const data = Buffer.from(prosyData.buffer, 'base64')
+			socket.write (data)
+			resoestSocket.resume()
 		})
-
-        const data = Buffer.from(prosyData.buffer, 'base64')
-        socket.write (data)
-        resoestSocket.resume()
-    })
-
-	socket.on ( 'end', () => {
-		logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
+	
+		socket.on ( 'end', () => {
+			logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
+			resoestSocket.end().destroy()
+		})
+	
+		socket.on ( 'error', err => {
+			logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
+	
+		})
+	
+		resoestSocket.on('error', err => {
+			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
+		})
+	} catch (ex) {
+		logger(`createConnection On catch`, ex)
 		resoestSocket.end().destroy()
-	})
+	}
 
-	socket.on ( 'error', err => {
-		logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
-
-	})
-
-    resoestSocket.on('error', err => {
-        logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
-    })
 }
 
 const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
