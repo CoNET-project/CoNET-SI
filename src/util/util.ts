@@ -12,9 +12,11 @@ import { getServerIPV4Address } from './localNodeCommand'
 
 const conetHoleskyRPC = 'https://rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
-const cCNTPAddr = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
+const cCNTPAddr_old = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
+const newCNTP_v8 = '0xa4b389994A591735332A67f3561D60ce96409347'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
-const GuardianNodesInfoV5 = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
+const GuardianNodesInfoV5_old = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
+const GuardianNodesInfoV6 = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLowerCase()
 let GlobalIpAddress = ''
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
@@ -30,7 +32,7 @@ const initGuardianNodes = async () => {
 	}
 	getNodeInfoProssing = true
 	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
-	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV5, openPGPContractAbi, CONETProvider)
+	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV6, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
 		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
@@ -174,11 +176,11 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 
 	const toAddr = transObj?.to?.toLowerCase()
 	
-	if ( GuardianNodesInfoV5 === toAddr) {
+	if ( GuardianNodesInfoV6 === toAddr) {
 		return await initGuardianNodes()
 	}
 
-	if (!toAddr || toAddr !== cCNTPAddr || transObj?.logs?.length !== 1 ) {
+	if (!toAddr || toAddr !== newCNTP_v8 || transObj?.logs?.length !== 1 ) {
 		return //logger(Colors.gray(`Skip tx ${tx}`))
 	}
 
