@@ -17,6 +17,7 @@ const newCNTP_v8 = '0xa4b389994A591735332A67f3561D60ce96409347'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
 const GuardianNodesInfoV5_old = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
 const GuardianNodesInfoV6 = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLowerCase()
+const GuardianNFT = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
 let GlobalIpAddress = ''
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
@@ -31,7 +32,7 @@ const initGuardianNodes = async () => {
 		return logger(`initGuardianNodes already running!`)
 	}
 	getNodeInfoProssing = true
-	const guardianSmartContract = new ethers.Contract(GuardianNodes_ContractV3, GuardianNodesV2ABI, CONETProvider)
+	const guardianSmartContract = new ethers.Contract(GuardianNFT, GuardianNodesV2ABI, CONETProvider)
 	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV6, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
