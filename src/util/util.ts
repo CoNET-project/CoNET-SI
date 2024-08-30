@@ -47,12 +47,6 @@ const initGuardianNodes = async () => {
 	let NFTAssets: number[]
 
 	const NFTIds = _nodesAddress.map ((n, index) => 100 + index)
-	try {
-		NFTAssets = await guardianSmartContract.balanceOfBatch(_nodesAddress, NFTIds)
-	} catch (ex: any) {
-		getNodeInfoProssing = false
-		return logger(Colors.red(`nodesAirdrop guardianSmartContract.balanceOfBatch(${_nodesAddress},${NFTIds}) Error! STOP`), ex.mesage)
-	}
 	
 
 	const getNodeInfo = async (nodeID: number) => {
@@ -81,19 +75,17 @@ const initGuardianNodes = async () => {
 		return null
 	}
 
-	NFTAssets.forEach(async (n, index) => {
-		if (n) {
-			const node: NodList = {
-				isGuardianNode: true,
-				wallet: _nodesAddress[index].toLowerCase(),
-				nodeID: NFTIds[index],
-				nodeInfo:null,
-				Expired: 0
-			}
-			useNodeReceiptList.set(node.wallet,node)
-		} else {
-			//logger(Color.red(`nodesAddress [${_nodesAddress[index]}] has no NFT ${NFTIds[index]}`))
+	_nodesAddress.forEach(async (n, index) => {
+		
+		const node: NodList = {
+			isGuardianNode: true,
+			wallet: n.toLowerCase(),
+			nodeID: NFTIds[index],
+			nodeInfo:null,
+			Expired: 0
 		}
+		useNodeReceiptList.set(node.wallet, node)
+		logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
 	})
 
 	return await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
