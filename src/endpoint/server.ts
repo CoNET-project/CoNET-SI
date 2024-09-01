@@ -7,6 +7,7 @@ import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from '../util/localNodeCommand'
 import {startEventListening} from '../util/util'
 import Colors from 'colors/safe'
+import { createReadStream} from 'fs'
 import  { distorySocket } from '../util/htmlResponse'
 
 //@ts-ignore
@@ -62,6 +63,35 @@ const getLengthHander = (headers: string[]) => {
 	return isNaN(ret) ? -1 : ret
 }
 
+
+
+
+const indexHtmlFileName = join(`${__dirname}`, 'index.html')
+const responseRootHomePage = (socket: Net.Socket) => {
+	//	@ts-ignore
+	const ret = `HTTP/1.1 200 OK\r\n` +
+	`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+	//@ts-ignore
+	`Date: ${new Date().toGMTString()}\r\n` +
+	`Content-Type: text/html\r\n` +
+	`Content-Length: 615\r\n`+
+	`Connection: keep-alive\r\n` +
+	`Accept-Ranges: bytes\r\n\r\n` 
+	const homepage = createReadStream(indexHtmlFileName)
+	if (socket.writable) {
+		socket.write(ret, err => {
+			homepage.pipe(socket).on('end', ()=> {
+				logger(Colors.blue(`responseRootHomePage PIPE on End() socket.writable = ${socket.writable}`))
+				if (socket.writable) {
+					socket.write('\r\n\r\n')
+				}
+			})
+		})
+	}
+	
+	
+}
+
 class conet_si_server {
 
 	private PORT=0
@@ -71,6 +101,7 @@ class conet_si_server {
 	public nodePool = []
 	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
+
 
 	private initSetupData = async () => {
 		
@@ -189,9 +220,9 @@ class conet_si_server {
 					
 				}
 
-				if (/^GET \/post HTTP\/1.1/.test(requestProtocol)) {
+				if (/^GET \/ HTTP\//.test(requestProtocol)) {
 					logger (inspect(htmlHeaders, false, 3, true))
-					return distorySocket(socket)
+					return responseRootHomePage(socket)
 				}
 
 				
