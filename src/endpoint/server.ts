@@ -227,7 +227,7 @@ class conet_si_server {
 const startExpressServer = () => {
 	const app = Express()
 
-	app.use( __dirname, Express.static(''))
+	app.use( __dirname, Express.static('/'))
 	const httpServer = app.listen(80)
 }
 
