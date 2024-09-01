@@ -9,6 +9,7 @@ import {startEventListening} from '../util/util'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import  { distorySocket } from '../util/htmlResponse'
+import Express from 'express'
 
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -25,32 +26,6 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
     console.log(Colors.grey( hexdump( buffer.slice( 0, length ))))
 }
 
-// const udpListening = () => {
-// 	const server = dgram.createSocket('udp4')
-// 	server.on('error', (err) => {
-// 		console.error(`server error:\n${err.stack}`)
-// 		server.close()
-// 		udpListening()
-// 	})
-	
-// 	server.on('message', (msg, rinfo) => {
-		
-// 		console.log(Colors.red(`UDP server got Message [${ msg.length }] from ${rinfo.address}:${rinfo.port}`))
-// 		if (!initData) {
-// 			return 
-// 		}
-		
-// 		postFromUDP (msg.toString(), initData.pgpKey.privateKey, initData.passwd? initData.passwd: '', initData.outbound_price, initData.storage_price, initData.ipV4, onlineClientPool, null, '')
-// 	})
-	
-// 	server.on('listening', () => {
-// 		const address = server.address()
-// 		console.log(Colors.blue(`UDP server listening ${address.address}:${address.port}`))
-		
-// 	})
-	
-// 	server.bind(41234)
-// }
 
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
@@ -64,6 +39,13 @@ const getLengthHander = (headers: string[]) => {
 }
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
+
+// sudo certbot certonly --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d 0190939f63056eef.conet.network
+
+const regiestSSl = () => {
+	const cmd = `sudo `
+}
+
 const responseRootHomePage = (socket: Net.Socket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
@@ -145,7 +127,7 @@ class conet_si_server {
     }
 
 	private startServer = () => {
-		
+		startExpressServer()
 		const server = new Net.Server( socket => {
 
 			socket.once('data', data => {
@@ -232,7 +214,7 @@ class conet_si_server {
 			logger(Colors.red(`conet_si_server server on Error! ${err.message}`))
 		})
 
-		server.listen ( 80, () => {
+		server.listen ( 81, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
 			return console.table([
                 { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
@@ -240,6 +222,12 @@ class conet_si_server {
             ])
 		})
 	}
+}
+
+const startExpressServer = () => {
+	const app = Express()
+	app.use(`${__dirname}`, Express.static("letsencrypt/.well-known/acme-challenge"))
+	const httpServer = app.listen(80)
 }
 
 export default conet_si_server
