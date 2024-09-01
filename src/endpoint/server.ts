@@ -75,15 +75,15 @@ const responseRootHomePage = (socket: Net.Socket) => {
 	//@ts-ignore
 	`Date: ${new Date().toGMTString()}\r\n` +
 	`Content-Type: text/html\r\n` +
-	`Content-Length: ${homepage}\r\n`+
+	`Content-Length: ${homepage.length}\r\n`+
 	`Connection: keep-alive\r\n` +
 	`Accept-Ranges: bytes\r\n\r\n` + homepage
 	
 	if (socket.writable) {
 		socket.write(ret, err => {
-			
+			socket.end(() => {
 				logger(Colors.blue(`responseRootHomePage PIPE on End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length}`))
-			
+			})
 			
 		})
 	}
