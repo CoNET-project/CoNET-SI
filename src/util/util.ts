@@ -23,7 +23,6 @@ let GlobalIpAddress = ''
 const useNodeReceiptList: Map<string, NodList> = new Map()
 const routerInfo: Map<string, nodeInfo> = new Map()
 
-
 const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false
 
@@ -84,6 +83,7 @@ const initGuardianNodes = async () => {
 			nodeInfo:null,
 			Expired: 0
 		}
+
 		useNodeReceiptList.set(node.wallet, node)
 		logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
 	})
@@ -308,6 +308,7 @@ export const startEventListening = async () => {
 	if (ip && ip.length) {
 		GlobalIpAddress = ip[0]
 	}
+
 	await initGuardianNodes()
 
 	CONETProvider.on('block', async block => {
@@ -324,7 +325,6 @@ export const startEventListening = async () => {
 			await detailTransfer(n, CONETProvider)
 		})
 		
-
 	})
 	
 	await scanPassedEpoch()

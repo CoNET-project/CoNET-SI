@@ -108,7 +108,7 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 		this.startServer ()
-		startEventListening()
+		//	startEventListening()
 	}
 
 	constructor () {
@@ -188,7 +188,10 @@ class conet_si_server {
 					return getData ()
 					
 				}
-
+				if (/^GET \/post HTTP\/1.1/.test(requestProtocol)) {
+					logger (inspect(htmlHeaders, false, 3, true))
+					return distorySocket(socket)
+				}
 
 				
 				return distorySocket(socket)
