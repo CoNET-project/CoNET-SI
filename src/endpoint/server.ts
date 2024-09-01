@@ -66,6 +66,7 @@ const getLengthHander = (headers: string[]) => {
 
 
 
+
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 const responseRootHomePage = (socket: Net.Socket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
@@ -87,7 +88,6 @@ const responseRootHomePage = (socket: Net.Socket) => {
 			
 		})
 	}
-	
 	
 }
 
@@ -128,6 +128,7 @@ class conet_si_server {
 			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		}
 		this.publicKeyID = this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
+
 		this.PORT = this.initData.ipV4Port
 
 		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
@@ -237,7 +238,7 @@ class conet_si_server {
 		server.listen ( 80, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
 			return console.table([
-                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT }` }
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
 				
             ])
 		})
