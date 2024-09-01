@@ -761,8 +761,6 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: SICommandObj) => {
 
-
-
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
@@ -789,6 +787,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
             return connectWithHttp(requestOrgnal, socket, password, requestHeaders)
         }
+
+		case 'mining': {
+			
+		}
 
 		default : {
 			logger (Colors.red(`postOpenpgpRoute invalid command [${inspect(command, false, 3, true)}]`))

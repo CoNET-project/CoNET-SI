@@ -63,10 +63,6 @@ const getLengthHander = (headers: string[]) => {
 	return isNaN(ret) ? -1 : ret
 }
 
-
-
-
-
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 const responseRootHomePage = (socket: Net.Socket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
@@ -78,6 +74,7 @@ const responseRootHomePage = (socket: Net.Socket) => {
 	`Content-Type: text/html\r\n` +
 	`Content-Length: ${homepage.length}\r\n`+
 	`Connection: keep-alive\r\n` +
+	'access-control-allow-origin: *\r\n' +
 	`Accept-Ranges: bytes\r\n\r\n` + homepage
 	
 	if (socket.writable) {
