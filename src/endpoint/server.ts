@@ -82,7 +82,7 @@ const responseRootHomePage = (socket: Net.Socket) => {
 	if (socket.writable) {
 		socket.write(ret, err => {
 			
-			logger(Colors.blue(`responseRootHomePage PIPE on End() ${socket?.remoteAddress} socket.writable = ${socket.writable}`))
+			logger(Colors.blue(`responseRootHomePage PIPE on End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length} - 615 = ${615 - homepage.length}`))
 			
 		})
 	}
