@@ -40,7 +40,7 @@ const getLengthHander = (headers: string[]) => {
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
-// sudo certbot certonly --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d 0190939f63056eef.conet.network
+// sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d 0190939f63056eef.conet.network
 
 const regiestSSl = () => {
 	const cmd = `sudo `
@@ -226,7 +226,8 @@ class conet_si_server {
 
 const startExpressServer = () => {
 	const app = Express()
-	app.use(`${__dirname}`, Express.static("letsencrypt/.well-known/acme-challenge"))
+
+	app.use( __dirname, Express.static('.well-known/acme-challenge'))
 	const httpServer = app.listen(80)
 }
 
