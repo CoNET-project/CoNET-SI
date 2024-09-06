@@ -18,6 +18,19 @@ const CertificatePATH = ['/etc/letsencrypt/live/slickstack/fullchain.pem','/etc/
 
 if (Cluster.isPrimary) {
 
+	const startNode = () => {
+		
+		const worker = Math.floor(cpus().length/2)
+		logger(Colors.magenta(`startNode worker<2 = ${worker<2}`))
+		if (worker<2) {
+			new conet_si_server()
+		} else {
+			for (let i = 0; i < worker; i ++) {
+				Cluster.fork()
+			}
+		}
+	}
+
 	const _sslCertificate = (keyid: string) => new Promise((resolve, reject) => {
 		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.conet.network`
 		return exec(cmd, (error, stdout, stderr) => {
@@ -80,19 +93,6 @@ if (Cluster.isPrimary) {
 		}
 
 		startNode()
-	}
-
-	const startNode = () => {
-		
-		const worker = Math.floor(cpus().length/2)
-		logger(Colors.magenta(`startNode worker<2 = ${worker<2}`))
-		if (worker<2) {
-			new conet_si_server()
-		} else {
-			for (let i = 0; i < worker; i ++) {
-				Cluster.fork()
-			}
-		}
 	}
 
 	start()
