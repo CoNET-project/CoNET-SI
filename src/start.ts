@@ -77,8 +77,8 @@ if (Cluster.isPrimary) {
 
 		if (!initData.sslDate) {
 			await sslCertificate(publicKeyID)
-
 		}
+		
 		startNode()
 	}
 

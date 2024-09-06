@@ -114,12 +114,11 @@ class conet_si_server {
 		saveSetup ( this.initData, true )
 
 		this.startServer ()
-			startEventListening()
+		startEventListening()
 	}
 
 	constructor () {
         this.initSetupData ()
-		// udpListening()
     }
 
 	private startServer = () => {
