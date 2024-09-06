@@ -20,6 +20,7 @@ interface ICoNET_NodeSetup {
 	passwd?: string
 	platform_verison: string
 	dl_publicKeyArmored: string
+	sslDate?: number
 }
 
 interface ICoNET_DL {

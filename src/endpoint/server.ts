@@ -41,9 +41,10 @@ const getLengthHander = (headers: string[]) => {
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 // sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d 0190939f63056eef.conet.network
+//	sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d b7a3086f92d53b34.conet.network
 
-const regiestSSl = () => {
-	const cmd = `sudo `
+const regiestSSl = (keyid: string) => {
+	const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname} -d ${keyid}.conet.network `
 }
 
 const responseRootHomePage = (socket: Net.Socket) => {
@@ -70,6 +71,7 @@ const responseRootHomePage = (socket: Net.Socket) => {
 	
 }
 
+
 class conet_si_server {
 
 	private PORT=0
@@ -80,6 +82,12 @@ class conet_si_server {
 	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
 
+	private checkSSl = () => {
+		//		hasn't ssl
+		if (this.initData?.sslDate) {
+			logger(Colors.magenta(`Didn't apply ssl!`))
+		}
+	}
 
 	private initSetupData = async () => {
 		
@@ -92,7 +100,7 @@ class conet_si_server {
 
 		if ( !this.initData?.keychain || this.initData?.passwd === undefined) {
             logger ('initData?.keychain = ',this.initData?.keychain,'initData.passwd = ', this.initData?.passwd)
-			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI !`)
+			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI with node dist/cli start!`)
 		}
 
         logger (`initSetupData initData.passwd = [${this.initData.passwd}]`)
@@ -117,6 +125,7 @@ class conet_si_server {
 		this.initData.pgpKey.keyID = newID
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
+
 		this.startServer ()
 		//	startEventListening()
 	}
@@ -224,11 +233,6 @@ class conet_si_server {
 	}
 }
 
-const startExpressServer = () => {
-	const app = Express()
 
-	app.use( '/', Express.static(__dirname))
-	const httpServer = app.listen(80)
-}
 
 export default conet_si_server
