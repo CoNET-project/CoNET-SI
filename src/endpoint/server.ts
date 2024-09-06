@@ -113,8 +113,8 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 
-		// this.startServer ()
-		//	startEventListening()
+		this.startServer ()
+			startEventListening()
 	}
 
 	constructor () {
@@ -210,7 +210,7 @@ class conet_si_server {
 			logger(Colors.red(`conet_si_server server on Error! ${err.message}`))
 		})
 
-		server.listen ( 81, () => {
+		server.listen ( this.initData?.ipV4Port, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
 			return console.table([
                 { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
