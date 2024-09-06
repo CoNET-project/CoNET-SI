@@ -7,7 +7,7 @@ import {logger} from './util/logger'
 import Colors from 'colors/safe'
 import {exec} from 'node:child_process'
 import {access, constants} from 'node:fs/promises'
-import {startExpressServer} from './endpoint/sslManager'
+import {startExpressServer, stopServer} from './endpoint/sslManager'
 
 process.on ('uncaughtException', (err) => {
 	console.error(err.stack)
@@ -57,7 +57,7 @@ if (Cluster.isPrimary) {
 		startExpressServer()
 		//await _sslCertificate(publicKeyID)
 		await testCertificateFiles()
-		
+		await stopServer()
 	})
 		
 	
