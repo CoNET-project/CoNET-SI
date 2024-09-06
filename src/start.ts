@@ -71,6 +71,7 @@ if (Cluster.isPrimary) {
 		//await _sslCertificate(publicKeyID)
 		await testCertificateFiles()
 		await stopServer()
+		startNode()
 	})
 		
 	
@@ -86,10 +87,11 @@ if (Cluster.isPrimary) {
 		} catch (ex) {
 			throw new Error (`Error: CONET Layer Minus Node have no setup data!\nPlease restart CoNET-SI with command: node dist/cli start!`)
 		}
+
 		const publicKeyID = initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 
 		if (!initData.sslDate) {
-			await sslCertificate(publicKeyID)
+			return await sslCertificate(publicKeyID)
 		}
 
 		startNode()
