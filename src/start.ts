@@ -49,6 +49,7 @@ if (Cluster.isPrimary) {
 			access(CertificatePATH[1], constants.R_OK),
 
 		])
+		logger(`testCertificateFiles success!`)
 	}
 
 	const sslCertificate = async (publicKeyID: string) => new Promise(async (resolve, reject) => {
