@@ -6,7 +6,7 @@ import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKey
 import {logger} from './util/logger'
 import Colors from 'colors/safe'
 import {exec} from 'node:child_process'
-import {access, constants} from 'node:fs'
+import {access, constants} from 'node:fs/promises'
 import {startExpressServer} from './endpoint/sslManager'
 
 process.on ('uncaughtException', (err) => {
@@ -43,9 +43,9 @@ if (Cluster.isPrimary) {
 		
 	const testCertificateFiles = async () => {
 		await Promise.all([
-			//	@ts-ignore
+			
 			access(CertificatePATH[0], constants.R_OK),
-			//	@ts-ignore
+			
 			access(CertificatePATH[1], constants.R_OK),
 
 		])
