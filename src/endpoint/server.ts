@@ -136,7 +136,7 @@ class conet_si_server {
     }
 
 	private startServer = () => {
-		startExpressServer()
+		
 		const server = new Net.Server( socket => {
 
 			socket.once('data', data => {
