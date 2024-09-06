@@ -68,7 +68,7 @@ if (Cluster.isPrimary) {
 	const sslCertificate = async (publicKeyID: string) => new Promise(async (resolve, reject) => {
 		logger(Colors.magenta(`Didn't init SSL Certificate! Try `))
 		startExpressServer()
-		//await _sslCertificate(publicKeyID)
+		await _sslCertificate(publicKeyID)
 		await testCertificateFiles()
 		await stopServer()
 		startNode()
