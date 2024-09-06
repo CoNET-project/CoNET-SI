@@ -6,6 +6,7 @@ import {logger} from './util/logger'
 import Colors from 'colors/safe'
 import {exec} from 'node:child_process'
 import {fstat} from 'node:fs'
+import {startExpressServer} from './endpoint/sslManager'
 
 process.on ('uncaughtException', (err) => {
 	console.error(err.stack)
@@ -45,6 +46,7 @@ if (Cluster.isPrimary) {
 
 		if (!initData.sslDate) {
 			logger(Colors.magenta(`Didn't init SSL Certificate`))
+			startExpressServer()
 			sslCertificate(publicKeyID)
 		}
 		

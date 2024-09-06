@@ -6,6 +6,7 @@ import Net from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from '../util/localNodeCommand'
 import {startEventListening} from '../util/util'
+import {startExpressServer} from './sslManager'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import  { distorySocket } from '../util/htmlResponse'
@@ -39,13 +40,6 @@ const getLengthHander = (headers: string[]) => {
 }
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
-
-// sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d 0190939f63056eef.conet.network
-//	sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w /home/peter/CoNET-SI/dist/endpoint/ -d b7a3086f92d53b34.conet.network
-
-const regiestSSl = (keyid: string) => {
-	const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname} -d ${keyid}.conet.network `
-}
 
 const responseRootHomePage = (socket: Net.Socket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
@@ -81,13 +75,6 @@ class conet_si_server {
 	public nodePool = []
 	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
-
-	private checkSSl = () => {
-		//		hasn't ssl
-		if (this.initData?.sslDate) {
-			logger(Colors.magenta(`Didn't apply ssl!`))
-		}
-	}
 
 	private initSetupData = async () => {
 		
@@ -126,7 +113,7 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 
-		this.startServer ()
+		// this.startServer ()
 		//	startEventListening()
 	}
 
