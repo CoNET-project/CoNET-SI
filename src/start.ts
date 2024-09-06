@@ -78,12 +78,14 @@ if (Cluster.isPrimary) {
 		if (!initData.sslDate) {
 			await sslCertificate(publicKeyID)
 		}
-		
+
 		startNode()
 	}
 
 	const startNode = () => {
+		
 		const worker = Math.floor(cpus().length/2)
+		logger(Colors.magenta(`startNode worker<2 = ${worker<2}`))
 		if (worker<2) {
 			new conet_si_server()
 		} else {
