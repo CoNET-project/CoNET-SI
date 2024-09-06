@@ -2,7 +2,7 @@ import Cluster from 'node:cluster'
 import {cpus} from 'node:os'
 
 import conet_si_server from './endpoint/server'
-import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from './util/localNodeCommand'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, makeOpenpgpObj, saveSetup, register_to_DL} from './util/localNodeCommand'
 import {logger} from './util/logger'
 import Colors from 'colors/safe'
 import {exec} from 'node:child_process'
@@ -65,12 +65,14 @@ if (Cluster.isPrimary) {
 		logger(`testCertificateFiles success!`)
 	}
 
-	const sslCertificate = async (publicKeyID: string) => new Promise(async (resolve, reject) => {
+	const sslCertificate = async (publicKeyID: string, initData: ICoNET_NodeSetup) => new Promise(async (resolve, reject) => {
 		logger(Colors.magenta(`Didn't init SSL Certificate! Try `))
 		startExpressServer()
 		await _sslCertificate(publicKeyID)
 		await testCertificateFiles()
 		await stopServer()
+		initData.sslDate = new Date().getTime()
+		await saveSetup(initData, false)
 		startNode()
 	})
 		
@@ -91,7 +93,7 @@ if (Cluster.isPrimary) {
 		const publicKeyID = initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 
 		if (!initData.sslDate) {
-			return await sslCertificate(publicKeyID)
+			return await sslCertificate(publicKeyID, initData)
 		}
 
 		startNode()
