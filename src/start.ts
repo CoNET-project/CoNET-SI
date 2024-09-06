@@ -18,7 +18,7 @@ if (Cluster.isPrimary) {
 
 
 	const sslCertificate = (keyid: string) => {
-		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname} -d ${keyid}.conet.network`
+		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.conet.network`
 		exec(cmd, (error, stdout, stderr) => {
 			if (error) {
 				logger(Colors.red(error.message))
