@@ -284,7 +284,7 @@ class conet_si_server {
 			const responseHeader = () => {
 				const ret = `HTTP/1.1 200 OK\r\n` + 
 							`Cache-Control: no-cache\r\n` +
-							`access-control-allow-origin: *\r\n` +
+							`Access-Control-Allow-Origin: *\r\n` +
 							`Content-Type: text/event-stream\r\n` +
 							`Connection: keep-alive\r\n\r\n`
 	
