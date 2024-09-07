@@ -250,7 +250,7 @@ class conet_si_server {
 		}
 
 		const readMore = (data: Buffer) => {
-			
+			logger(Colors.blue(`readMore listen more data!`))
 			socket.once('data', _data => {
 				const request = data + _data
 				const request_line = request.toString().split('\r\n\r\n')
@@ -302,9 +302,10 @@ class conet_si_server {
 			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
 				
 				const bodyLength = getLengthHander (htmlHeaders)
+
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 
-				if ( !bodyLength) {
+				if ( bodyLength < 1) {
 					first = false
 					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
 					return responseHeader()
