@@ -133,7 +133,7 @@ const testMinerCOnnecting = (res: Response, returnData: any, wallet: string, ipa
 const stratlivenessV2 = async (block: number, nodeWallet: string) => {
 	
 	
-	logger(Colors.blue(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
+	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
@@ -341,8 +341,9 @@ class conet_si_server {
 					if (err) {
 						res.sendStatus(400).end()
 						res.socket?.end().destroy()
-						logger(Colors.red(`/^post$/i.test Attack ${req.socket.remoteAddress} ! ${req.url}`))
-						logger(inspect(req.body, false, 3, true))
+						logger(Colors.red(`/^post$/i.test Attack ${req.socket.remoteAddress} ! `))
+						logger(inspect(req, false, 3, true))
+						logger(err)
 						return
 					}
 
@@ -389,7 +390,7 @@ class conet_si_server {
 					return res.socket?.end().destroy()
 				}
 
-				
+
 				res.status(200)
 				res.setHeader('Cache-Control', 'no-cache')
 				res.setHeader('Content-Type', 'text/event-stream')
