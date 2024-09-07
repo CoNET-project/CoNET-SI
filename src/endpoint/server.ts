@@ -289,7 +289,6 @@ class conet_si_server {
 							`Date: ${new Date().toGMTString()}\r\n` +
 							`Cache-Control: no-cache\r\n` +
 							`Access-Control-Allow-Origin: *\r\n` +
-							`Content-Type: text/event-stream\r\n` +
 							`Connection: keep-alive\r\n\r\n`
 	
 				readMore(data)
@@ -307,7 +306,7 @@ class conet_si_server {
 
 				if ( bodyLength < 1) {
 					first = false
-					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
+					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }]`))
 					return responseHeader()
 				}
 				
