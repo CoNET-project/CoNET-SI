@@ -151,8 +151,6 @@ const stratlivenessV2 = async (block: number, nodeWallet: string) => {
 		wallets.push (key)
 	})
 
-	logger(Colors.grey(`stratliveness EPOCH ${block} stoped! Pool length = [${livenessListeningPool.size}]`))
-
 }
 
 class conet_si_server {
@@ -218,10 +216,11 @@ class conet_si_server {
         this.initSetupData ()
     }
 	private sockerdata = (socket:  Socket|TLSSocket) => {
-		socket.once('data', data => {
-
-			const request = data.toString()
+		logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
+		socket.once('data', (data:Buffer) => {
 			
+			const request = data.toString()
+			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on request [${request}]`))
 			const request_line = request.split('\r\n\r\n')
 			
 			if (request_line.length < 2) {
@@ -294,6 +293,10 @@ class conet_si_server {
 
 			return distorySocket(socket)
 		})
+
+		socket.once('end', () => {
+			logger(Colors.gray(`sockerdata ${socket.remoteAddress} on end()`))
+		})
 	}
 
 	private startServer = () => {
@@ -330,7 +333,7 @@ class conet_si_server {
 		})
 
 		server.listen(443, () => {
-			startEPOCH_EventListeningForMining(this.nodeWallet)
+			// startEPOCH_EventListeningForMining(this.nodeWallet)
 			return console.table([
                 { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet}` }
             ])
