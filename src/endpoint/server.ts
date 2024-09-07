@@ -2,15 +2,14 @@
 import { join } from 'node:path'
 import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
-import Net from 'node:net'
+import {Socket, createServer} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, checkSign} from '../util/localNodeCommand'
 import {startEventListening, CONETProvider} from '../util/util'
-import Express, { Router, Response } from 'express'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
+import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
-import {createServer} from 'node:https'
 import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -42,7 +41,7 @@ const getLengthHander = (headers: string[]) => {
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
-const responseRootHomePage = (socket: Net.Socket) => {
+const responseRootHomePage = (socket: Socket|TLSSocket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
 	const ret = `HTTP/1.1 200 OK\r\n` +
@@ -68,7 +67,7 @@ const responseRootHomePage = (socket: Net.Socket) => {
 
 
 interface livenessListeningPoolObj {
-	res: Response
+	res: Socket|TLSSocket
 	ipaddress: string
 	wallet: string
 }
@@ -76,15 +75,11 @@ interface livenessListeningPoolObj {
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 
-const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Response) => {
+const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
 			_obj.res.end()
-			const socker = res.socket
-			if (socker && typeof socker.destroy === 'function') {
-				socker.destroy()
-			}
 		}
 		
 	}
@@ -112,7 +107,7 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 }
 
 
-const testMinerCOnnecting = (res: Response, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
+const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
 	returnData['wallet'] = wallet
 	if (res.writable && !res.closed) {
 		return res.write( JSON.stringify(returnData)+'\r\n\r\n', async err => {
@@ -222,88 +217,90 @@ class conet_si_server {
 	constructor () {
         this.initSetupData ()
     }
+	private sockerdata = (socket:  Socket|TLSSocket) => {
+		socket.once('data', data => {
 
+			const request = data.toString()
+			
+			const request_line = request.split('\r\n\r\n')
+			
+			if (request_line.length < 2) {
+				return distorySocket(socket)
+			}
 
-	private startServer = () => {
-		
-		const server = new Net.Server( socket => {
+			const htmlHeaders = request_line[0].split('\r\n')
+			const requestProtocol = htmlHeaders[0]
 
-			socket.once('data', data => {
+			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
+				logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+				const bodyLength = getLengthHander (htmlHeaders)
 
-				const request = data.toString()
-				
-				const request_line = request.split('\r\n\r\n')
-				
-				if (request_line.length < 2) {
+				if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
+					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
 					return distorySocket(socket)
 				}
 
-				const htmlHeaders = request_line[0].split('\r\n')
-				const requestProtocol = htmlHeaders[0]
+				const getData = () => {
 
-				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-					logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
-					const bodyLength = getLengthHander (htmlHeaders)
-
-					if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
-						logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
+					if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
+						logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
 						return distorySocket(socket)
 					}
 
-					const getData = () => {
+					logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+					let body
+					try {
+						body = JSON.parse(request_line[1])
+					} catch (ex) {
+						logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+						return distorySocket(socket)
+					}
+					
+					if (!body.data || typeof body.data !== 'string') {
+						logger (Colors.magenta(`startServer HTML body format error!`))
+						return distorySocket(socket)
+					}
+					//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+					return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
+				}
 
-						if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
-							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
-							return distorySocket(socket)
-						}
-
-						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-						let body
-						try {
-							body = JSON.parse(request_line[1])
-						} catch (ex) {
-							logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-							return distorySocket(socket)
+				const readMore = () => {
+					logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+					socket.once('data', _data => {
+						
+						request_line[1] += _data
+						if (request_line[1].length < bodyLength) {
+							logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+							return readMore ()
 						}
 						
-						if (!body.data || typeof body.data !== 'string') {
-							logger (Colors.magenta(`startServer HTML body format error!`))
-							return distorySocket(socket)
-						}
-						//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
-					}
-
-					const readMore = () => {
-						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-						socket.once('data', _data => {
-							
-							request_line[1] += _data
-							if (request_line[1].length < bodyLength) {
-								logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-								return readMore ()
-							}
-							
-							getData ()
-						})
-					}
-
-					if (request_line[1].length < bodyLength) {
-
-						return readMore ()
-					}
-
-					return getData ()
-					
+						getData ()
+					})
 				}
 
-				if (/^GET \/ HTTP\//.test(requestProtocol)) {
-					logger (inspect(htmlHeaders, false, 3, true))
-					return responseRootHomePage(socket)
+				if (request_line[1].length < bodyLength) {
+
+					return readMore ()
 				}
 
-				return distorySocket(socket)
-			})
+				return getData ()
+				
+			}
+
+			if (/^GET \/ HTTP\//.test(requestProtocol)) {
+				logger (inspect(htmlHeaders, false, 3, true))
+				return responseRootHomePage(socket)
+			}
+
+			return distorySocket(socket)
+		})
+	}
+
+	private startServer = () => {
+		
+		const server = createServer( socket => {
+
+			return this.sockerdata(socket)
 
 		})
 
@@ -328,83 +325,10 @@ class conet_si_server {
 			cert
 		}
 		
-		const app = Express()
-		app.disable('x-powered-by')
-		const Cors = require('cors')
-		app.use( Cors ())
-		app.use (async (req, res, next) => {
-			if (/^post$/i.test(req.method)) {
-				
-				return Express.json({limit: '1mb'})(req, res, err => {
-
-					if (err) {
-						res.sendStatus(400).end()
-						res.socket?.end().destroy()
-						logger(Colors.red(`/^post$/i.test Attack ${req.socket.remoteAddress} ! `))
-						logger(inspect(req, false, 3, true))
-						logger(err)
-						return
-					}
-
-					return next()
-				})
-			}
-				
-			return next()
-			
+		const server = createServerSSL (options, socket => {
+			this.sockerdata (socket)
 		})
 
-		const _router = Router ()
-		app.use( '/api', _router )
-
-
-		const router = (router: Router) => {
-
-			router.post ('/startMining', async (req, res) => {
-				const ipaddress = req.socket.remoteAddress
-
-				let message, signMessage
-
-				try {
-					message = req.body.message
-					signMessage = req.body.signMessage
-	
-				} catch (ex) {
-					logger (Colors.grey(`${ ipaddress } request /livenessListening message = req.body.message ERROR! ${inspect(req.body, false, 3, true)}`))
-					return res.status(404).end()
-				}
-
-				if (!message||!signMessage) {
-					logger (Colors.grey(`Router /livenessListening !message||!signMessage Error! [${ipaddress}]`))
-					return  res.status(404).end()
-					
-				}
-
-				
-				const obj = checkSign (message, signMessage)
-	
-				if (!obj) {
-					logger (Colors.grey(`[${ipaddress}] to /startMining !obj Error!`))
-					res.status(404).end()
-					return res.socket?.end().destroy()
-				}
-
-
-				res.status(200)
-				res.setHeader('Cache-Control', 'no-cache')
-				res.setHeader('Content-Type', 'text/event-stream')
-				res.setHeader('Access-Control-Allow-Origin', '*')
-				res.setHeader('Connection', 'keep-alive')
-				res.flushHeaders() // flush the headers to establish SSE with client
-				const returnData = addIpaddressToLivenessListeningPool(ipaddress||'', obj.walletAddress, res)
-
-				res.write(JSON.stringify (returnData)+'\r\n\r\n')
-				
-			})
-		}
-
-		router(_router)
-		const server = createServer(options, app)
 		server.listen(443, () => {
 			startEPOCH_EventListeningForMining(this.nodeWallet)
 			return console.table([
