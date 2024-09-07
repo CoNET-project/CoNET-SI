@@ -215,9 +215,60 @@ class conet_si_server {
 	constructor () {
         this.initSetupData ()
     }
-	private sockerdata = (socket:  Socket|TLSSocket) => {
+
+
+
+	private sockerdata = (socket: Socket|TLSSocket) => {
 		logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
-		socket.once('data', (data:Buffer) => {
+		let first = true
+
+		const getData = (bodyLength: number, request_line: string[], htmlHeaders: string[]) => {
+
+			if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
+				logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
+				return distorySocket(socket)
+			}
+
+			logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+			let body
+			try {
+				body = JSON.parse(request_line[1])
+			} catch (ex) {
+				logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+				logger(request_line[1])
+				return distorySocket(socket)
+			}
+			
+			if (!body.data || typeof body.data !== 'string') {
+				logger (Colors.magenta(`startServer HTML body is ont string error!`))
+				logger(request_line[1])
+				distorySocket(socket)
+				
+			}
+			//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+			return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
+		}
+
+		const readMore = (data: Buffer) => {
+			
+			socket.once('data', _data => {
+				const request = data + _data
+				const request_line = request.toString().split('\r\n\r\n')
+				const htmlHeaders = request_line[0].split('\r\n')
+				const bodyLength = getLengthHander (htmlHeaders)
+
+				if (request_line[1].length < bodyLength) {
+					logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+					return readMore (request)
+				}
+				
+				getData (bodyLength, request_line, htmlHeaders)
+			})
+		}
+
+
+
+		socket.once('data', (data: Buffer) => {
 			
 			const request = data.toString()
 			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on request [${request}]`))
@@ -230,59 +281,35 @@ class conet_si_server {
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 
+			const responseHeader = () => {
+				const ret = `HTTP/1.1 200 OK\r\n` + 
+							`Cache-Control: no-cache\r\n` +
+							`access-control-allow-origin: *\r\n` +
+							`Content-Type: text/event-stream\r\n` +
+							`Connection: keep-alive\r\n\r\n`
+	
+				readMore(data)
+					
+				if (socket.writable) {
+					return socket.write(ret)
+				}
+			}
+
 			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 				const bodyLength = getLengthHander (htmlHeaders)
 
-				if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
+				if ( !bodyLength) {
+					first = false
 					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
-					return distorySocket(socket)
-				}
-
-				const getData = () => {
-
-					if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
-						logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
-						return distorySocket(socket)
-					}
-
-					logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-					let body
-					try {
-						body = JSON.parse(request_line[1])
-					} catch (ex) {
-						logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-						return distorySocket(socket)
-					}
-					
-					if (!body.data || typeof body.data !== 'string') {
-						logger (Colors.magenta(`startServer HTML body format error!`))
-						return distorySocket(socket)
-					}
-					//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-					return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
-				}
-
-				const readMore = () => {
-					logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-					socket.once('data', _data => {
-						
-						request_line[1] += _data
-						if (request_line[1].length < bodyLength) {
-							logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-							return readMore ()
-						}
-						
-						getData ()
-					})
+					return responseHeader()
 				}
 
 				if (request_line[1].length < bodyLength) {
-
-					return readMore ()
+					return readMore (data)
 				}
 
-				return getData ()
+				return getData (bodyLength, request_line, htmlHeaders)
 				
 			}
 
@@ -290,6 +317,8 @@ class conet_si_server {
 				logger (inspect(htmlHeaders, false, 3, true))
 				return responseRootHomePage(socket)
 			}
+
+			
 
 			return distorySocket(socket)
 		})
