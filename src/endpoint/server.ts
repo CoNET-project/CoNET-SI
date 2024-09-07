@@ -300,16 +300,18 @@ class conet_si_server {
 			}
 
 			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
-				logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+				
 				const bodyLength = getLengthHander (htmlHeaders)
+				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 
 				if ( !bodyLength) {
 					first = false
 					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
 					return responseHeader()
 				}
-
+				
 				if (request_line[1].length < bodyLength) {
+					logger(Colors.blue(`request_line[1].length [${request_line[1].length}]< bodyLength ${bodyLength} goto readMore (data)`))
 					return readMore (data)
 				}
 
