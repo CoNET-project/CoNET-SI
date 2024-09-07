@@ -282,7 +282,11 @@ class conet_si_server {
 			const requestProtocol = htmlHeaders[0]
 
 			const responseHeader = () => {
+				logger(`responseHeader send response headers to ${socket.remoteAddress}`)
 				const ret = `HTTP/1.1 200 OK\r\n` + 
+							`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+							//	@ts-ignore
+							`Date: ${new Date().toGMTString()}\r\n` +
 							`Cache-Control: no-cache\r\n` +
 							`Access-Control-Allow-Origin: *\r\n` +
 							`Content-Type: text/event-stream\r\n` +
