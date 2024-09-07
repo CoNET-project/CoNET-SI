@@ -230,7 +230,7 @@ class conet_si_server {
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 
-			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
+			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 				const bodyLength = getLengthHander (htmlHeaders)
 
