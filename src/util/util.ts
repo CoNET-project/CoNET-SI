@@ -10,6 +10,7 @@ import { mapLimit } from 'async'
 import {readKey} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
 
+
 const conetHoleskyRPC = 'https://rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 const cCNTPAddr_old = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
@@ -23,7 +24,7 @@ let GlobalIpAddress = ''
 const useNodeReceiptList: Map<string, NodList> = new Map()
 const routerInfo: Map<string, nodeInfo> = new Map()
 
-const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
+export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false
 
 const initGuardianNodes = async () => {
@@ -302,6 +303,8 @@ const scanPassedEpoch = async () => {
 	})
 }
 
+
+
 export const startEventListening = async () => {
 	currentEpoch = await CONETProvider.getBlockNumber()
 	const ip = getServerIPV4Address ( false )
@@ -329,3 +332,4 @@ export const startEventListening = async () => {
 	
 	await scanPassedEpoch()
 }
+

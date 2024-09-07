@@ -197,3 +197,5 @@ interface minerObj extends SICommandObj{
 	data?: any
 	allWallets?: string[]
 }
+
+

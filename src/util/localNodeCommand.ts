@@ -26,6 +26,7 @@ import {checkPayment, getRoute } from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {resolve4} from 'node:dns'
+import {access, constants} from 'node:fs/promises'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -1131,3 +1132,44 @@ const pgpTest = async () => {
 }
 
 
+
+export const CertificatePATH = ['/etc/letsencrypt/live/slickstack/cert.pem','/etc/letsencrypt/live/slickstack/privkey.pem']
+export const testCertificateFiles: () => Promise<boolean> = () => new Promise (async resolve => {
+	try {
+		await Promise.all([
+			access(CertificatePATH[0], constants.R_OK),
+			access(CertificatePATH[1], constants.R_OK),
+		])
+		logger(`testCertificateFiles success!`)
+		return resolve (true)
+	} catch (ex) {
+		return resolve (false)
+	}
+})
+export const checkSign = (message: string, signMess: string) => {
+	let digest, recoverPublicKey, verifyMessage, obj: minerObj
+	let wallet = ''
+	try {
+		obj = JSON.parse(message)
+		wallet = obj.walletAddress
+		digest = ethers.id(message)
+		recoverPublicKey = ethers.recoverAddress(digest, signMess)
+		verifyMessage = ethers.verifyMessage(message, signMess)
+
+	} catch (ex) {
+		logger (Colors.red(`checkSignObj recoverPublicKey ERROR`), ex)
+		logger (`digest = ${digest} signMess = ${signMess}`)
+		return null
+	}
+	
+
+	if (wallet && (verifyMessage.toLowerCase() === wallet.toLowerCase() || recoverPublicKey.toLowerCase() === wallet.toLowerCase())) {
+		obj.walletAddress = wallet.toLowerCase()
+		return obj
+		
+	}
+	
+	logger (Colors.red(`checkSignObj recoveredAddress (${verifyMessage.toLowerCase()}) or recoverPublicKey ${recoverPublicKey.toLowerCase()} !== wallet (${wallet.toLowerCase()})`))
+	return null
+	
+}

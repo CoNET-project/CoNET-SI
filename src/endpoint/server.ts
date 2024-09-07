@@ -4,14 +4,14 @@ import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
 import Net from 'node:net'
 import {logger} from '../util/logger'
-import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, register_to_DL} from '../util/localNodeCommand'
-import {startEventListening} from '../util/util'
-import {startExpressServer} from './sslManager'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, checkSign} from '../util/localNodeCommand'
+import {startEventListening, CONETProvider} from '../util/util'
+import Express, { Router, Response } from 'express'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import  { distorySocket } from '../util/htmlResponse'
-import Express from 'express'
-
+import {createServer} from 'node:https'
+import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -27,6 +27,7 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
     console.log(Colors.grey( hexdump( buffer.slice( 0, length ))))
 }
 
+const countAccessPool: Map<string, number[]> = new Map()
 
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
@@ -66,12 +67,106 @@ const responseRootHomePage = (socket: Net.Socket) => {
 }
 
 
+interface livenessListeningPoolObj {
+	res: Response
+	ipaddress: string
+	wallet: string
+}
+//			getIpAddressFromForwardHeader(req.header(''))
+
+const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
+
+const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Response) => {
+	const _obj = livenessListeningPool.get (wallet)
+	if (_obj) {
+		if (_obj.res.writable && typeof _obj.res.end === 'function') {
+			_obj.res.end()
+			const socker = res.socket
+			if (socker && typeof socker.destroy === 'function') {
+				socker.destroy()
+			}
+		}
+		
+	}
+	const obj: livenessListeningPoolObj = {
+		ipaddress, wallet, res
+	}
+	
+	livenessListeningPool.set (wallet, obj)
+	const returnData = {
+		ipaddress,
+		status: 200
+	}
+
+	res.once('error', err => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
+		livenessListeningPool.delete(wallet)
+	})
+	res.once('close', () => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
+		livenessListeningPool.delete(wallet)
+	})
+
+	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
+	return returnData
+}
+
+
+const testMinerCOnnecting = (res: Response, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
+	returnData['wallet'] = wallet
+	if (res.writable && !res.closed) {
+		return res.write( JSON.stringify(returnData)+'\r\n\r\n', async err => {
+			if (err) {
+				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+				livenessListeningPool.delete(wallet)
+			}
+			return resolve (true)
+		})
+		
+	}
+	livenessListeningPool.delete(wallet)
+	logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+	return resolve (true)
+})
+
+
+const stratlivenessV2 = async (block: number, nodeWallet: string) => {
+	
+	
+	logger(Colors.blue(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
+
+	// clusterNodes = await getApiNodes()
+	const processPool: any[] = []
+	
+	livenessListeningPool.forEach(async (n, key) => {
+		const res = n.res
+		const returnData = {
+			status: 200,
+			epoch: block
+		}
+		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
+
+	})
+
+	await Promise.all(processPool)
+
+	const wallets: string[] = []
+
+	livenessListeningPool.forEach((value: livenessListeningPoolObj, key: string) => {
+		wallets.push (key)
+	})
+
+	logger(Colors.grey(`stratliveness EPOCH ${block} stoped! Pool length = [${livenessListeningPool.size}]`))
+
+}
+
 class conet_si_server {
 
 	private PORT=0
 	private password = ''
 	private debug = true
 	private workerNumber = 0
+	private nodeWallet: string = ''
 	public nodePool = []
 	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
@@ -101,6 +196,7 @@ class conet_si_server {
 			this.initData.keychain = await generateWalletAddress (this.password)
 			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		}
+		
 		this.publicKeyID = this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 
 		this.PORT = this.initData.ipV4Port
@@ -112,6 +208,12 @@ class conet_si_server {
 		this.initData.pgpKey.keyID = newID
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
+		const wallet:Wallet = this.initData.keyObj
+		this.nodeWallet = wallet.address.toLowerCase()
+		const ssl = await testCertificateFiles ()
+		if (ssl) {
+			this.startSslServer ()
+		}
 
 		this.startServer ()
 		startEventListening()
@@ -120,6 +222,8 @@ class conet_si_server {
 	constructor () {
         this.initSetupData ()
     }
+
+
 
 	private startServer = () => {
 		
@@ -199,7 +303,6 @@ class conet_si_server {
 					return responseRootHomePage(socket)
 				}
 
-				
 				return distorySocket(socket)
 			})
 
@@ -217,8 +320,105 @@ class conet_si_server {
             ])
 		})
 	}
+
+	private startSslServer = () => {
+		const key = readFileSync(CertificatePATH[1])
+		const cert = readFileSync(CertificatePATH[0])
+		const options = {
+			key,
+			cert
+		}
+		
+		const app = Express()
+		app.disable('x-powered-by')
+		const Cors = require('cors')
+		app.use( Cors ())
+		app.use (async (req, res, next) => {
+			if (/^post$/i.test(req.method)) {
+				
+				return Express.json({limit: '1mb'})(req, res, err => {
+
+					if (err) {
+						res.sendStatus(400).end()
+						res.socket?.end().destroy()
+						logger(Colors.red(`/^post$/i.test Attack ${req.socket.remoteAddress} ! ${req.url}`))
+						logger(inspect(req.body, false, 3, true))
+						return
+					}
+
+					return next()
+				})
+			}
+				
+			return next()
+			
+		})
+
+		const _router = Router ()
+		app.use( '/api', _router )
+
+
+		const router = (router: Router) => {
+
+			router.post ('/startMining', async (req, res) => {
+				const ipaddress = req.socket.remoteAddress
+
+				let message, signMessage
+
+				try {
+					message = req.body.message
+					signMessage = req.body.signMessage
+	
+				} catch (ex) {
+					logger (Colors.grey(`${ ipaddress } request /livenessListening message = req.body.message ERROR! ${inspect(req.body, false, 3, true)}`))
+					return res.status(404).end()
+				}
+
+				if (!message||!signMessage) {
+					logger (Colors.grey(`Router /livenessListening !message||!signMessage Error! [${ipaddress}]`))
+					return  res.status(404).end()
+					
+				}
+
+				
+				const obj = checkSign (message, signMessage)
+	
+				if (!obj) {
+					logger (Colors.grey(`[${ipaddress}] to /startMining !obj Error!`))
+					res.status(404).end()
+					return res.socket?.end().destroy()
+				}
+
+				
+				res.status(200)
+				res.setHeader('Cache-Control', 'no-cache')
+				res.setHeader('Content-Type', 'text/event-stream')
+				res.setHeader('Access-Control-Allow-Origin', '*')
+				res.setHeader('Connection', 'keep-alive')
+				res.flushHeaders() // flush the headers to establish SSE with client
+				const returnData = addIpaddressToLivenessListeningPool(ipaddress||'', obj.walletAddress, res)
+
+				res.write(JSON.stringify (returnData)+'\r\n\r\n')
+				
+			})
+		}
+
+		router(_router)
+		const server = createServer(options, app)
+		server.listen(443, () => {
+			startEPOCH_EventListeningForMining(this.nodeWallet)
+			return console.table([
+                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet}` }
+            ])
+		})
+
+	}
 }
 
-
+const startEPOCH_EventListeningForMining = (nodeWallet: string) => {
+	CONETProvider.on('block', block => {
+		stratlivenessV2(block, nodeWallet)
+	})
+}
 
 export default conet_si_server
