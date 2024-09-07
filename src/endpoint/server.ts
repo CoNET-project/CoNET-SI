@@ -215,14 +215,13 @@ class conet_si_server {
 			this.startSslServer ()
 		}
 
-		this.startServer ()
+		// this.startServer ()
 		startEventListening()
 	}
 
 	constructor () {
         this.initSetupData ()
     }
-
 
 
 	private startServer = () => {
