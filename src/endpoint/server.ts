@@ -278,7 +278,7 @@ class conet_si_server {
 						`access-control-allow-origin: *\r\n` +
 						`content-type: text/event-stream\r\n` +
 						`Cache-Control: no-cache\r\n` +
-						`Connection: close\r\n\r\n`
+						`Connection: close\r\n`
 
 				
 			if (socket.writable) {
