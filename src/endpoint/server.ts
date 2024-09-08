@@ -5,7 +5,7 @@ import Cluster from 'node:cluster'
 import {Socket, createServer} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining} from '../util/localNodeCommand'
-import {startEventListening} from '../util/util'
+import {startEventListening, test} from '../util/util'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -240,6 +240,7 @@ class conet_si_server {
 
 		server.listen ( this.initData?.ipV4Port, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
+			test()
 			return console.table([
                 { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
 				
