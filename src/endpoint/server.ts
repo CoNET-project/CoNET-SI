@@ -281,7 +281,6 @@ class conet_si_server {
 						`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
 						`Cache-Control: no-cache\r\n` +
 						`Connection: Keep-Alive\r\n\r\n`
-
 				
 			if (socket.writable) {
 				return socket.write(ret)
@@ -290,26 +289,19 @@ class conet_si_server {
 
 		socket.on('data', (_data: Buffer) => {
 			data += _data
-			
-			if (first) {
-				first = false
-				responseHeader()
-			}
-			logger(inspect(JSON.stringify(data)))
-			
-		})
-
-		socket.once('end', () => {
 			const request = data.toString()
-			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on end [${request}]`))
-			logger (inspect(data.toString()))
 			const request_line = request.split('\r\n\r\n')
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
+			logger(Colors.blue(JSON.stringify(request)))
+
+			if (first) {
+				first = false
+				return responseHeader()
+			}
 
 
-
-			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
+			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				
 				const bodyLength = getLengthHander (htmlHeaders)
 
@@ -325,10 +317,12 @@ class conet_si_server {
 				return responseRootHomePage(socket)
 			}
 
-			
-
 			return distorySocket(socket)
 			
+		})
+
+		socket.once('end', () => {
+			logger(Colors.green(`${socket.remoteAddress} on END`))
 		})
 	}
 
