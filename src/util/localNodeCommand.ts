@@ -810,11 +810,45 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, socket)
 		}
 
+		case 'mining_validator': {
+			return validatorMining(command, socket)
+		}
+
 		default : {
 			logger (Colors.red(`postOpenpgpRoute invalid command [${inspect(command, false, 3, true)}]`))
 			return distorySocket(socket)
 		}
 	}
+
+}
+
+const validatorNodes: Map<string, boolean> = new Map()
+
+const validatorMining = (command: minerObj, socket: Socket ) => {
+
+	const validatorData: nodeResponse = command.data
+	if (!validatorData) {
+		logger(Colors.red(`validatorMining has null validatorData`))
+		logger(inspect(command, false, 3, true))
+		return distorySocket(socket)
+	}
+
+	if (validatorData.epoch !== listenValidatorEpoch || !validatorData?.nodeWallet|| !validatorData?.hash) {
+		logger(Colors.red(`validatorMining has null validatorData`))
+		logger(inspect(command, false, 3, true))
+		return distorySocket(socket)
+	}
+	
+	const wallet = command.walletAddress
+	const message = {epoch: listenValidatorEpoch, wallet}
+	const va = ethers.verifyMessage(JSON.stringify(message), validatorData.hash)
+
+	if (va.toLowerCase() !== validatorData.nodeWallet.toLowerCase()) {
+		logger(Colors.red(`validatorMining verifyMessage hash Error! va.toLowerCase() ${va.toLowerCase()} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
+		logger(inspect(command, false, 3, true))
+		return distorySocket(socket)
+	}
+
 
 }
 
@@ -1215,11 +1249,25 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 	return resolve (true)
 })
 
-
-export const startEPOCH_EventListeningForMining = (nodePrivate: Wallet) => {
+let CurrentEpoch = 0
+let listenValidatorEpoch = 0
+export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
+	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	CONETProvider.on('block', block => {
+		listenValidatorEpoch = CurrentEpoch = block
 		stratlivenessV2(block, nodePrivate)
 	})
+	validatorNodes.set('0x36b195508d291ccb8195875164b75868b992644d'.toLowerCase(), true)
+	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
+}
+
+interface nodeResponse {
+	status: number
+	epoch: number
+	hash: string
+	rate: string
+	nodeWallet:string
+	minerResponseHash?: string
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
@@ -1235,12 +1283,14 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		const message = {epoch: block, wallet: key}
 		logger(inspect(message, false, 3, true))
 		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
-		const returnData = {
+		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block,
+			rate: '0',
 			hash: signMessage,
 			nodeWallet: nodeWprivateKey.address.toLowerCase()
 		}
+
 		logger(inspect(returnData, false, 3, true))
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
@@ -1255,3 +1305,4 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	})
 
 }
+

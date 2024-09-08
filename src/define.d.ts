@@ -73,7 +73,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SaaS_Proxy'|'SaaS_Sock5'|'mining'
+	command: 'SaaS_Proxy'|'SaaS_Sock5'|'mining'|'mining_validator'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
