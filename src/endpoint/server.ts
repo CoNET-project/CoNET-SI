@@ -180,7 +180,7 @@ class conet_si_server {
 						`Connection: Keep-Alive\r\n\r\n`
 				
 			if (socket.writable) {
-				return socket.write(ret)
+				return socket.end(ret).destroy()
 			}
 		}
 
