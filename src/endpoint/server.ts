@@ -118,7 +118,8 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 		const wallet:Wallet = this.initData.keyObj
-		this.nodeWallet = wallet.address.toLowerCase()
+		this.nodeWallet = wallet.signingKey.privateKey
+		
 		const ssl = await testCertificateFiles ()
 		if (ssl) {
 			this.startSslServer ()

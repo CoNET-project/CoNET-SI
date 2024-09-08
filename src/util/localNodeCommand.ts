@@ -1216,25 +1216,28 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 })
 
 
-export const startEPOCH_EventListeningForMining = (nodeWallet: string) => {
+export const startEPOCH_EventListeningForMining = (nodePrivate: Wallet) => {
 	CONETProvider.on('block', block => {
-		stratlivenessV2(block, nodeWallet)
+		stratlivenessV2(block, nodePrivate)
 	})
 }
 
-const stratlivenessV2 = async (block: number, nodeWallet: string) => {
+const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	
 	
-	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
+	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
 	
 	livenessListeningPool.forEach(async (n, key) => {
 		const res = n.res
+		const message = JSON.stringify({epoch: block, wallet: key})
+		const signMessage = await nodeWprivateKey.signMessage(message)
 		const returnData = {
 			status: 200,
-			epoch: block
+			epoch: block,
+			hash: signMessage
 		}
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
