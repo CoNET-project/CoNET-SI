@@ -827,14 +827,14 @@ const validatorNodes: Map<string, boolean> = new Map()
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
-	if (!validatorData) {
+	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash) {
 		logger(Colors.red(`validatorMining has null validatorData`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
 
-	if (validatorData.epoch !== listenValidatorEpoch || !validatorData?.nodeWallet|| !validatorData?.hash) {
-		logger(Colors.red(`validatorMining has null validatorData`))
+	if (validatorData.epoch !== listenValidatorEpoch) {
+		logger(Colors.red(`validatorData.epoch [${validatorData}] !== listenValidatorEpoch [${listenValidatorEpoch}]`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
