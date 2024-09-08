@@ -277,8 +277,7 @@ class conet_si_server {
 						`Server: nginx/1.24.0 (Ubuntu)\r\n` +
 						`access-control-allow-origin: *\r\n` +
 						`content-type: text/event-stream\r\n` +
-						`Cache-Control: no-cache\r\n` +
-						`Connection: close\r\n`
+						`Cache-Control: no-cache\r\n\r\n`
 
 				
 			if (socket.writable) {
