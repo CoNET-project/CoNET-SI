@@ -765,14 +765,14 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
-			const payment = checkPayment(command.walletAddress)
+			// const payment = checkPayment(command.walletAddress)
 
-			if (!payment) {
-				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-				return distorySocket(socket, '402 Payment Required')
-			}
+			// if (!payment) {
+			// 	logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+			// 	return distorySocket(socket, '402 Payment Required')
+			// }
 			
-			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
+			// logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
 
 			const prosyData = command.requestData[0]
 			return socks5Connect(prosyData, socket)
@@ -780,19 +780,19 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
         case 'SaaS_Proxy': {
             
-			const payment = checkPayment(command.walletAddress)
+			// const payment = checkPayment(command.walletAddress)
 
-			if (!payment) {
-				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-				return distorySocket(socket, '402 Payment Required')
-			}
+			// if (!payment) {
+			// 	logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+			// 	return distorySocket(socket, '402 Payment Required')
+			// }
 			const requestHeaders = command.requestData[1]
             const requestOrgnal = command.requestData[0]
 
             logger (Colors.blue(`SaaS_Proxy get Request\n`), inspect(requestOrgnal, false, 3, true))
             logger (Colors.blue(`SaaS_Proxy requestHeaders\n`), inspect(requestHeaders, false, 3, true))
             logger (`SaaS_Proxy clientReq headers\n`, headers)
-			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
+			// logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
             const password = command.Securitykey
             // const _encrypt = new encrypteStream (keyJSON, command.iv, MB)
             //#endregion 
