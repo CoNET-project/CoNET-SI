@@ -1225,7 +1225,7 @@ export const startEPOCH_EventListeningForMining = (nodePrivate: Wallet) => {
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	
 	
-	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
+	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
@@ -1240,6 +1240,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 			hash: signMessage,
 			nodeWallet: nodeWprivateKey.address.toLowerCase()
 		}
+		logger(inspect(returnData, false, 3, true))
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
 	})
