@@ -221,7 +221,7 @@ class conet_si_server {
 	private sockerdata = (socket: Socket|TLSSocket) => {
 		logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
 		let first = true
-
+		let data = ''
 		const getData = (bodyLength: number, request_line: string[], htmlHeaders: string[]) => {
 
 			if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
@@ -270,15 +270,18 @@ class conet_si_server {
 
 
 
-		socket.once('data', (data: Buffer) => {
+		socket.on('data', (_data: Buffer) => {
 			
+			data += _data
+			logger(Colors.gray(`sockerdata ${socket.remoteAddress} on data!`))
+			logger(inspect(data.toString(), false, 3, true))
+		})
+
+		socket.once('end', () => {
 			const request = data.toString()
-			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on request [${request}]`))
+			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on end [${request}]`))
 			logger (inspect(data.toString()))
 			const request_line = request.split('\r\n\r\n')
-			
-			
-
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 
@@ -293,7 +296,6 @@ class conet_si_server {
 							`Cache-Control: no-cache\r\n` +
 							`Connection: close\r\n\r\n`
 	
-				readMore(data)
 					
 				if (socket.writable) {
 					return socket.write(ret)
@@ -329,10 +331,7 @@ class conet_si_server {
 			
 
 			return distorySocket(socket)
-		})
-
-		socket.once('end', () => {
-			logger(Colors.gray(`sockerdata ${socket.remoteAddress} on end()`))
+			
 		})
 	}
 
