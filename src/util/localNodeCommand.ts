@@ -1232,8 +1232,9 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	
 	livenessListeningPool.forEach(async (n, key) => {
 		const res = n.res
-		const message = JSON.stringify({epoch: block, wallet: key})
-		const signMessage = await nodeWprivateKey.signMessage(message)
+		const message = {epoch: block, wallet: key}
+		logger(inspect(message, false, 3, true))
+		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
 		const returnData = {
 			status: 200,
 			epoch: block,
