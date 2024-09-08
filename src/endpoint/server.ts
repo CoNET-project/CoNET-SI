@@ -119,7 +119,7 @@ class conet_si_server {
 		saveSetup ( this.initData, true )
 		const wallet:Wallet = this.initData.keyObj
 		this.nodeWallet = wallet
-
+		await test()
 		const ssl = await testCertificateFiles ()
 		if (ssl) {
 			this.startSslServer ()
@@ -240,7 +240,7 @@ class conet_si_server {
 
 		server.listen ( this.initData?.ipV4Port, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
-			test()
+			
 			return console.table([
                 { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
 				
