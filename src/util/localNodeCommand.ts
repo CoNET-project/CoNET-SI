@@ -25,8 +25,10 @@ export const setupPath = '.CoNET-SI'
 import {checkPayment, getRoute } from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
+import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
+import {startEventListening, CONETProvider} from '../util/util'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -543,7 +545,6 @@ const saveCoNETCashData = async (publicGPGKeyID: string, linkid: string, jsonDat
 	})
 }
 
-
 const encryptWebCryptCommand = async (keyJSON:  webcrypto.JsonWebKey, _iv: string, command: SICommandObj) => {
     return encryptWebCrypt(keyJSON, _iv, JSON.stringify(command))
 }
@@ -759,25 +760,39 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
     serverReq.end()
 }
 
-
-export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: SICommandObj) => {
+export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj) => {
 
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
+			const payment = checkPayment(command.walletAddress)
+
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocket(socket, '402 Payment Required')
+			}
 			
+			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
+
 			const prosyData = command.requestData[0]
 			return socks5Connect(prosyData, socket)
 		}
 
         case 'SaaS_Proxy': {
-            const requestHeaders = command.requestData[1]
+            
+			const payment = checkPayment(command.walletAddress)
+
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocket(socket, '402 Payment Required')
+			}
+			const requestHeaders = command.requestData[1]
             const requestOrgnal = command.requestData[0]
 
             logger (Colors.blue(`SaaS_Proxy get Request\n`), inspect(requestOrgnal, false, 3, true))
             logger (Colors.blue(`SaaS_Proxy requestHeaders\n`), inspect(requestHeaders, false, 3, true))
             logger (`SaaS_Proxy clientReq headers\n`, headers)
-
+			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
             const password = command.Securitykey
             // const _encrypt = new encrypteStream (keyJSON, command.iv, MB)
             //#endregion 
@@ -790,7 +805,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
         }
 
 		case 'mining': {
-			
+			logger(`mining...`)
+
 		}
 
 		default : {
@@ -963,7 +979,7 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 
 export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
 
-	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [$${pgpData?.length}]`))
+	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
 	let messObj
 	
@@ -980,7 +996,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger (Colors.red(`postOpenpgpRoute readMessage has no keys ERROR end connecting!\n`))
 		return distorySocket(socket)
 	}
-
+	
 	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
 
 	
@@ -1010,15 +1026,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(Colors.red(`checkSignObj Error!`))
 		return distorySocket(socket)
 	}
-
-	const payment = checkPayment(command.walletAddress)
-
-	if (!payment) {
-		logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-		return distorySocket(socket, '402 Payment Required')
-	}
 	
-	logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
 	return localNodeCommandSocket(socket, headers, command )
 	
 }
@@ -1144,3 +1152,100 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 		return resolve (false)
 	}
 })
+
+
+
+
+interface livenessListeningPoolObj {
+	res: Socket|TLSSocket
+	ipaddress: string
+	wallet: string
+}
+//			getIpAddressFromForwardHeader(req.header(''))
+
+const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
+
+
+const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
+	const _obj = livenessListeningPool.get (wallet)
+	if (_obj) {
+		if (_obj.res.writable && typeof _obj.res.end === 'function') {
+			_obj.res.end()
+		}
+		
+	}
+	const obj: livenessListeningPoolObj = {
+		ipaddress, wallet, res
+	}
+	
+	livenessListeningPool.set (wallet, obj)
+	const returnData = {
+		ipaddress,
+		status: 200
+	}
+
+	res.once('error', err => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
+		livenessListeningPool.delete(wallet)
+	})
+	res.once('close', () => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
+		livenessListeningPool.delete(wallet)
+	})
+
+	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
+	return returnData
+}
+
+
+const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
+	returnData['wallet'] = wallet
+	if (res.writable && !res.closed) {
+		return res.write( JSON.stringify(returnData)+'\r\n\r\n', async err => {
+			if (err) {
+				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+				livenessListeningPool.delete(wallet)
+			}
+			return resolve (true)
+		})
+		
+	}
+	livenessListeningPool.delete(wallet)
+	logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+	return resolve (true)
+})
+
+
+export const startEPOCH_EventListeningForMining = (nodeWallet: string) => {
+	CONETProvider.on('block', block => {
+		stratlivenessV2(block, nodeWallet)
+	})
+}
+
+const stratlivenessV2 = async (block: number, nodeWallet: string) => {
+	
+	
+	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
+
+	// clusterNodes = await getApiNodes()
+	const processPool: any[] = []
+	
+	livenessListeningPool.forEach(async (n, key) => {
+		const res = n.res
+		const returnData = {
+			status: 200,
+			epoch: block
+		}
+		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
+
+	})
+
+	await Promise.all(processPool)
+
+	const wallets: string[] = []
+
+	livenessListeningPool.forEach((value: livenessListeningPoolObj, key: string) => {
+		wallets.push (key)
+	})
+
+}

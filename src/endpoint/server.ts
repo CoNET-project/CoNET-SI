@@ -4,8 +4,8 @@ import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
 import {Socket, createServer} from 'node:net'
 import {logger} from '../util/logger'
-import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, checkSign} from '../util/localNodeCommand'
-import {startEventListening, CONETProvider} from '../util/util'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining} from '../util/localNodeCommand'
+import {startEventListening} from '../util/util'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -66,92 +66,8 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 }
 
 
-interface livenessListeningPoolObj {
-	res: Socket|TLSSocket
-	ipaddress: string
-	wallet: string
-}
-//			getIpAddressFromForwardHeader(req.header(''))
-
-const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
-
-const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
-	const _obj = livenessListeningPool.get (wallet)
-	if (_obj) {
-		if (_obj.res.writable && typeof _obj.res.end === 'function') {
-			_obj.res.end()
-		}
-		
-	}
-	const obj: livenessListeningPoolObj = {
-		ipaddress, wallet, res
-	}
-	
-	livenessListeningPool.set (wallet, obj)
-	const returnData = {
-		ipaddress,
-		status: 200
-	}
-
-	res.once('error', err => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
-		livenessListeningPool.delete(wallet)
-	})
-	res.once('close', () => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
-		livenessListeningPool.delete(wallet)
-	})
-
-	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
-	return returnData
-}
 
 
-const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
-	returnData['wallet'] = wallet
-	if (res.writable && !res.closed) {
-		return res.write( JSON.stringify(returnData)+'\r\n\r\n', async err => {
-			if (err) {
-				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
-				livenessListeningPool.delete(wallet)
-			}
-			return resolve (true)
-		})
-		
-	}
-	livenessListeningPool.delete(wallet)
-	logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
-	return resolve (true)
-})
-
-
-const stratlivenessV2 = async (block: number, nodeWallet: string) => {
-	
-	
-	logger(Colors.magenta(`stratliveness EPOCH ${block} starting! ${nodeWallet} Pool length = [${livenessListeningPool.size}]`))
-
-	// clusterNodes = await getApiNodes()
-	const processPool: any[] = []
-	
-	livenessListeningPool.forEach(async (n, key) => {
-		const res = n.res
-		const returnData = {
-			status: 200,
-			epoch: block
-		}
-		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
-
-	})
-
-	await Promise.all(processPool)
-
-	const wallets: string[] = []
-
-	livenessListeningPool.forEach((value: livenessListeningPoolObj, key: string) => {
-		wallets.push (key)
-	})
-
-}
 
 class conet_si_server {
 
@@ -209,7 +125,7 @@ class conet_si_server {
 		}
 
 		// this.startServer ()
-		//startEventListening()
+		// startEventListening()
 	}
 
 	constructor () {
@@ -248,26 +164,6 @@ class conet_si_server {
 			//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 			return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
 		}
-
-		const readMore = (data: Buffer) => {
-			logger(Colors.blue(`readMore listen more data!`))
-			
-			socket.on('data', _data => {
-				data+= _data
-			})
-			socket.on('end', ()=> {
-				logger(`readMore on end`)
-				
-				const request = data.toString()
-				logger(inspect(data))
-				const request_line = request.toString().split('\r\n\r\n')
-				const htmlHeaders = request_line[0].split('\r\n')
-				const bodyLength = getLengthHander (htmlHeaders)
-				
-				getData (bodyLength, request_line, htmlHeaders)
-			})
-		}
-
 
 		const responseHeader = () => {
 			logger(`responseHeader send response headers to ${socket.remoteAddress}`)
@@ -311,7 +207,6 @@ class conet_si_server {
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 				return getData (bodyLength, request_line, htmlHeaders)
-				
 			}
 
 			distorySocket(socket)
@@ -356,7 +251,7 @@ class conet_si_server {
 		})
 
 		server.listen(443, () => {
-			// startEPOCH_EventListeningForMining(this.nodeWallet)
+			startEPOCH_EventListeningForMining(this.nodeWallet)
 			return console.table([
                 { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet}` }
             ])
@@ -365,10 +260,6 @@ class conet_si_server {
 	}
 }
 
-const startEPOCH_EventListeningForMining = (nodeWallet: string) => {
-	CONETProvider.on('block', block => {
-		stratlivenessV2(block, nodeWallet)
-	})
-}
+
 
 export default conet_si_server
