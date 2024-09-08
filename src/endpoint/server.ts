@@ -298,7 +298,6 @@ class conet_si_server {
 
 			if (first) {
 				if (/^GET \/ HTTP\//.test(requestProtocol)) {
-					logger (inspect(htmlHeaders, false, 3, true))
 					return responseRootHomePage(socket)
 				}
 				first = false
@@ -314,7 +313,7 @@ class conet_si_server {
 				return getData (bodyLength, request_line, htmlHeaders)
 				
 			}
-			
+
 			distorySocket(socket)
 		})
 
