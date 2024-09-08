@@ -251,18 +251,18 @@ class conet_si_server {
 
 		const readMore = (data: Buffer) => {
 			logger(Colors.blue(`readMore listen more data!`))
-			socket.once('data', _data => {
-				logger(`readMore on data`)
-				logger(inspect(_data.toString()))
-				const request = data + _data
+			
+			socket.on('data', _data => {
+				data+= _data
+			})
+			socket.on('end', ()=> {
+				logger(`readMore on end`)
+				
+				const request = data.toString()
+				logger(inspect(data))
 				const request_line = request.toString().split('\r\n\r\n')
 				const htmlHeaders = request_line[0].split('\r\n')
 				const bodyLength = getLengthHander (htmlHeaders)
-
-				if (request_line[1].length < bodyLength) {
-					logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-					return readMore (request)
-				}
 				
 				getData (bodyLength, request_line, htmlHeaders)
 			})
