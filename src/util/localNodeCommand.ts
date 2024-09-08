@@ -806,7 +806,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 		case 'mining': {
 			logger(`mining...`)
-			addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, socket)
+			
+			return addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, socket)
 		}
 
 		default : {
