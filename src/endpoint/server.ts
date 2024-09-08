@@ -252,6 +252,8 @@ class conet_si_server {
 		const readMore = (data: Buffer) => {
 			logger(Colors.blue(`readMore listen more data!`))
 			socket.once('data', _data => {
+				logger(`readMore on data`)
+				logger(inspect(_data.toString()))
 				const request = data + _data
 				const request_line = request.toString().split('\r\n\r\n')
 				const htmlHeaders = request_line[0].split('\r\n')
@@ -283,13 +285,14 @@ class conet_si_server {
 
 			const responseHeader = () => {
 				logger(`responseHeader send response headers to ${socket.remoteAddress}`)
-				const ret = `HTTP/1.1 200 OK\r\n` + 
-							`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+				const ret = `HTTP/1.1 200 OK\r\n` +
 							//	@ts-ignore
 							`Date: ${new Date().toGMTString()}\r\n` +
+							`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+							`access-control-allow-origin: *\r\n` +
+							`content-type: text/event-stream\r\n` +
 							`Cache-Control: no-cache\r\n` +
-							`Access-Control-Allow-Origin: *\r\n` +
-							`Connection: keep-alive\r\n\r\n`
+							`Connection: close\r\n\r\n`
 	
 				readMore(data)
 					
