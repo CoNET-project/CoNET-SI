@@ -269,12 +269,32 @@ class conet_si_server {
 		}
 
 
+		const responseHeader = () => {
+			logger(`responseHeader send response headers to ${socket.remoteAddress}`)
+			const ret = `HTTP/1.1 200 OK\r\n` +
+						//	@ts-ignore
+						`Date: ${new Date().toGMTString()}\r\n` +
+						`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+						`access-control-allow-origin: *\r\n` +
+						`content-type: text/event-stream\r\n` +
+						`Cache-Control: no-cache\r\n` +
+						`Connection: close\r\n\r\n`
+
+				
+			if (socket.writable) {
+				return socket.write(ret)
+			}
+		}
 
 		socket.on('data', (_data: Buffer) => {
-			
 			data += _data
 			logger(Colors.gray(`sockerdata ${socket.remoteAddress} on data!`))
 			logger(inspect(data.toString(), false, 3, true))
+
+			if (first) {
+				first = false
+				return responseHeader()
+			}
 		})
 
 		socket.once('end', () => {
@@ -285,22 +305,7 @@ class conet_si_server {
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 
-			const responseHeader = () => {
-				logger(`responseHeader send response headers to ${socket.remoteAddress}`)
-				const ret = `HTTP/1.1 200 OK\r\n` +
-							//	@ts-ignore
-							`Date: ${new Date().toGMTString()}\r\n` +
-							`Server: nginx/1.24.0 (Ubuntu)\r\n` +
-							`access-control-allow-origin: *\r\n` +
-							`content-type: text/event-stream\r\n` +
-							`Cache-Control: no-cache\r\n` +
-							`Connection: close\r\n\r\n`
-	
-					
-				if (socket.writable) {
-					return socket.write(ret)
-				}
-			}
+
 
 			if (/^(POST |OPTIONS )\/post HTTP\/1.1/.test(requestProtocol)) {
 				
