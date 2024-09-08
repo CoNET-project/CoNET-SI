@@ -295,11 +295,10 @@ class conet_si_server {
 			const requestProtocol = htmlHeaders[0]
 			logger(Colors.blue(JSON.stringify(request)))
 
-			if (first) {
+			if (first && /^OPTIONS /.test(requestProtocol)) {
 				first = false
-				return responseHeader()
+				responseHeader()
 			}
-
 
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				
