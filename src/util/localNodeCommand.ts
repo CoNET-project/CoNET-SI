@@ -1004,7 +1004,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(inspect(content, false,3, true))
 		return distorySocket(socket)
 	}
-	const command = checkSignObj (content.message, content.signMessage)
+	const command = checkSign (content.message, content.signMessage)
 
 	if (!command) {
 		logger(Colors.red(`checkSignObj Error!`))
@@ -1077,36 +1077,34 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 
 }
 
-export const checkSignObj = (message: string, signMess: string) => {
-	if (!message || !signMess) {
-		return null
-	}
-	let obj: minerObj
+export const checkSign = (message: string, signMess: string) => {
+	let digest, recoverPublicKey, verifyMessage, obj: minerObj
+	let wallet = ''
 	try {
 		obj = JSON.parse(message)
-	} catch (ex) {
-		logger (Colors.red(`checkSignObj JSON.parse(message) Error`), message)
-		return null
-	}
-
-	let digest, recoverPublicKey, _digest
-	try {
+		wallet = obj.walletAddress
 		digest = ethers.id(message)
 		recoverPublicKey = ethers.recoverAddress(digest, signMess)
-		ethers.getAddress(recoverPublicKey)
+		verifyMessage = ethers.verifyMessage(message, signMess)
+
 	} catch (ex) {
-		// logger (colors.red(`checkSignObj recoverPublicKey ERROR digest = ${digest} signMess = ${signMess}`))
+		logger (Colors.red(`checkSignObj recoverPublicKey ERROR`), ex)
+		logger (`digest = ${digest} signMess = ${signMess}`)
 		return null
 	}
 	
-	if (!recoverPublicKey || !obj?.walletAddress || recoverPublicKey.toLowerCase() !== obj?.walletAddress?.toLowerCase()) {
-		logger (Colors.red(`checkSignObj obj Error! !recoverPublicKey[${!recoverPublicKey}] !obj?.walletAddress[${!obj?.walletAddress}] recoverPublicKey.toLowerCase() [${recoverPublicKey.toLowerCase()}]!== obj?.walletAddress?.toLowerCase() [${recoverPublicKey.toLowerCase() !== obj?.walletAddress?.toLowerCase()}]`),inspect(obj, false, 3, true) )
-		return null
-	}
-	obj.walletAddress = recoverPublicKey.toLowerCase()
-	return obj
 
+	if (wallet && (verifyMessage.toLowerCase() === wallet.toLowerCase() || recoverPublicKey.toLowerCase() === wallet.toLowerCase())) {
+		obj.walletAddress = wallet.toLowerCase()
+		return obj
+		
+	}
+	
+	logger (Colors.red(`checkSignObj recoveredAddress (${verifyMessage.toLowerCase()}) or recoverPublicKey ${recoverPublicKey.toLowerCase()} !== wallet (${wallet.toLowerCase()})`))
+	return null
+	
 }
+
 
 const pgpTest = async () => {
 	const password = 'ddd'
@@ -1146,30 +1144,3 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 		return resolve (false)
 	}
 })
-export const checkSign = (message: string, signMess: string) => {
-	let digest, recoverPublicKey, verifyMessage, obj: minerObj
-	let wallet = ''
-	try {
-		obj = JSON.parse(message)
-		wallet = obj.walletAddress
-		digest = ethers.id(message)
-		recoverPublicKey = ethers.recoverAddress(digest, signMess)
-		verifyMessage = ethers.verifyMessage(message, signMess)
-
-	} catch (ex) {
-		logger (Colors.red(`checkSignObj recoverPublicKey ERROR`), ex)
-		logger (`digest = ${digest} signMess = ${signMess}`)
-		return null
-	}
-	
-
-	if (wallet && (verifyMessage.toLowerCase() === wallet.toLowerCase() || recoverPublicKey.toLowerCase() === wallet.toLowerCase())) {
-		obj.walletAddress = wallet.toLowerCase()
-		return obj
-		
-	}
-	
-	logger (Colors.red(`checkSignObj recoveredAddress (${verifyMessage.toLowerCase()}) or recoverPublicKey ${recoverPublicKey.toLowerCase()} !== wallet (${wallet.toLowerCase()})`))
-	return null
-	
-}
