@@ -166,7 +166,7 @@ class conet_si_server {
 			return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
 		}
 
-		const responseHeader = () => {
+		const responseHeader = (end: boolean) => {
 			logger(`responseHeader send response headers to ${socket.remoteAddress}`)
 			const ret = `HTTP/1.1 200 OK\r\n` +
 						//	@ts-ignore
@@ -180,7 +180,15 @@ class conet_si_server {
 						`Connection: Keep-Alive\r\n\r\n`
 				
 			if (socket.writable) {
-				return socket.end(ret).destroy()
+				if (end) {
+					return socket.end(ret).destroy()
+				}
+				return socket.write (ret, err => {
+					if (err) {
+						return socket.destroy()
+					}
+					
+				})
 			}
 		}
 
@@ -198,7 +206,7 @@ class conet_si_server {
 					return responseRootHomePage(socket)
 				}
 				first = false
-				return responseHeader()
+				return responseHeader(/^OPTIONS /.test(requestProtocol))
 			}
 
 			if (request_line[1].length < bodyLength) {
