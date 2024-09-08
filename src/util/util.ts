@@ -227,7 +227,8 @@ const cleanupUseNodeReceiptList = (epoch: number) => {
 	})
 }
 
-export const getRoute = (keyID: string) => {
+export const getRoute = async (keyID: string) => {
+	await test()
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
 		// initGuardianNodes()
@@ -335,7 +336,7 @@ export const startEventListening = async () => {
 }
 
 
-export const test = async () => {
+const test = async () => {
 	const node1_key = 'LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FWnEybStCWUpLd1lCQkFIYVJ3OEJBUWRBaGFoVkZ4SHd2bDcyb25DOEZWa1ZlcnYvWmJDSnVFRjUKOXBDWnlIS09hREhOS2pCNFlrVTVNMFF4TldWRU1qVTFPVEUwT0RnME1XUXhRamsyWVdObU16ZENZVVl5Cll6WTVOa1l5WXNLTUJCQVdDZ0ErQllKbXJhYjRCQXNKQndnSmtNQlBRM3lGQ1BvYUF4VUlDZ1FXQUFJQgpBaGtCQXBzREFoNEJGaUVFblpobVJ1cnBGaUt5MXhNNndFOURmSVVJK2hvQUFCSW9BUDk4ZzIxd0NQOHYKL01UR1BpUUV2S3dJN3lOcVl1RWlOeGltcWhCaENXZVM5QUQrS2VmV0ZsZk05ejA5b2ZkYmtiNzRHZVJkCnFlTVEwSkNwU1ZZZEpLd3JLQWZPT0FSbXJhYjRFZ29yQmdFRUFaZFZBUVVCQVFkQWdwSUUyNERDYU5JMApkUjFuUmlISEVYMzBoSXVYYjdKUXFwTzhtcGNiT0FvREFRZ0h3bmdFR0JZS0FDb0ZnbWF0cHZnSmtNQlAKUTN5RkNQb2FBcHNNRmlFRW5aaG1SdXJwRmlLeTF4TTZ3RTlEZklVSStob0FBTlhlQVFDLzJhdnBqTGhMCkluRTdTV09mVXJkcVVtSEJMYTBvVnFINUtvK3NnSEdydVFEL1ZQYUlRQVBoT0E1a3BGbTNOYXJkZGhheApINmZHTnpzc1A5cnRiNmQ5QVFvPQo9Ui9FTwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg=='
 	const pgpKeyArmore1 = Buffer.from(node1_key, 'base64').toString()
 	const pgpKey1 = await readKey({ armoredKey: pgpKeyArmore1})

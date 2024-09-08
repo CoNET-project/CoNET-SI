@@ -1109,7 +1109,7 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 
 
 	//			forward encrypted text
-	const _route = getRoute (gpgPublicKeyID)
+	const _route = await getRoute (gpgPublicKeyID)
 
 	if ( !_route ) {
 		
