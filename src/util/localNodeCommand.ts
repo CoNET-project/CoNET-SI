@@ -1237,7 +1237,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		const returnData = {
 			status: 200,
 			epoch: block,
-			hash: signMessage
+			hash: signMessage,
+			nodeWallet: nodeWprivateKey.address.toLowerCase()
 		}
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
