@@ -57,7 +57,7 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 	if (socket.writable) {
 		socket.write(ret, err => {
 			socket.end(() => {
-				logger(Colors.blue(`responseRootHomePage PIPE on End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length}`))
+				logger(Colors.blue(`responseRootHomePage PIPE End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length}`))
 			})
 			
 		})
@@ -295,9 +295,13 @@ class conet_si_server {
 			const requestProtocol = htmlHeaders[0]
 			logger(Colors.blue(JSON.stringify(request)))
 
-			if (first && /^OPTIONS /.test(requestProtocol)) {
+			if (first) {
+				if (/^GET \/ HTTP\//.test(requestProtocol)) {
+					logger (inspect(htmlHeaders, false, 3, true))
+					return responseRootHomePage(socket)
+				}
 				first = false
-				responseHeader()
+				return responseHeader()
 			}
 
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
@@ -305,18 +309,11 @@ class conet_si_server {
 				const bodyLength = getLengthHander (htmlHeaders)
 
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
-
-
 				return getData (bodyLength, request_line, htmlHeaders)
 				
 			}
 
-			if (/^GET \/ HTTP\//.test(requestProtocol)) {
-				logger (inspect(htmlHeaders, false, 3, true))
-				return responseRootHomePage(socket)
-			}
-
-			return distorySocket(socket)
+			
 			
 		})
 
