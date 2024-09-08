@@ -293,9 +293,9 @@ class conet_si_server {
 			
 			if (first) {
 				first = false
-				return responseHeader()
+				responseHeader()
 			}
-			
+			logger(inspect(JSON.stringify(data)))
 			
 		})
 
