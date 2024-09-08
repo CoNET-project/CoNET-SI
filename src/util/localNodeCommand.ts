@@ -849,7 +849,8 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-
+	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${listenValidatorEpoch}] Success!`))
+	return response200Html(socket, JSON.stringify(validatorData))
 }
 
 class BandwidthCount extends Transform {
