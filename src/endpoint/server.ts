@@ -75,7 +75,7 @@ class conet_si_server {
 	private password = ''
 	private debug = true
 	private workerNumber = 0
-	private nodeWallet: string = ''
+	private nodeWallet: Wallet|null = null
 	public nodePool = []
 	private publicKeyID = ''
 	public initData:ICoNET_NodeSetup|null = null
@@ -118,8 +118,8 @@ class conet_si_server {
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 		const wallet:Wallet = this.initData.keyObj
-		this.nodeWallet = wallet.signingKey.privateKey
-		
+		this.nodeWallet = wallet
+
 		const ssl = await testCertificateFiles ()
 		if (ssl) {
 			this.startSslServer ()
@@ -252,7 +252,10 @@ class conet_si_server {
 		})
 
 		server.listen(443, () => {
-			startEPOCH_EventListeningForMining(this.nodeWallet)
+			if (this.nodeWallet) {
+				startEPOCH_EventListeningForMining(this.nodeWallet)
+			}
+			
 			return console.table([
                 { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet}` }
             ])
