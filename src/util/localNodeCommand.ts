@@ -1173,7 +1173,6 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
 			_obj.res.end()
 		}
-		
 	}
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
@@ -1195,7 +1194,7 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	})
 
 	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
-	return returnData
+	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
 }
 
 
