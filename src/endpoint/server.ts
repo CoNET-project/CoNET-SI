@@ -277,7 +277,10 @@ class conet_si_server {
 						`Server: nginx/1.24.0 (Ubuntu)\r\n` +
 						`access-control-allow-origin: *\r\n` +
 						`content-type: text/event-stream\r\n` +
-						`Cache-Control: no-cache\r\n\r\n`
+						`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
+						`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
+						`Cache-Control: no-cache\r\n` +
+						`Connection: Keep-Alive\r\n\r\n`
 
 				
 			if (socket.writable) {
@@ -287,13 +290,13 @@ class conet_si_server {
 
 		socket.on('data', (_data: Buffer) => {
 			data += _data
-			logger(Colors.gray(`sockerdata ${socket.remoteAddress} on data!`))
-			logger(inspect(data.toString(), false, 3, true))
-
+			
 			if (first) {
 				first = false
 				return responseHeader()
 			}
+			
+			
 		})
 
 		socket.once('end', () => {
