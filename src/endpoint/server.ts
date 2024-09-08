@@ -274,11 +274,10 @@ class conet_si_server {
 			
 			const request = data.toString()
 			logger(Colors.gray(`sockerdata connect ${socket.remoteAddress} on request [${request}]`))
+			logger (inspect(data.toString()))
 			const request_line = request.split('\r\n\r\n')
 			
-			if (request_line.length < 2) {
-				return distorySocket(socket)
-			}
+			
 
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
