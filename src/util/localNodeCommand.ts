@@ -833,8 +833,8 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-	if (validatorData.epoch !== listenValidatorEpoch) {
-		logger(Colors.red(`validatorData.epoch [${validatorData}] !== listenValidatorEpoch [${listenValidatorEpoch}]`))
+	if (validatorData.epoch < listenValidatorEpoch) {
+		logger(Colors.red(`validatorData.epoch [${validatorData.epoch}] !== listenValidatorEpoch [${listenValidatorEpoch}]`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}

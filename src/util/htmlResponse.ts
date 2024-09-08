@@ -1,4 +1,5 @@
 import type {Socket} from 'node:net'
+import { logger } from './logger'
 
 
 export const distorySocket = (socket: Socket, header = '404 Not Found') => {
@@ -13,5 +14,6 @@ export const response200Html = (socket: Socket, responseData: string) => {
     //	@ts-ignore
 	const time = new Date().toGMTString()
     const response = `HTTP/1.1 200 OK\r\nServer: nginx/1.18.0\r\nDate: ${time}\r\nContent-Type: text/html\r\nContent-Length: ${responseData.length}\r\nConnection: keep-alive\r\n\r\n${responseData}\r\n`
-    socket.end(response)
+
+    socket.end(response).destroy()
 }
