@@ -293,6 +293,7 @@ class conet_si_server {
 			const request_line = request.split('\r\n\r\n')
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
+			const bodyLength = getLengthHander (htmlHeaders)
 			logger(Colors.blue(JSON.stringify(request)))
 
 			if (first) {
@@ -304,17 +305,17 @@ class conet_si_server {
 				return responseHeader()
 			}
 
-			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-				
-				const bodyLength = getLengthHander (htmlHeaders)
+			if (request_line[1].length < bodyLength) {
+				return 
+			}
 
+			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 				return getData (bodyLength, request_line, htmlHeaders)
 				
 			}
-
 			
-			
+			distorySocket(socket)
 		})
 
 		socket.once('end', () => {
