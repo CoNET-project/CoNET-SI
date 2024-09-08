@@ -230,7 +230,8 @@ const cleanupUseNodeReceiptList = (epoch: number) => {
 export const getRoute = (keyID: string) => {
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
-		initGuardianNodes()
+		// initGuardianNodes()
+		logger(inspect(routerInfo.keys(), false, 3, true))
 		return null
 	}
 	return node.ipaddress
