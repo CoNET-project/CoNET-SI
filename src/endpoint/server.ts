@@ -308,16 +308,6 @@ class conet_si_server {
 
 				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 
-				if ( bodyLength < 1) {
-					first = false
-					logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }]`))
-					return responseHeader()
-				}
-				
-				if (request_line[1].length < bodyLength) {
-					logger(Colors.blue(`request_line[1].length [${request_line[1].length}]< bodyLength ${bodyLength} goto readMore (data)`))
-					return readMore (data)
-				}
 
 				return getData (bodyLength, request_line, htmlHeaders)
 				
