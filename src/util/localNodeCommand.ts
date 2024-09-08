@@ -826,7 +826,7 @@ const validatorNodes: Map<string, boolean> = new Map()
 
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
-	const validatorData: nodeResponse = command.data
+	const validatorData: nodeResponse = command.requestData
 	if (!validatorData) {
 		logger(Colors.red(`validatorMining has null validatorData`))
 		logger(inspect(command, false, 3, true))

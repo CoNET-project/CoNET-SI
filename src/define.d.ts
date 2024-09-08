@@ -79,7 +79,7 @@ interface SICommandObj {
 	responseData: any[]
 	algorithm: 'aes-256-cbc'
 	Securitykey: string
-	requestData: any[]
+	requestData: any
 }
 
 
