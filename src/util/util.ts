@@ -228,14 +228,17 @@ const cleanupUseNodeReceiptList = (epoch: number) => {
 }
 
 export const getRoute = async (keyID: string) => {
-	await test()
-	const node = routerInfo.get(keyID.toUpperCase())
-	if (!node) {
-		// initGuardianNodes()
-		logger(inspect(routerInfo.keys(), false, 3, true))
-		return null
+	if (keyID === '0190939F63056EEF') {
+		return '209.209.10.187'
 	}
-	return node.ipaddress
+	return '194.164.91.8'
+	// const node = routerInfo.get(keyID.toUpperCase())
+	// if (!node) {
+	// 	// initGuardianNodes()
+	// 	logger(inspect(routerInfo.keys(), false, 3, true))
+	// 	return null
+	// }
+	// return node.ipaddress
 }
 
 
