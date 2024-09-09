@@ -824,6 +824,11 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 const validatorNodes: Map<string, boolean> = new Map()
 
+
+const postToMiningPool: Map<number, string> = new Map()
+const postToCONET = (epoch: number) => {
+
+}
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
@@ -845,6 +850,10 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 	}
 
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
+	
+	if (CurrentEpoch !== validatorData.epoch) {
+		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
+	}
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
@@ -959,8 +968,6 @@ const saveClientCache = (publicGPGKeyID: string, encryptedText: string, timeNumb
 		
 	})
 }
-
-
 
 const customerDataSocket =  async (socket: Socket, encryptedText: string, customerKeyID: string, client: SI_Client_CoNETCashData, onlineClientPool: IclientPool[], outbound_price: number, storage_price: number ) => {
 	
@@ -1245,14 +1252,18 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 	return resolve (true)
 })
 
+
+
 let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
+
 	CONETProvider.on('block', block => {
-		listenValidatorEpoch = CurrentEpoch = block
+		CurrentEpoch = block
 		stratlivenessV2(block, nodePrivate)
 	})
+
 	validatorNodes.set('0x36b195508d291ccb8195875164b75868b992644d'.toLowerCase(), true)
 	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
 }
