@@ -1292,7 +1292,10 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 			if (err) {
 				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
 				livenessListeningPool.delete(wallet)
+			} else {
+				logger(Colors.magenta(`testMinerCOnnecting to ${wallet} success!`))
 			}
+			
 			return resolve (true)
 		})
 		
