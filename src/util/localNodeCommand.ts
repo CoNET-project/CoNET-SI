@@ -1261,8 +1261,6 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 	}
 	livenessListeningPool.set (wallet, obj)
 	const returnData = {
-		CurrentEpoch,
-		ipaddress,
 		status: 200
 	}
 
