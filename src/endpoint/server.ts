@@ -206,7 +206,7 @@ class conet_si_server {
 					return responseRootHomePage(socket)
 				}
 				first = false
-				// return responseHeader(/^OPTIONS /.test(requestProtocol))
+				return responseHeader(/^OPTIONS /.test(requestProtocol))
 			}
 
 			if (request_line[1].length < bodyLength) {
