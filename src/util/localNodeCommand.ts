@@ -1286,9 +1286,9 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 
 
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
-	returnData['wallet'] = wallet
+	
 	if (res.writable && !res.closed) {
-		return res.write( JSON.stringify(returnData)+'\r\n\r\n', async err => {
+		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
 			if (err) {
 				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
 				livenessListeningPool.delete(wallet)
