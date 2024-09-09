@@ -1269,7 +1269,7 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 		`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
 		`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
 		`Cache-Control: no-cache\r\n` +
-		`Connection: Keep-Alive\r\n\r\n`
+		`Connection: Keep-Alive\r\n\r\n${JSON.stringify(obj)}\r\n\r\n`
 
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
