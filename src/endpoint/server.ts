@@ -230,7 +230,83 @@ class conet_si_server {
 		
 		const server = createServer( socket => {
 
-			return this.sockerdata(socket)
+			socket.once('data', data => {
+
+				const request = data.toString()
+				
+				const request_line = request.split('\r\n\r\n')
+				
+				if (request_line.length < 2) {
+					return distorySocket(socket)
+				}
+
+				const htmlHeaders = request_line[0].split('\r\n')
+				const requestProtocol = htmlHeaders[0]
+
+				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
+					logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+					const bodyLength = getLengthHander (htmlHeaders)
+
+					if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
+						logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
+						return distorySocket(socket)
+					}
+
+					const getData = () => {
+
+						if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
+							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
+							return distorySocket(socket)
+						}
+
+						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						let body
+						try {
+							body = JSON.parse(request_line[1])
+						} catch (ex) {
+							logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+							return distorySocket(socket)
+						}
+						
+						if (!body.data || typeof body.data !== 'string') {
+							logger (Colors.magenta(`startServer HTML body format error!`))
+							return distorySocket(socket)
+						}
+						//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
+					}
+
+					const readMore = () => {
+						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						socket.once('data', _data => {
+							
+							request_line[1] += _data
+							if (request_line[1].length < bodyLength) {
+								logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+								return readMore ()
+							}
+							
+							getData ()
+						})
+					}
+
+					if (request_line[1].length < bodyLength) {
+
+						return readMore ()
+					}
+
+					return getData ()
+					
+				}
+
+				if (/^GET \/ HTTP\//.test(requestProtocol)) {
+					logger (inspect(htmlHeaders, false, 3, true))
+					return responseRootHomePage(socket)
+				}
+
+				
+				return distorySocket(socket)
+			})
 
 		})
 
