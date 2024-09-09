@@ -1260,9 +1260,16 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 		ipaddress, wallet, res
 	}
 	livenessListeningPool.set (wallet, obj)
-	const returnData = {
-		status: 200
-	}
+	const returnData = `HTTP/1.1 200 OK\r\n` +
+		//	@ts-ignore
+		`Date: ${new Date().toGMTString()}\r\n` +
+		`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+		`access-control-allow-origin: *\r\n` +
+		`content-type: text/event-stream\r\n` +
+		`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
+		`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
+		`Cache-Control: no-cache\r\n` +
+		`Connection: Keep-Alive\r\n\r\n`
 
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
