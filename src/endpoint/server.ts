@@ -31,7 +31,7 @@ const countAccessPool: Map<string, number[]> = new Map()
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
 	if (index < 0) {
-		logger (inspect(headers, false, 3, true))
+		//logger (inspect(headers, false, 3, true))
 		return -1
 	}
 	const length = headers[index].split(/^Content-Length\: /i)[1]
