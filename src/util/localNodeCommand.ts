@@ -833,14 +833,9 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-	if (validatorData.epoch < listenValidatorEpoch) {
-		logger(Colors.red(`validatorData.epoch [${validatorData.epoch}] !== listenValidatorEpoch [${listenValidatorEpoch}]`))
-		logger(inspect(command, false, 3, true))
-		return distorySocket(socket)
-	}
 	
 	const wallet = command.walletAddress
-	const message = {epoch: listenValidatorEpoch, wallet}
+	const message = {epoch: validatorData.epoch, wallet}
 	const va = ethers.verifyMessage(JSON.stringify(message), validatorData.hash)
 
 	if (va.toLowerCase() !== validatorData.nodeWallet.toLowerCase()) {
@@ -849,7 +844,7 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${listenValidatorEpoch}] Success!`))
+	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
