@@ -850,7 +850,7 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 	}
 
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
-	
+
 	if (CurrentEpoch !== validatorData.epoch) {
 		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
 	}
@@ -1017,7 +1017,7 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 
 export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
 
-	logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
+	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
 	let messObj
 	
@@ -1288,7 +1288,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	livenessListeningPool.forEach(async (n, key) => {
 		const res = n.res
 		const message = {epoch: block, wallet: key}
-		logger(inspect(message, false, 3, true))
+		// logger(inspect(message, false, 3, true))
 		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
 		const returnData: nodeResponse = {
 			status: 200,
@@ -1298,7 +1298,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 			nodeWallet: nodeWprivateKey.address.toLowerCase()
 		}
 
-		logger(inspect(returnData, false, 3, true))
+		// logger(inspect(returnData, false, 3, true))
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
 	})
