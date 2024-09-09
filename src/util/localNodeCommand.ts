@@ -814,6 +814,11 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return validatorMining(command, socket)
 		}
 
+		case 'mining_gossip': {
+			logger(`mining_gossip...`)
+			return addToGossipPool (socket.remoteAddress||'', command.walletAddress, socket)
+		}
+
 		default : {
 			logger (Colors.red(`postOpenpgpRoute invalid command [${inspect(command, false, 3, true)}]`))
 			return distorySocket(socket)
@@ -824,11 +829,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 const validatorNodes: Map<string, boolean> = new Map()
 
-
-const postToMiningPool: Map<number, string> = new Map()
-const postToCONET = (epoch: number) => {
-
-}
+const validatorPool: Map<number, Map<string, boolean>> = new Map()
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
@@ -854,6 +855,21 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 	if (CurrentEpoch !== validatorData.epoch) {
 		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
 	}
+	const obj = validatorPool.get(validatorData.epoch)
+
+	if (!obj) {
+		//	Passed EPOCH
+		if (validatorData.epoch < CurrentEpoch) {
+			return distorySocket(socket)
+		}
+		const newEpoch: Map<string, boolean> = new Map()
+		newEpoch.set(wallet, true)
+		validatorPool.set (validatorData.epoch, newEpoch)
+		
+	} else {
+		obj.set(wallet, true)
+	}
+
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
@@ -1069,7 +1085,6 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	
 }
 
-
 const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string) => {
 
 	const rawHttpRequest = otherRequestForNet(JSON.stringify({data}), ipAddr, port)
@@ -1203,12 +1218,11 @@ interface livenessListeningPoolObj {
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 
-
 const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
-			_obj.res.end()
+			_obj.res.end().destroy()
 		}
 	}
 	const obj: livenessListeningPoolObj = {
@@ -1231,6 +1245,37 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	})
 
 	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
+	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
+}
+const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
+
+const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
+	const _obj = livenessListeningPool.get (wallet)
+	if (_obj) {
+		if (_obj.res.writable && typeof _obj.res.end === 'function') {
+			_obj.res.end().destroy()
+		}
+	}
+	const obj: livenessListeningPoolObj = {
+		ipaddress, wallet, res
+	}
+	livenessListeningPool.set (wallet, obj)
+	const returnData = {
+		CurrentEpoch,
+		ipaddress,
+		status: 200
+	}
+
+	res.once('error', err => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
+		livenessListeningPool.delete(wallet)
+	})
+	res.once('close', () => {
+		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Gossip Pool`))
+		livenessListeningPool.delete(wallet)
+	})
+
+	logger (Colors.green(` [${ipaddress}:${wallet}] Added to Gossip Pool [${livenessListeningPool.size}]!`))
 	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
 }
 

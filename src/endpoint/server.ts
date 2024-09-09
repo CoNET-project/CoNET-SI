@@ -66,9 +66,6 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 }
 
 
-
-
-
 class conet_si_server {
 
 	private PORT=0
@@ -348,7 +345,5 @@ class conet_si_server {
 
 	}
 }
-
-
 
 export default conet_si_server
