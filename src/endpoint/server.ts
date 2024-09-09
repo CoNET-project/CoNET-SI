@@ -199,7 +199,7 @@ class conet_si_server {
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 			const bodyLength = getLengthHander (htmlHeaders)
-			logger(Colors.blue(JSON.stringify(request)))
+
 
 			if (first) {
 				if (/^GET \/ HTTP\//.test(requestProtocol)) {
