@@ -1250,7 +1250,7 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
 
 const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
-	const _obj = livenessListeningPool.get (wallet)
+	const _obj = gossipListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
 			_obj.res.end().destroy()
@@ -1259,7 +1259,8 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
 	}
-	livenessListeningPool.set (wallet, obj)
+	gossipListeningPool.set (wallet, obj)
+
 	const returnData = `HTTP/1.1 200 OK\r\n` +
 		//	@ts-ignore
 		`Date: ${new Date().toGMTString()}\r\n` +
@@ -1283,6 +1284,25 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 	logger (Colors.green(` [${ipaddress}:${wallet}] Added to Gossip Pool [${livenessListeningPool.size}]!`))
 	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
 }
+
+const pushGossip = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve => {
+	if (res.writable && !res.closed) {
+		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
+			if (err) {
+				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+				gossipListeningPool.delete(wallet)
+			} else {
+				logger(Colors.magenta(`testMinerCOnnecting to ${wallet} success!`))
+			}
+			
+			return resolve (true)
+		})
+		
+	}
+	gossipListeningPool.delete(wallet)
+	logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
+	return resolve (true)
+})
 
 
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
@@ -1324,11 +1344,14 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 interface nodeResponse {
 	status: number
 	epoch: number
-	hash: string
+	hash?: string
 	rate: string
+	validatorPool?:string
 	nodeWallet:string
 	minerResponseHash?: string
 }
+
+
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	
@@ -1346,7 +1369,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block,
-			rate: '0',
+			rate: validatorPool.size.toString(),
 			hash: signMessage,
 			nodeWallet: nodeWprivateKey.address.toLowerCase()
 		}
@@ -1355,6 +1378,18 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
 	})
+
+	gossipListeningPool.forEach(async (n, key) => {
+		const res = n.res
+		const returnData: nodeResponse = {
+			status: 200,
+			epoch: block-1,
+			rate: validatorPool.size.toString(),
+			nodeWallet: nodeWprivateKey.address.toLowerCase()
+		}
+		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
+	})
+
 
 	await Promise.all(processPool)
 
