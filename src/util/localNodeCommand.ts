@@ -1190,8 +1190,6 @@ const pgpTest = async () => {
 	logger (keys)
 }
 
-
-
 export const CertificatePATH = ['/etc/letsencrypt/live/slickstack/cert.pem','/etc/letsencrypt/live/slickstack/privkey.pem']
 export const testCertificateFiles: () => Promise<boolean> = () => new Promise (async resolve => {
 	try {
@@ -1328,6 +1326,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
 
 	CONETProvider.on('block', block => {
+		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		stratlivenessV2(block, nodePrivate)
 	})
@@ -1379,7 +1378,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block-1,
-			rate: validatorPool.size.toString(),
+			rate: _wallets ? _wallets.size.toString(): '0',
 			wallets,
 			nodeWallet
 		}
