@@ -1259,6 +1259,7 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
 	}
+
 	gossipListeningPool.set (wallet, obj)
 
 	const returnData = `HTTP/1.1 200 OK\r\n` +
@@ -1270,39 +1271,27 @@ const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocke
 		`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
 		`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
 		`Cache-Control: no-cache\r\n` +
-		`Connection: Keep-Alive\r\n\r\n${JSON.stringify(obj)}\r\n\r\n`
+		`Connection: Keep-Alive\r\n\r\n${JSON.stringify(
+			{
+				status: 200,
+				epoch: CurrentEpoch - 1,
+				rate: validatorPool.size.toString(),
+				nodeWallet
+			})}\r\n\r\n`
 
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
-		livenessListeningPool.delete(wallet)
+		gossipListeningPool.delete(wallet)
 	})
 	res.once('close', () => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Gossip Pool`))
-		livenessListeningPool.delete(wallet)
+		gossipListeningPool.delete(wallet)
 	})
 
 	logger (Colors.green(` [${ipaddress}:${wallet}] Added to Gossip Pool [${livenessListeningPool.size}]!`))
 	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
 }
 
-const pushGossip = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve => {
-	if (res.writable && !res.closed) {
-		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
-			if (err) {
-				logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
-				gossipListeningPool.delete(wallet)
-			} else {
-				logger(Colors.magenta(`testMinerCOnnecting to ${wallet} success!`))
-			}
-			
-			return resolve (true)
-		})
-		
-	}
-	gossipListeningPool.delete(wallet)
-	logger(Colors.grey (`stratliveness write Error! delete ${wallet}`))
-	return resolve (true)
-})
 
 
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
@@ -1330,16 +1319,18 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 
 let CurrentEpoch = 0
 let listenValidatorEpoch = 0
+let nodeWallet = ''
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
+	
+	nodeWallet = nodePrivate.address.toLowerCase()
+	validatorNodes.set('0x36b195508d291ccb8195875164b75868b992644d'.toLowerCase(), true)
+	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
 
 	CONETProvider.on('block', block => {
 		CurrentEpoch = block
 		stratlivenessV2(block, nodePrivate)
 	})
-
-	validatorNodes.set('0x36b195508d291ccb8195875164b75868b992644d'.toLowerCase(), true)
-	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
 }
 
 interface nodeResponse {
@@ -1350,6 +1341,7 @@ interface nodeResponse {
 	validatorPool?:string
 	nodeWallet:string
 	minerResponseHash?: string
+	wallets?: string[]
 }
 
 
@@ -1372,7 +1364,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 			epoch: block,
 			rate: validatorPool.size.toString(),
 			hash: signMessage,
-			nodeWallet: nodeWprivateKey.address.toLowerCase()
+			nodeWallet
 		}
 
 		// logger(inspect(returnData, false, 3, true))
@@ -1382,11 +1374,14 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 
 	gossipListeningPool.forEach(async (n, key) => {
 		const res = n.res
+		const _wallets = validatorPool.get (block-1)
+		const wallets = _wallets ? [..._wallets.keys()] : []
 		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block-1,
 			rate: validatorPool.size.toString(),
-			nodeWallet: nodeWprivateKey.address.toLowerCase()
+			wallets,
+			nodeWallet
 		}
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 	})
