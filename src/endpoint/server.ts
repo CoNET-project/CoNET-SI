@@ -14,8 +14,6 @@ import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
-const healthTimeout = 1000 * 60 * 5
-
 const packageFile = join (__dirname, '..', '..','package.json')
 const packageJson = require ( packageFile )
 const version = packageJson.version
@@ -25,8 +23,6 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
     console.log(Colors.underline(Colors.green(`TOTAL LENGTH [${ buffer.length }]`)))
     console.log(Colors.grey( hexdump( buffer.slice( 0, length ))))
 }
-
-const countAccessPool: Map<string, number[]> = new Map()
 
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
