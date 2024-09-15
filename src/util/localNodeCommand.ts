@@ -1411,4 +1411,3 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 	await Promise.all(processPool)
 
 }
-

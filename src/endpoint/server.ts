@@ -119,7 +119,7 @@ class conet_si_server {
 		}
 
 		this.startServer ()
-		// startEventListening()
+		startEventListening()
 	}
 
 	constructor () {
@@ -159,9 +159,9 @@ class conet_si_server {
 			return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID)
 		}
 
-		const responseHeader = (end: boolean) => {
+		const responseHeader = (option: boolean) => {
 			logger(`responseHeader send response headers to ${socket.remoteAddress}`)
-			const ret = `HTTP/1.1 200 OK\r\n` +
+			const ret = `HTTP/1.1 ${option ? 204 : 200 } OK\r\n` +
 						//	@ts-ignore
 						`Date: ${new Date().toGMTString()}\r\n` +
 						`Server: nginx/1.24.0 (Ubuntu)\r\n` +
@@ -173,7 +173,7 @@ class conet_si_server {
 						`Connection: Keep-Alive\r\n\r\n`
 				
 			if (socket.writable) {
-				if (end) {
+				if (option) {
 					return socket.end(ret).destroy()
 				}
 				return socket.write (ret, err => {
@@ -192,7 +192,6 @@ class conet_si_server {
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
 			const bodyLength = getLengthHander (htmlHeaders)
-
 
 			if (first) {
 				if (/^GET \/ HTTP\//.test(requestProtocol)) {
