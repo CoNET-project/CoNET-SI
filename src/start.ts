@@ -78,11 +78,9 @@ if (Cluster.isPrimary) {
 
 		const publicKeyID = initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 
-		if (!initData.sslDate) {
-			return await sslCertificate(publicKeyID, initData)
-		}
 		
-		startNode()
+		return await sslCertificate(publicKeyID, initData)
+	
 	}
 
 	start()
