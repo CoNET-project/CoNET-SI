@@ -281,7 +281,7 @@ const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) =
 })
 
 const checkBlock = async (block: number) => {
-	logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
+	//logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
 	const blockDetail = await CONETProvider.getBlock(block)
 	if (!blockDetail?.transactions) {
 		return logger(Colors.gray(`checkBlock block ${block} hasn't any transactions`))
