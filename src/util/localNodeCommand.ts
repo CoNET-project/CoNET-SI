@@ -1133,7 +1133,7 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
 		return response200Html(socket, JSON.stringify({}))
 	}
-
+	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route.}`))
 	return socketForward( _route, 80, socket, encryptedText)
 
 }
