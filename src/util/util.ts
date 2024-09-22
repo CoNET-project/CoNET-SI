@@ -104,7 +104,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		const result = await getNodeInfo(v.nodeID)
 		
 		if (!result) {
-			next(new Error(`SPIP scan!`))
+			next(new Error('have no more'))
 		}
 
 		if (result !== true) {
