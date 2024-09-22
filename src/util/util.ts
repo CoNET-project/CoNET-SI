@@ -110,7 +110,8 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		if (result !== true) {
 			v.nodeInfo = result
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
-				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
+				v.nodeInfo.pgpArmored = Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString()
+				const pgpKey = await readKey({ armoredKey: v.nodeInfo.pgpArmored})
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
 				//logger(Colors.grey(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
