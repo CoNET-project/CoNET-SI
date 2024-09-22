@@ -1343,38 +1343,80 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 	CONETProvider.on('block', block => {
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
+		moveData(block)
 		gossipStart(block)
 		stratlivenessV2(block, nodePrivate)
 	})
 }
+
+interface IGossipStatus {
+	totalConnectNode: number
+	epoch: number
+	nodesWallets: Map<string, string[]>
+	totalMiners: number
+	nodeWallets: string[]
+}
+
+const gossipStatus: IGossipStatus = {
+	totalConnectNode: 0,
+	epoch: 0,
+	nodesWallets: new Map(),
+	totalMiners: 0,
+	nodeWallets: []
+}
+
+let previousGossipStatus = gossipStatus
 
 interface nodeResponse {
 	status: number
 	epoch: number
 	hash?: string
 	rate: string
+	totalMiners: number
 	validatorPool?:string
-	nodeWallet:string
+	nodeWallet: string
 	minerResponseHash?: string
-	wallets?: string[]
+	nodeWallets?: string[]
+}
+
+const moveData = (block: number) => {
+	previousGossipStatus = JSON.parse(JSON.stringify(gossipStatus))
+	const _wallets = validatorPool.get (block-1)
+	const nodeWallets = _wallets ? [..._wallets.keys()] : []
+	previousGossipStatus.nodeWallets = nodeWallets
+	let totalMiners = nodeWallets.length
+
+	gossipStatus.nodesWallets.forEach((v, key) => {
+		totalMiners += v.length
+	})
+	
+	previousGossipStatus.totalMiners = totalMiners
+
+	gossipStatus.epoch = block
+	gossipStatus.totalConnectNode = 0
+	gossipStatus.nodesWallets = new Map()
+	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
 
 const gossipStart = async (block: number) => {
 	const processPool: any = []
+	const returnData: nodeResponse = {
+		status: 200,
+		epoch: block-1,
+		rate: '',
+		nodeWallets: previousGossipStatus.nodeWallets,
+		nodeWallet,
+		totalMiners: previousGossipStatus.totalMiners
+	}
+
 	gossipListeningPool.forEach(async (n, key) => {
 		const res = n.res
-		const _wallets = validatorPool.get (block-1)
-		const wallets = _wallets ? [..._wallets.keys()] : []
-		const returnData: nodeResponse = {
-			status: 200,
-			epoch: block-1,
-			rate: _wallets ? _wallets.size.toString(): '0',
-			wallets,
-			nodeWallet
-		}
 		processPool.push(gossipCnnecting(res, returnData, key, n.ipaddress))
 	})
+
 	await Promise.all(processPool)
+	
+	
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
@@ -1390,12 +1432,14 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 		const message = {epoch: block, wallet: key}
 		// logger(inspect(message, false, 3, true))
 		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
+
 		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block,
 			rate: validatorPool.size.toString(),
 			hash: signMessage,
-			nodeWallet
+			nodeWallet,
+			totalMiners: previousGossipStatus.totalMiners
 		}
 
 		// logger(inspect(returnData, false, 3, true))

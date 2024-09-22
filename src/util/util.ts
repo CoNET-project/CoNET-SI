@@ -479,14 +479,12 @@ const test = async () => {
 	routerInfo.set (pgpKeyID, node0)
 }
 
-
 const startGossipListening = (privateKey: string) => {
 	if (!gossipNodes.length) {
 		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
 	}
 	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
 	gossipNodes.forEach(n => {
-		logger(inspect(n, false, 3, true))
 		connectToGossipNode(privateKey, n)
 	})
 	
