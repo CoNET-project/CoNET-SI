@@ -411,11 +411,15 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, _data ) => {
-		logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
+		if (!_data) {
+			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
+		}
 		try {
 			const data = JSON.parse(_data)
+			logger(Colors.blue(`${node.ipaddress} => \n${inspect(data, false, 3, true)}`))
 		} catch (ex) {
-			logg
+			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
+			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
 		}
 
 	})
