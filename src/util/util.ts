@@ -417,7 +417,6 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 		try {
 			const data = JSON.parse(_data)
 			gossipStatus.nodesWallets.set(node.ipaddress, data.wallets)
-			logger(Colors.blue(`${node.ipaddress} => \n${inspect(data, false, 3, true)}`))
 
 		} catch (ex) {
 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
