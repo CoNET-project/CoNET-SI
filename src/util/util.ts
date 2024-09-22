@@ -113,11 +113,17 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				const pgpKey = await readKey({ armoredKey: v.nodeInfo.pgpArmored})
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
-				//logger(Colors.grey(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
-				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+				
+					//logger(Colors.grey(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
+					routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+				
+				
 
 				if (i < GossipLimited) {
-					gossipNodes.push(v.nodeInfo)
+					if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
+						gossipNodes.push(v.nodeInfo)
+					}
+					
 					i ++
 				}
 			}
@@ -177,7 +183,7 @@ const iface = new ethers.Interface(cCNTPABI)
 
 let currentEpoch: number
 let lastrate: number
-
+let localPublicKeyID = ''
 
 const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
@@ -409,8 +415,9 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	})
 }
 
-export const startEventListening = async (privateKey: string) => {
+export const startEventListening = async (privateKey: string, keyID: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
+	localPublicKeyID = keyID
 	const ip = getServerIPV4Address ( false )
 	if (ip && ip.length) {
 		GlobalIpAddress = ip[0]
@@ -484,6 +491,3 @@ const startGossipListening = (privateKey: string) => {
 	})
 	
 }
-
-
-

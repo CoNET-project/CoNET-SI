@@ -120,7 +120,7 @@ class conet_si_server {
 		}
 
 		this.startServer ()
-		startEventListening(wallet.signingKey.privateKey)
+		startEventListening(wallet.signingKey.privateKey, newID)
 	}
 
 	constructor () {
