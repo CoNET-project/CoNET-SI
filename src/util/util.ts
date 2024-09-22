@@ -358,31 +358,28 @@ const startGossip = (host: string, POST: string, callback: (err?: string, data?:
 				callback ('', data)
 				data = ''
 				_Time = setTimeout(() => {
-					logger(Colors.red(`startGossip [${url}] has 2 EPOCH got NONE Gossip Error! Try to restart! `))
-					return startGossip (url, POST, callback)
+					logger(Colors.red(`startGossip [${host}] has 2 EPOCH got NONE Gossip Error! Try to restart! `))
+					kkk.destroy()
 				}, 24 * 1000)
 			}
 		})
 
 		res.once('error', err => {
 			kkk.destroy()
-			logger(Colors.red(`startGossip [${url}] res on ERROR! Try to restart! `), err.message)
-			return startGossip (url, POST, callback)
+			logger(Colors.red(`startGossip [${host}] res on ERROR! Try to restart! `), err.message)
 		})
 
 		res.once('end', () => {
 			kkk.destroy()
-			logger(Colors.red(`startGossip [${url}] res on END! Try to restart! `))
-			return startGossip (url, POST, callback)
+			logger(Colors.red(`startGossip [${host}] res on END! Try to restart! `))
 		})
 		
 	})
 
-	// kkk.on('error', err => {
-	// 	kkk.destroy()
-	// 	logger(Colors.red(`startGossip [${url}] requestHttps on Error! Try to restart! `), err.message)
-	// 	return startGossip (url, POST, callback)
-	// })
+	kkk.on('error', err => {
+		logger(Colors.red(`startGossip [${host}] requestHttps on Error! Try to restart! `), err.message)
+		return startGossip (host, POST, callback)
+	})
 
 	kkk.end(POST)
 
