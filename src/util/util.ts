@@ -359,10 +359,10 @@ const startGossip = (host: string, POST: string, callback: (err?: string, data?:
 				clearTimeout(_Time)
 				if (first) {
 					first = false
-					
 				}
 				callback ('', data)
 				data = ''
+
 				_Time = setTimeout(() => {
 					logger(Colors.red(`startGossip [${host}] has 2 EPOCH got NONE Gossip Error! Try to restart! `))
 					kkk.destroy()
@@ -410,8 +410,14 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, data ) => {
-		logger(Colors.blue(`${node.ipaddress} => \n${data}`))
+	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, _data ) => {
+		logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
+		try {
+			const data = JSON.parse(_data)
+		} catch (ex) {
+			logg
+		}
+
 	})
 }
 

@@ -827,9 +827,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 }
 
-const validatorNodes: Map<string, boolean> = new Map()
-
 const validatorPool: Map<number, Map<string, boolean>> = new Map()
+
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
@@ -1337,8 +1336,6 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	
 	nodeWallet = nodePrivate.address.toLowerCase()
-	validatorNodes.set('0x36b195508d291ccb8195875164b75868b992644d'.toLowerCase(), true)
-	validatorNodes.set('0xbE93D15eD2559148841d1B96acf37BaF2c696F2b'.toLowerCase(), true)
 
 	CONETProvider.on('block', block => {
 		validatorPool.delete(CurrentEpoch -2)
@@ -1377,6 +1374,7 @@ interface nodeResponse {
 	nodeWallet: string
 	minerResponseHash?: string
 	nodeWallets?: string[]
+	connetingNodes: number
 }
 
 const moveData = (block: number) => {
@@ -1389,7 +1387,7 @@ const moveData = (block: number) => {
 	gossipStatus.nodesWallets.forEach((v, key) => {
 		totalMiners += v.length
 	})
-	
+	previousGossipStatus.totalConnectNode = previousGossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 
 	gossipStatus.epoch = block
@@ -1406,7 +1404,8 @@ const gossipStart = async (block: number) => {
 		rate: '',
 		nodeWallets: previousGossipStatus.nodeWallets,
 		nodeWallet,
-		totalMiners: previousGossipStatus.totalMiners
+		totalMiners: previousGossipStatus.totalMiners,
+		connetingNodes: previousGossipStatus.nodesWallets.size
 	}
 
 	gossipListeningPool.forEach(async (n, key) => {
@@ -1439,7 +1438,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 			rate: validatorPool.size.toString(),
 			hash: signMessage,
 			nodeWallet,
-			totalMiners: previousGossipStatus.totalMiners
+			totalMiners: previousGossipStatus.totalMiners,
+			connetingNodes: previousGossipStatus.nodesWallets.size
 		}
 
 		// logger(inspect(returnData, false, 3, true))
