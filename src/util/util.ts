@@ -6,7 +6,7 @@ import Colors from 'colors/safe'
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import type {RequestOptions} from 'node:http'
-import {request} from 'node:https'
+import {request} from 'node:http'
 import P from 'phin'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
@@ -55,7 +55,6 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 
 	const NFTIds = _nodesAddress.map ((n, index) => 100 + index)
 	
-
 	const getNodeInfo = async (nodeID: number) => {
 
 		//	logger(Colors.gray(`getNodeInfo [${nodeID}]`))
@@ -129,9 +128,6 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		return resolve(true)
 	})
 })
-	
-	
-
 
 export const aesGcmEncrypt = async (plaintext: string, password: string) => {
 	const pwUtf8 = new TextEncoder().encode(password)                                 // encode password as UTF-8
@@ -328,7 +324,7 @@ const startGossip = (url: string, POST: string, callback: (err?: string, data?: 
 	const Url = new URL(url)
 
 	const option: RequestOptions = {
-		hostname: Url.hostname,
+		host: Url.hostname,
 		port: 80,
 		method: 'POST',
 		protocol: 'http:',
@@ -411,7 +407,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-	startGossip(`https://${node.domain}/post`, JSON.stringify({data: postData}), (err, data ) => {
+	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, data ) => {
 		logger(Colors.magenta(`${node.domain} => \n${data}`))
 	})
 }
