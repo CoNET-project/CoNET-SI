@@ -174,6 +174,7 @@ interface nodeInfo {
 	regionName: string
 	pgpArmored: string
 	pgpKeyID: string
+	domain: string
 }
 
 interface NodList {

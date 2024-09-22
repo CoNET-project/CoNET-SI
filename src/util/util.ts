@@ -5,9 +5,11 @@ import { logger } from './logger'
 import Colors from 'colors/safe'
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
+import type {RequestOptions} from 'node:http'
+import {request} from 'node:https'
 import P from 'phin'
 import { mapLimit } from 'async'
-import {readKey} from 'openpgp'
+import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
 
 
@@ -23,9 +25,11 @@ let GlobalIpAddress = ''
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
 const routerInfo: Map<string, nodeInfo> = new Map()
-
+let gossipNodes: nodeInfo[] = []
 export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false
+const GossipLimited = 20
+
 
 const initGuardianNodes = async () => {
 	if (getNodeInfoProssing) {
@@ -52,11 +56,12 @@ const initGuardianNodes = async () => {
 	const getNodeInfo = async (nodeID: number) => {
 
 		logger(Colors.gray(`getNodeInfo [${nodeID}]`))
-		const nodeInfo = {
+		const nodeInfo: nodeInfo = {
 			ipaddress: '',
 			regionName: '',
 			pgpArmored: '',
-			pgpKeyID: ''
+			pgpKeyID: '',
+			domain: ''
 		}
 
 		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
@@ -89,21 +94,31 @@ const initGuardianNodes = async () => {
 		logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
 	})
 
-	return await mapLimit(useNodeReceiptList.entries(), 1, async ([n, v], next) => {
+	let i = 0
+	gossipNodes = []
+	return await mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
 		
 		const result = await getNodeInfo(v.nodeID)
 		
 		if (!result) {
 			next(new Error(`SPIP scan!`))
 		}
+
 		if (result !== true) {
 			v.nodeInfo = result
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				const pgpKey = await readKey({ armoredKey: Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString() })
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
+				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
 				//logger(Colors.grey(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
+
+				if (i < GossipLimited) {
+					gossipNodes.push(v.nodeInfo)
+					i ++
+				}
 			}
+			
 		}
 			
 		
@@ -305,8 +320,99 @@ const scanPassedEpoch = async () => {
 }
 
 
+const startGossip = (url: string, POST: string, callback: (err?: string, data?: string) => void) => {
+	const Url = new URL(url)
 
-export const startEventListening = async () => {
+	const option: RequestOptions = {
+		hostname: Url.hostname,
+		port: 80,
+		method: 'POST',
+		protocol: 'http:',
+		headers: {
+			'Content-Type': 'application/json;charset=UTF-8'
+		},
+		path: Url.pathname
+	}
+
+	let first = true
+	logger(inspect(option, false, 3, true))
+	const kkk = request(option, res => {
+
+		if (res.statusCode !==200) {
+			return logger(`startTestMiner got res.statusCode = [${res.statusCode}] != 200 error! restart`)
+		}
+
+		let data = ''
+		let _Time: NodeJS.Timeout
+
+		res.on ('data', _data => {
+
+			data += _data.toString()
+			
+			if (/\r\n\r\n/.test(data)) {
+				clearTimeout(_Time)
+				if (first) {
+					first = false
+					
+				}
+				callback ('', data)
+				data = ''
+				_Time = setTimeout(() => {
+					logger(Colors.red(`startGossip [${url}] has 2 EPOCH got NONE Gossip Error! Try to restart! `))
+					return startGossip (url, POST, callback)
+				}, 24 * 1000)
+			}
+		})
+
+		res.once('error', err => {
+			kkk.destroy()
+			logger(Colors.red(`startGossip [${url}] res on ERROR! Try to restart! `), err.message)
+			return startGossip (url, POST, callback)
+		})
+
+		res.once('end', () => {
+			kkk.destroy()
+			logger(Colors.red(`startGossip [${url}] res on END! Try to restart! `))
+			return startGossip (url, POST, callback)
+		})
+		
+	})
+
+	// kkk.on('error', err => {
+	// 	kkk.destroy()
+	// 	logger(Colors.red(`startGossip [${url}] requestHttps on Error! Try to restart! `), err.message)
+	// 	return startGossip (url, POST, callback)
+	// })
+
+	kkk.end(POST)
+
+}
+
+
+const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
+	
+	const wallet = new ethers.Wallet(privateKey)
+	const command = {
+		command: 'mining_gossip',
+		walletAddress: wallet.address.toLowerCase()
+	}
+	
+	const message =JSON.stringify(command)
+	const signMessage = await wallet.signMessage(message)
+	const encryptObj = {
+        message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
+		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
+		config: { preferredCompressionAlgorithm: enums.compression.zlib } 		// compress the data with zlib
+    }
+
+	const postData = await encrypt (encryptObj)
+
+	startGossip(`https://${node.domain}/post`, JSON.stringify({data: postData}), (err, data ) => {
+		logger(Colors.magenta(`${node.domain} => \n${data}`))
+	})
+}
+
+export const startEventListening = async (privateKey: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
 	const ip = getServerIPV4Address ( false )
 	if (ip && ip.length) {
@@ -314,7 +420,8 @@ export const startEventListening = async () => {
 	}
 
 	await initGuardianNodes()
-
+	await scanPassedEpoch()
+	startGossipListening(privateKey)
 	CONETProvider.on('block', async block => {
 		currentEpoch = block
 		cleanupUseNodeReceiptList(block)
@@ -331,7 +438,6 @@ export const startEventListening = async () => {
 		
 	})
 	
-	await scanPassedEpoch()
 }
 
 
@@ -368,6 +474,18 @@ const test = async () => {
 	routerInfo.set (pgpKeyID, node0)
 }
 
+
+const startGossipListening = (privateKey: string) => {
+	if (!gossipNodes.length) {
+		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
+	}
+	mapLimit(gossipNodes, 1, (n, next) => {
+		connectToGossipNode(privateKey, n)
+	}, err => {
+		logger(Colors.blue(`startGossipListening ${gossipNodes.length} success!`))
+	})
+	
+}
 
 
 

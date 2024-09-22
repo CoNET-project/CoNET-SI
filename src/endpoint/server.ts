@@ -62,6 +62,7 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 }
 
 
+
 class conet_si_server {
 
 	private PORT=0
@@ -110,7 +111,7 @@ class conet_si_server {
 		this.initData.pgpKey.keyID = newID
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
-		const wallet:Wallet = this.initData.keyObj
+		const wallet: Wallet = this.initData.keyObj
 		this.nodeWallet = wallet
 
 		const ssl = await testCertificateFiles ()
@@ -119,7 +120,7 @@ class conet_si_server {
 		}
 
 		this.startServer ()
-		startEventListening()
+		startEventListening(wallet.signingKey.privateKey)
 	}
 
 	constructor () {

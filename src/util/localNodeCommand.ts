@@ -1166,7 +1166,6 @@ export const checkSign = (message: string, signMess: string) => {
 	
 }
 
-
 const pgpTest = async () => {
 	const password = 'ddd'
 	const { privateKey, publicKey, revocationCertificate } = await generateKey({
@@ -1203,9 +1202,6 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 		return resolve (false)
 	}
 })
-
-
-
 
 interface livenessListeningPoolObj {
 	res: Socket|TLSSocket
@@ -1245,6 +1241,7 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
 	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
 }
+
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
 
 const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
@@ -1331,8 +1328,6 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 	logger(Colors.grey (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 	return resolve (true)
 })
-
-
 
 let CurrentEpoch = 0
 let listenValidatorEpoch = 0
