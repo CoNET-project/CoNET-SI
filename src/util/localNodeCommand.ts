@@ -1197,6 +1197,7 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 		logger(`testCertificateFiles success!`)
 		return resolve (true)
 	} catch (ex) {
+		logger(ex)
 		return resolve (false)
 	}
 })
@@ -1334,7 +1335,9 @@ let nodeWallet = ''
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
+
 	CONETProvider.on('block', block => {
+
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
@@ -1385,6 +1388,7 @@ const moveData = (block: number) => {
 	gossipStatus.nodesWallets.forEach((v, key) => {
 		totalMiners += v.length
 	})
+
 	previousGossipStatus.totalConnectNode = previousGossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 
