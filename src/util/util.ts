@@ -31,9 +31,10 @@ let getNodeInfoProssing = false
 const GossipLimited = 20
 
 
-const initGuardianNodes = async () => {
+const initGuardianNodes = async () => new Promise(async resolve => {
 	if (getNodeInfoProssing) {
-		return logger(`initGuardianNodes already running!`)
+		 logger(`initGuardianNodes already running!`)
+		 return resolve(false)
 	}
 	logger(`initGuardianNodes start running!`)
 	getNodeInfoProssing = true
@@ -44,7 +45,8 @@ const initGuardianNodes = async () => {
 		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
 	} catch (ex: any) {
 		getNodeInfoProssing = false
-		return console.error(Colors.red(`guardianReferrals guardianSmartContract.getAllIdOwnershipAndBooster() Error!`), ex.mesage)
+		console.error(Colors.red(`guardianReferrals guardianSmartContract.getAllIdOwnershipAndBooster() Error!`), ex.mesage)
+		return resolve(false)
 	}
 
 
@@ -97,7 +99,7 @@ const initGuardianNodes = async () => {
 
 	let i = 0
 	gossipNodes = []
-	return await mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
+	mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
 		
 		const result = await getNodeInfo(v.nodeID)
 		
@@ -121,9 +123,14 @@ const initGuardianNodes = async () => {
 			}
 			
 		}
+	}, err => {
+		logger(`initGuardianNodes finished!`)
+		return resolve(true)
 	})
+})
 	
-}
+	
+
 
 export const aesGcmEncrypt = async (plaintext: string, password: string) => {
 	const pwUtf8 = new TextEncoder().encode(password)                                 // encode password as UTF-8
