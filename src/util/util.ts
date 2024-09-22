@@ -10,7 +10,7 @@ import {request} from 'node:http'
 import P from 'phin'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
-import { getServerIPV4Address } from './localNodeCommand'
+import { getServerIPV4Address, gossipStatus } from './localNodeCommand'
 
 
 const conetHoleskyRPC = 'https://rpc.conet.network'
@@ -416,7 +416,9 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 		}
 		try {
 			const data = JSON.parse(_data)
+			gossipStatus.nodesWallets.set(node.ipaddress, data.wallets)
 			logger(Colors.blue(`${node.ipaddress} => \n${inspect(data, false, 3, true)}`))
+
 		} catch (ex) {
 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
 			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
@@ -453,40 +455,6 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 		
 	})
 	
-}
-
-
-const test = async () => {
-	const node1_key = 'LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FWnEybStCWUpLd1lCQkFIYVJ3OEJBUWRBaGFoVkZ4SHd2bDcyb25DOEZWa1ZlcnYvWmJDSnVFRjUKOXBDWnlIS09hREhOS2pCNFlrVTVNMFF4TldWRU1qVTFPVEUwT0RnME1XUXhRamsyWVdObU16ZENZVVl5Cll6WTVOa1l5WXNLTUJCQVdDZ0ErQllKbXJhYjRCQXNKQndnSmtNQlBRM3lGQ1BvYUF4VUlDZ1FXQUFJQgpBaGtCQXBzREFoNEJGaUVFblpobVJ1cnBGaUt5MXhNNndFOURmSVVJK2hvQUFCSW9BUDk4ZzIxd0NQOHYKL01UR1BpUUV2S3dJN3lOcVl1RWlOeGltcWhCaENXZVM5QUQrS2VmV0ZsZk05ejA5b2ZkYmtiNzRHZVJkCnFlTVEwSkNwU1ZZZEpLd3JLQWZPT0FSbXJhYjRFZ29yQmdFRUFaZFZBUVVCQVFkQWdwSUUyNERDYU5JMApkUjFuUmlISEVYMzBoSXVYYjdKUXFwTzhtcGNiT0FvREFRZ0h3bmdFR0JZS0FDb0ZnbWF0cHZnSmtNQlAKUTN5RkNQb2FBcHNNRmlFRW5aaG1SdXJwRmlLeTF4TTZ3RTlEZklVSStob0FBTlhlQVFDLzJhdnBqTGhMCkluRTdTV09mVXJkcVVtSEJMYTBvVnFINUtvK3NnSEdydVFEL1ZQYUlRQVBoT0E1a3BGbTNOYXJkZGhheApINmZHTnpzc1A5cnRiNmQ5QVFvPQo9Ui9FTwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg=='
-	const pgpKeyArmore1 = Buffer.from(node1_key, 'base64').toString()
-	const pgpKey1 = await readKey({ armoredKey: pgpKeyArmore1})
-	const pgpKeyID1 = pgpKey1.getKeyIDs()[1].toHex().toUpperCase()
-	const node1 = {
-		armoredPublicKey: pgpKeyArmore1,
-		ip_addr: '194.164.91.8',
-		publicKeyObj: null,
-		region: 'US',
-		domain: `${pgpKeyID1}.conet.network`
-	}
-	
-	
-	const node_key = `LS0tLS1CRUdJTiBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCgp4ak1FWnRRQ0xoWUpLd1lCQkFIYVJ3OEJBUWRBc1lWSXQrdzB2WGlycGFPeXMvMVEyeHY4aVN0L2lkcUsKTUtxbVRtd1ZpeWJOS2pCNE16WkNNVGsxTlRBNFpESTVNVU5EWWpneE9UVTROelV4TmpSQ056VTROamhpCk9Ua3lOalEwUk1LTUJCQVdDZ0ErQllKbTFBSXVCQXNKQndnSmtBN3dnUCtsZkd2aUF4VUlDZ1FXQUFJQgpBaGtCQXBzREFoNEJGaUVFVEZwVDNyT1IzdmJvN1ZPNkR2Q0EvNlY4YStJQUFHRVBBUDkvdDlPYUJTS2QKQm5vb3F2cDBOYldoWEorRERKMFZnMDBzT1BDc2c1STQrZ0Q5R21WTGEwdkRMSWJxVXIyWXVuSkpCYzBZCjBKWDZJRWxwc1UvTHo2R29oZ0RPT0FSbTFBSXVFZ29yQmdFRUFaZFZBUVVCQVFkQTRwRC9lS2ZmU3dRTApGbXZJNzZwWlJwNkZSbmZROGdrSXR1a2p5V0x1eFRzREFRZ0h3bmdFR0JZS0FDb0ZnbWJVQWk0SmtBN3cKZ1ArbGZHdmlBcHNNRmlFRVRGcFQzck9SM3ZibzdWTzZEdkNBLzZWOGErSUFBS1ZMQVB3TXBWVnJjSEViCnROZ2tIZW90d2krMVBlaW9vUGpERE5LaWRZaHB1V01BUVFEK1AxTjgwbVM5b3pxanE5c0ZBSkFxaEZ1QQpGRUt3amRxQmpiYzhKMVdPandVPQo9aThtRwotLS0tLUVORCBQR1AgUFVCTElDIEtFWSBCTE9DSy0tLS0tCg==`
-	const pgpKeyArmore = Buffer.from(node_key, 'base64').toString()
-	const pgpKey = await readKey({ armoredKey: pgpKeyArmore})
-	const pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
-	const node0 = {
-		armoredPublicKey: pgpKeyArmore,
-		ip_addr: '209.209.10.187',
-		publicKeyObj: null,
-		region: 'US',
-		domain: `${pgpKeyID}.conet.network`
-	}
-
-	logger(Colors.magenta(`node0 ${node0.domain} node1 ${node1.domain}`))
-	//	@ts-ignore
-	routerInfo.set (pgpKeyID1, node1)
-	//	@ts-ignore
-	routerInfo.set (pgpKeyID, node0)
 }
 
 const startGossipListening = (privateKey: string) => {

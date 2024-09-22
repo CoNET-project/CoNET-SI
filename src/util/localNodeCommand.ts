@@ -1354,7 +1354,7 @@ interface IGossipStatus {
 	nodeWallets: string[]
 }
 
-const gossipStatus: IGossipStatus = {
+export const gossipStatus: IGossipStatus = {
 	totalConnectNode: 0,
 	epoch: 0,
 	nodesWallets: new Map(),
