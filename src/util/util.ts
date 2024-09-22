@@ -252,7 +252,8 @@ export const getRoute = async (keyID: string) => {
 
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
-		logger(inspect(routerInfo.keys(), false, 3, true))
+
+		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`),inspect(routerInfo.keys(), false, 3, true))
 		return null
 	}
 	return node.ipaddress
@@ -341,7 +342,7 @@ const startGossip = (host: string, POST: string, callback: (err?: string, data?:
 	}
 
 	let first = true
-	logger(inspect(option, false, 3, true))
+
 	const kkk = request(option, res => {
 
 		if (res.statusCode !==200) {

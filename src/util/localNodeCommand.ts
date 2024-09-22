@@ -1128,7 +1128,6 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 	const _route = await getRoute (gpgPublicKeyID)
 
 	if ( !_route ) {
-		
 		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
 		return response200Html(socket, JSON.stringify({}))
 	}
@@ -1334,9 +1333,7 @@ let nodeWallet = ''
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
-	
 	nodeWallet = nodePrivate.address.toLowerCase()
-
 	CONETProvider.on('block', block => {
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
@@ -1344,6 +1341,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 		gossipStart(block)
 		stratlivenessV2(block, nodePrivate)
 	})
+	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
 
 interface IGossipStatus {
@@ -1414,7 +1412,6 @@ const gossipStart = async (block: number) => {
 	})
 
 	await Promise.all(processPool)
-	
 	
 }
 
