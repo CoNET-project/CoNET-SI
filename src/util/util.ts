@@ -384,8 +384,12 @@ const startGossip = (host: string, POST: string, callback: (err?: string, data?:
 	})
 
 	kkk.on('error', err => {
-		logger(Colors.red(`startGossip [${host}] requestHttps on Error! Try to restart! `), err.message)
-		return startGossip (host, POST, callback)
+		
+		setTimeout(() => {
+			logger(Colors.red(`startGossip [${host}] requestHttps on Error! Try to restart! `), err.message)
+			startGossip (host, POST, callback)
+		}, 1000)
+		
 	})
 
 	kkk.end(POST)
