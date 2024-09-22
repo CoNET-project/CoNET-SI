@@ -405,7 +405,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, data ) => {
-		logger(Colors.blue(`${node.domain} => \n${data}`))
+		logger(Colors.blue(`${node.ipaddress} => \n${data}`))
 	})
 }
 
