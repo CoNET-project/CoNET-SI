@@ -121,11 +121,6 @@ const initGuardianNodes = async () => {
 			}
 			
 		}
-			
-		
-	}, err => {
-		getNodeInfoProssing = false
-		logger(`mapLimit scan STOPed!`, err)
 	})
 	
 }
@@ -421,8 +416,9 @@ export const startEventListening = async (privateKey: string) => {
 	}
 
 	await initGuardianNodes()
-	await scanPassedEpoch()
 	startGossipListening(privateKey)
+	await scanPassedEpoch()
+	
 	CONETProvider.on('block', async block => {
 		currentEpoch = block
 		cleanupUseNodeReceiptList(block)
@@ -480,6 +476,7 @@ const startGossipListening = (privateKey: string) => {
 	if (!gossipNodes.length) {
 		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
 	}
+	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
 	mapLimit(gossipNodes, 1, (n, next) => {
 		connectToGossipNode(privateKey, n)
 	}, err => {
