@@ -92,7 +92,7 @@ const initGuardianNodes = async () => {
 		}
 
 		useNodeReceiptList.set(node.wallet, node)
-		logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
+		//logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
 	})
 
 	let i = 0
@@ -407,7 +407,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
     }
 
 	const postData = await encrypt (encryptObj)
-
+	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip(`https://${node.domain}/post`, JSON.stringify({data: postData}), (err, data ) => {
 		logger(Colors.magenta(`${node.domain} => \n${data}`))
 	})
