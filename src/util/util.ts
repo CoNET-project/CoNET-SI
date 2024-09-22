@@ -35,6 +35,7 @@ const initGuardianNodes = async () => {
 	if (getNodeInfoProssing) {
 		return logger(`initGuardianNodes already running!`)
 	}
+	logger(`initGuardianNodes start running!`)
 	getNodeInfoProssing = true
 	const guardianSmartContract = new ethers.Contract(GuardianNFT, GuardianNodesV2ABI, CONETProvider)
 	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV6, openPGPContractAbi, CONETProvider)
@@ -55,7 +56,7 @@ const initGuardianNodes = async () => {
 
 	const getNodeInfo = async (nodeID: number) => {
 
-		logger(Colors.gray(`getNodeInfo [${nodeID}]`))
+		//	logger(Colors.gray(`getNodeInfo [${nodeID}]`))
 		const nodeInfo: nodeInfo = {
 			ipaddress: '',
 			regionName: '',
