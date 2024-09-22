@@ -320,18 +320,18 @@ const scanPassedEpoch = async () => {
 }
 
 
-const startGossip = (url: string, POST: string, callback: (err?: string, data?: string) => void) => {
-	const Url = new URL(url)
+const startGossip = (host: string, POST: string, callback: (err?: string, data?: string) => void) => {
+	
 
 	const option: RequestOptions = {
-		host: Url.hostname,
+		host: host,
 		port: 80,
 		method: 'POST',
 		protocol: 'http:',
 		headers: {
 			'Content-Type': 'application/json;charset=UTF-8'
 		},
-		path: Url.pathname
+		path: "/post"
 	}
 
 	let first = true
