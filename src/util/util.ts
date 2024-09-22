@@ -485,6 +485,7 @@ const startGossipListening = (privateKey: string) => {
 	}
 	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
 	mapLimit(gossipNodes, 1, (n, next) => {
+		logger(inspect(n, false, 3, true))
 		connectToGossipNode(privateKey, n)
 	}, err => {
 		logger(Colors.blue(`startGossipListening ${gossipNodes.length} success!`))
