@@ -405,7 +405,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, data ) => {
-		logger(Colors.magenta(`${node.domain} => \n${data}`))
+		logger(Colors.blue(`${node.domain} => \n${data}`))
 	})
 }
 
@@ -478,11 +478,9 @@ const startGossipListening = (privateKey: string) => {
 		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
 	}
 	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
-	mapLimit(gossipNodes, 1, (n, next) => {
+	gossipNodes.forEach(n => {
 		logger(inspect(n, false, 3, true))
 		connectToGossipNode(privateKey, n)
-	}, err => {
-		logger(Colors.blue(`startGossipListening ${gossipNodes.length} success!`))
 	})
 	
 }
