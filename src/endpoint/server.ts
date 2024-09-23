@@ -72,7 +72,6 @@ class conet_si_server {
 	private nodeWallet: Wallet|null = null
 	public nodePool = []
 	private publicKeyID = ''
-	private publicNewKeyID = ''
 	private nodeIpAddr = ''
 	public initData:ICoNET_NodeSetup|null = null
 
@@ -102,12 +101,12 @@ class conet_si_server {
 			this.initData.keyObj = await loadWalletAddress ( this.initData.keychain, this.password )
 		}
 		
-		this.publicKeyID = this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
+		//this.publicKeyID = this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
 
 		this.PORT = this.initData.ipV4Port
 
-		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
-		this.publicNewKeyID = newID
+		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)	//	same as this.initData.pgpKeyObj.publicKeyObj.getKeyIDs()[1].toHex().toUpperCase()
+		this.publicKeyID = newID
 		logger (`this.initData.pgpKey.keyID [${this.initData.pgpKey.keyID}] <= newID [${newID}]`)
 		logger(Colors.blue(`pgpKey base64 \n`), Buffer.from(this.initData.pgpKey.publicKey).toString('base64'))
 		this.initData.pgpKey.keyID = newID
@@ -315,7 +314,7 @@ class conet_si_server {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
 			
 			return console.table([
-                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network newKey ${this.publicNewKeyID}` }
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
 				
             ])
 		})
@@ -339,7 +338,7 @@ class conet_si_server {
 			}
 			
 			return console.table([
-                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet} newKey ${this.publicNewKeyID}` }
+                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet?.address}` }
             ])
 		})
 
