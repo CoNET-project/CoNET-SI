@@ -1392,8 +1392,6 @@ const moveData = (block: number) => {
 
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
-
-	
 	gossipStatus.epoch = block
 	gossipStatus.totalConnectNode = 0
 	gossipStatus.nodesWallets = new Map()
