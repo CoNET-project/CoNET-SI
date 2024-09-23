@@ -854,6 +854,7 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 	if (CurrentEpoch !== validatorData.epoch) {
 		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
 	}
+
 	const obj = validatorPool.get(validatorData.epoch)
 
 	if (!obj) {
@@ -1390,17 +1391,13 @@ interface nodeResponse {
 
 const moveData = (block: number) => {
 
-
+	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
+	
 	const _wallets = validatorPool.get (block-1)
+	logger(inspect(_wallets, false, 3, true))
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	
 	let totalMiners = nodeWallets.length
-	if (gossipStatus.nodesWallets.size > 0) {
-		gossipStatus.nodesWallets.forEach((v, key) => {
-			totalMiners += v.length
-		})
-	}
-
 
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
