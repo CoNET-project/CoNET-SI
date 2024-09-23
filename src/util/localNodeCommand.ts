@@ -1457,7 +1457,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			totalMiners: previousGossipStatus.totalMiners,
 			connetingNodes: previousGossipStatus.nodesWallets.size,
 			nodeDomain,
-			nodeIpAddr
+			nodeIpAddr,
+			nodeWallets: previousGossipStatus.nodeWallets
 		}
 
 		// logger(inspect(returnData, false, 3, true))
