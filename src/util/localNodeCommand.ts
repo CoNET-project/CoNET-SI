@@ -1211,7 +1211,7 @@ interface livenessListeningPoolObj {
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 
-const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
+const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: TLSSocket|Socket) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
@@ -1223,14 +1223,16 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	}
 	
 	livenessListeningPool.set (wallet, obj)
-	
 	const returnData = {
 		ipaddress,
 		status: 200
 	}
 
 	// @ts-ignore
-	const responseData = `HTTP/1.1 200 OK\r\nDate: ${ new Date ().toGMTString()}\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n${JSON.stringify(returnData)}\r\n\r\n`
+	const responseData = typeof res.getTLSTicket !== 'function'
+	//@ts-ignore
+		? `HTTP/1.1 200 OK\r\nDate: ${ new Date ().toGMTString()}\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n${JSON.stringify(returnData)}\r\n\r\n` 
+		: JSON.stringify(returnData)
 
 
 	res.once('error', err => {
