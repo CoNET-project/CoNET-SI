@@ -1355,7 +1355,7 @@ interface IGossipStatus {
 	nodeWallets: string[]
 }
 
-export const gossipStatus: IGossipStatus = {
+export let gossipStatus: IGossipStatus = {
 	totalConnectNode: 0,
 	epoch: 0,
 	nodesWallets: new Map(),
@@ -1379,7 +1379,7 @@ interface nodeResponse {
 }
 
 const moveData = (block: number) => {
-	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode}`))
+	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${gossipStatus.totalConnectNode}`))
 	previousGossipStatus = JSON.parse(JSON.stringify(gossipStatus))
 
 	const _wallets = validatorPool.get (block-1)
@@ -1393,9 +1393,13 @@ const moveData = (block: number) => {
 
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
-	gossipStatus.epoch = block
-	gossipStatus.totalConnectNode = 0
-	gossipStatus.nodesWallets = new Map()
+	gossipStatus = {
+		epoch: block,
+		totalConnectNode: 0,
+		nodesWallets: new Map(),
+		totalMiners: 0,
+		nodeWallets: []
+	}
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
 
