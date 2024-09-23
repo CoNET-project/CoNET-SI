@@ -1392,11 +1392,13 @@ interface nodeResponse {
 const moveData = (block: number) => {
 
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
-	
+
 	const _wallets = validatorPool.get (block-1)
-	logger(inspect(_wallets, false, 3, true))
-	const nodeWallets = _wallets ? [..._wallets.keys()] : []
+
 	
+
+	const nodeWallets = _wallets ? [..._wallets.keys()] : []
+	logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
 
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
