@@ -72,6 +72,8 @@ class conet_si_server {
 	private nodeWallet: Wallet|null = null
 	public nodePool = []
 	private publicKeyID = ''
+	private publicNewKeyID = ''
+	private nodeIpAddr = ''
 	public initData:ICoNET_NodeSetup|null = null
 
 	private initSetupData = async () => {
@@ -105,10 +107,12 @@ class conet_si_server {
 		this.PORT = this.initData.ipV4Port
 
 		const newID = await getPublicKeyArmoredKeyID(this.initData.pgpKey.publicKey)
-		
+		this.publicNewKeyID = newID
 		logger (`this.initData.pgpKey.keyID [${this.initData.pgpKey.keyID}] <= newID [${newID}]`)
 		logger(Colors.blue(`pgpKey base64 \n`), Buffer.from(this.initData.pgpKey.publicKey).toString('base64'))
 		this.initData.pgpKey.keyID = newID
+		this.nodeIpAddr = this.initData.ipV4
+
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
 		const wallet: Wallet = this.initData.keyObj
@@ -311,7 +315,7 @@ class conet_si_server {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
 			
 			return console.table([
-                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network newKey ${this.publicNewKeyID}` }
 				
             ])
 		})
@@ -331,11 +335,11 @@ class conet_si_server {
 
 		server.listen(443, () => {
 			if (this.nodeWallet) {
-				startEPOCH_EventListeningForMining(this.nodeWallet)
+				startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 			}
 			
 			return console.table([
-                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet}` }
+                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet} newKey ${this.publicNewKeyID}` }
             ])
 		})
 

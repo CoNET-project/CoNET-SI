@@ -1332,7 +1332,7 @@ let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 let nodeWallet = ''
 
-export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) => {
+export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 
@@ -1342,7 +1342,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 		CurrentEpoch = block
 		moveData(block)
 		// gossipStart(block)
-		stratlivenessV2(block, nodePrivate)
+		stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
 	})
 	//logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
@@ -1376,6 +1376,8 @@ interface nodeResponse {
 	minerResponseHash?: string
 	nodeWallets?: string[]
 	connetingNodes: number
+	nodeDomain?: string
+	nodeIpAddr?: string
 }
 
 const moveData = (block: number) => {
@@ -1425,7 +1427,7 @@ const gossipStart = async (block: number) => {
 	
 }
 
-const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
+const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
@@ -1445,7 +1447,9 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
 			hash: signMessage,
 			nodeWallet,
 			totalMiners: previousGossipStatus.totalMiners,
-			connetingNodes: previousGossipStatus.nodesWallets.size
+			connetingNodes: previousGossipStatus.nodesWallets.size,
+			nodeDomain,
+			nodeIpAddr
 		}
 
 		// logger(inspect(returnData, false, 3, true))
