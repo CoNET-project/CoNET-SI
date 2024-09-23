@@ -1337,14 +1337,14 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 	nodeWallet = nodePrivate.address.toLowerCase()
 
 	CONETProvider.on('block', block => {
-		logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
+		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
 		// gossipStart(block)
 		stratlivenessV2(block, nodePrivate)
 	})
-	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
+	//logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
 
 interface IGossipStatus {
