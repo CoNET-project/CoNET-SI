@@ -1223,10 +1223,15 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	}
 	
 	livenessListeningPool.set (wallet, obj)
+	
 	const returnData = {
 		ipaddress,
 		status: 200
 	}
+
+	// @ts-ignore
+	const responseData = `HTTP/1.1 200 OK\r\nDate: ${ new Date ().toGMTString()}\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n${JSON.stringify(returnData)}\r\n\r\n`
+
 
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
@@ -1238,7 +1243,8 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	})
 
 	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
-	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
+
+	return testMinerCOnnecting (res, responseData, wallet, ipaddress)
 }
 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
