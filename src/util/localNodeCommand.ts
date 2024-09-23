@@ -1379,6 +1379,7 @@ interface nodeResponse {
 }
 
 const moveData = (block: number) => {
+	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode}`))
 	previousGossipStatus = JSON.parse(JSON.stringify(gossipStatus))
 
 	const _wallets = validatorPool.get (block-1)
