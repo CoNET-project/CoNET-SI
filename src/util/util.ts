@@ -423,7 +423,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 			const data = JSON.parse(_data)
 			
 			gossipStatus.nodesWallets.set(node.ipaddress, data.nodeWallets||[])
-			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.wallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
+			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
 			
 			
 		} catch (ex) {
