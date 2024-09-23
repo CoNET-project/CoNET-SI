@@ -1386,12 +1386,13 @@ const moveData = (block: number) => {
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	
 	let totalMiners = nodeWallets.length
-
-	gossipStatus.nodesWallets.forEach((v, key) => {
-		totalMiners += v.length
-	})
-
+	if (gossipStatus.nodesWallets.size > 0) {
+		gossipStatus.nodesWallets.forEach((v, key) => {
+			totalMiners += v.length
+		})
+	}
 	
+
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
