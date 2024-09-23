@@ -1380,18 +1380,20 @@ interface nodeResponse {
 
 const moveData = (block: number) => {
 	previousGossipStatus = JSON.parse(JSON.stringify(gossipStatus))
+
 	const _wallets = validatorPool.get (block-1)
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
-	previousGossipStatus.nodeWallets = nodeWallets
+	
 	let totalMiners = nodeWallets.length
 
 	gossipStatus.nodesWallets.forEach((v, key) => {
 		totalMiners += v.length
 	})
 
-	previousGossipStatus.totalConnectNode = previousGossipStatus.nodesWallets.size
+	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 
+	
 	gossipStatus.epoch = block
 	gossipStatus.totalConnectNode = 0
 	gossipStatus.nodesWallets = new Map()
