@@ -422,7 +422,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 		try {
 			const data = JSON.parse(_data)
 			gossipStatus.nodesWallets.set(node.ipaddress, data.wallets)
-
+			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.wallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
 		} catch (ex) {
 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
 			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
