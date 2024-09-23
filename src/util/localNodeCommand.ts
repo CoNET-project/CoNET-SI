@@ -814,10 +814,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return validatorMining(command, socket)
 		}
 
-		case 'mining_gossip': {
-			logger(`mining_gossip...`)
-			return addToGossipPool (socket.remoteAddress||'', command.walletAddress, socket)
-		}
+		// case 'mining_gossip': {
+		// 	logger(`mining_gossip...`)
+		// 	return addToGossipPool (socket.remoteAddress||'', command.walletAddress, socket)
+		// }
 
 		default : {
 			logger (Colors.red(`postOpenpgpRoute invalid command [${inspect(command, false, 3, true)}]`))
@@ -1243,48 +1243,48 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
 
-const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
-	const _obj = gossipListeningPool.get (wallet)
-	if (_obj) {
-		if (_obj.res.writable && typeof _obj.res.end === 'function') {
-			_obj.res.end().destroy()
-		}
-	}
-	const obj: livenessListeningPoolObj = {
-		ipaddress, wallet, res
-	}
+// const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
+// 	const _obj = gossipListeningPool.get (wallet)
+// 	if (_obj) {
+// 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
+// 			_obj.res.end().destroy()
+// 		}
+// 	}
+// 	const obj: livenessListeningPoolObj = {
+// 		ipaddress, wallet, res
+// 	}
 
-	gossipListeningPool.set (wallet, obj)
+// 	gossipListeningPool.set (wallet, obj)
 
-	const returnData = `HTTP/1.1 200 OK\r\n` +
-		//	@ts-ignore
-		`Date: ${new Date().toGMTString()}\r\n` +
-		`Server: nginx/1.24.0 (Ubuntu)\r\n` +
-		`access-control-allow-origin: *\r\n` +
-		`content-type: text/event-stream\r\n` +
-		`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
-		`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
-		`Cache-Control: no-cache\r\n` +
-		`Connection: Keep-Alive\r\n\r\n${JSON.stringify(
-			{
-				status: 200,
-				epoch: CurrentEpoch - 1,
-				rate: validatorPool.size.toString(),
-				nodeWallet
-			})}\r\n\r\n`
+// 	const returnData = `HTTP/1.1 200 OK\r\n` +
+// 		//	@ts-ignore
+// 		`Date: ${new Date().toGMTString()}\r\n` +
+// 		`Server: nginx/1.24.0 (Ubuntu)\r\n` +
+// 		`access-control-allow-origin: *\r\n` +
+// 		`content-type: text/event-stream\r\n` +
+// 		`Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n` +
+// 		`Access-Control-Allow-Headers: X-PINGOTHER, Content-Type\r\n` +
+// 		`Cache-Control: no-cache\r\n` +
+// 		`Connection: Keep-Alive\r\n\r\n${JSON.stringify(
+// 			{
+// 				status: 200,
+// 				epoch: CurrentEpoch - 1,
+// 				rate: validatorPool.size.toString(),
+// 				nodeWallet
+// 			})}\r\n\r\n`
 
-	res.once('error', err => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
-		gossipListeningPool.delete(wallet)
-	})
-	res.once('close', () => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Gossip Pool`))
-		gossipListeningPool.delete(wallet)
-	})
+// 	res.once('error', err => {
+// 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Gossip Pool`), err.message)
+// 		gossipListeningPool.delete(wallet)
+// 	})
+// 	res.once('close', () => {
+// 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Gossip Pool`))
+// 		gossipListeningPool.delete(wallet)
+// 	})
 
-	logger (Colors.green(` [${ipaddress}:${wallet}] Added to Gossip Pool [${livenessListeningPool.size}]!`))
-	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
-}
+// 	logger (Colors.green(` [${ipaddress}:${wallet}] Added to Gossip Pool [${livenessListeningPool.size}]!`))
+// 	return testMinerCOnnecting (res, returnData, wallet, ipaddress)
+// }
 
 const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
 	logger(Colors.blue(`gossipCnnecting SENT DATA to ${res.remoteAddress}`))
@@ -1341,7 +1341,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
-		gossipStart(block)
+		// gossipStart(block)
 		stratlivenessV2(block, nodePrivate)
 	})
 	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
@@ -1428,7 +1428,6 @@ const gossipStart = async (block: number) => {
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet) => {
-	
 	
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
