@@ -110,7 +110,8 @@ class conet_si_server {
 		logger (`this.initData.pgpKey.keyID [${this.initData.pgpKey.keyID}] <= newID [${newID}]`)
 		logger(Colors.blue(`pgpKey base64 \n`), Buffer.from(this.initData.pgpKey.publicKey).toString('base64'))
 		this.initData.pgpKey.keyID = newID
-		this.nodeIpAddr = this.initData.ipV4
+		const ipaddress = this.initData.ipV4 ? this.initData.ipV4.split(':') : []
+		this.nodeIpAddr = ipaddress.length ? ipaddress[ipaddress.length-1] : ''
 
 		this.initData.platform_verison = version
 		saveSetup ( this.initData, true )
