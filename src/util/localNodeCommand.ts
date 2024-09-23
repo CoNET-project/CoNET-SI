@@ -1337,7 +1337,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet) =>
 	nodeWallet = nodePrivate.address.toLowerCase()
 
 	CONETProvider.on('block', block => {
-
+		logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		validatorPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
