@@ -1395,12 +1395,10 @@ const moveData = (block: number) => {
 
 	const _wallets = validatorPool.get (block-1)
 
-	
-
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
-
+	previousGossipStatus.nodeWallets = nodeWallets
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 	gossipStatus = {
@@ -1408,7 +1406,7 @@ const moveData = (block: number) => {
 		totalConnectNode: 0,
 		nodesWallets: new Map(),
 		totalMiners: 0,
-		nodeWallets
+		nodeWallets: []
 	}
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
