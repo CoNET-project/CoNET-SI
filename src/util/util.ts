@@ -446,7 +446,7 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 	}
 
 	await initGuardianNodes()
-	startGossipListening(privateKey)
+	// startGossipListening(privateKey)
 	await scanPassedEpoch()
 	
 	CONETProvider.on('block', async block => {
