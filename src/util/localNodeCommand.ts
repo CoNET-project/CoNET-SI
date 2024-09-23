@@ -1391,6 +1391,9 @@ const moveData = (block: number) => {
 		totalMiners += v.length
 	})
 
+	
+	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
+
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 	gossipStatus = {
