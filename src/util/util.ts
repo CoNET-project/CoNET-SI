@@ -421,10 +421,14 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 		}
 		try {
 			const data = JSON.parse(_data)
+			if (data.wallets === undefined) {
+				logger(Colors.blue(`connectToGossipNode ${node.ipaddress}  gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`),inspect(data, false, 3, true))
+			} else {
+				gossipStatus.nodesWallets.set(node.ipaddress, data.wallets||[])
 
-			gossipStatus.nodesWallets.set(node.ipaddress, data.wallets||[])
-
-			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.wallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
+				logger(`connectToGossipNode ${node.ipaddress} wallets ${data.wallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
+			}
+			
 		} catch (ex) {
 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
 			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
