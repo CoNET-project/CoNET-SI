@@ -1430,7 +1430,7 @@ export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) =
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
-	const rate = await getRate(block-1)
+	const rate = await getRate(block-2)
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
