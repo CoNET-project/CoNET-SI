@@ -29,6 +29,7 @@ import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
 import {startEventListening, CONETProvider} from '../util/util'
+import P from 'phin'
 
 const KB = 1000
 const MB = 1000 * KB
@@ -1378,7 +1379,7 @@ interface nodeResponse {
 	status: number
 	epoch: number
 	hash?: string
-	rate: string
+	rate: number
 	totalMiners: number
 	validatorPool?:string
 	nodeWallet: string
@@ -1411,29 +1412,25 @@ const moveData = (block: number) => {
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
 
-const gossipStart = async (block: number) => {
-	const processPool: any = []
-	const returnData: nodeResponse = {
-		status: 200,
-		epoch: block-1,
-		rate: '',
-		nodeWallets: previousGossipStatus.nodeWallets,
-		nodeWallet,
-		totalMiners: previousGossipStatus.totalMiners,
-		connetingNodes: previousGossipStatus.nodesWallets.size
-	}
-
-	gossipListeningPool.forEach(async (n, key) => {
-		const res = n.res
-		processPool.push(gossipCnnecting(res, returnData, key, n.ipaddress))
+const rateUrl = `https://apiv3.conet.network/api/miningRate?eposh=`
+interface rate {
+	totalMiners: number
+	minerRate: number
+}
+export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) => {
+	const url = rateUrl + epoch
+	const res = await P({
+		url,
+		parse: 'json'
 	})
-
-	await Promise.all(processPool)
+	//	@ts-ignore
+	const ret: rate = res?.body
+	return ret
 	
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
-	
+	const rate = await getRate(block-1)
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
@@ -1448,10 +1445,10 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 		const returnData: nodeResponse = {
 			status: 200,
 			epoch: block,
-			rate: validatorPool.size.toString(),
+			rate: rate?.minerRate,
 			hash: signMessage,
 			nodeWallet,
-			totalMiners: previousGossipStatus.totalMiners,
+			totalMiners: rate?.totalMiners,
 			connetingNodes: previousGossipStatus.nodesWallets.size,
 			nodeDomain,
 			nodeIpAddr,
@@ -1466,3 +1463,4 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
+
