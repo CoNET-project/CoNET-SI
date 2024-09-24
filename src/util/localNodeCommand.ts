@@ -1380,7 +1380,7 @@ interface nodeResponse {
 	epoch: number
 	hash?: string
 	rate: number
-	totalMiners: number
+	online: number
 	validatorPool?:string
 	nodeWallet: string
 	minerResponseHash?: string
@@ -1448,7 +1448,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			rate: rate?.minerRate,
 			hash: signMessage,
 			nodeWallet,
-			totalMiners: rate?.totalMiners,
+			online: rate?.totalMiners,
 			connetingNodes: previousGossipStatus.nodesWallets.size,
 			nodeDomain,
 			nodeIpAddr,
