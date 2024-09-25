@@ -401,7 +401,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	
 	const wallet = new ethers.Wallet(privateKey)
 	const command = {
-		command: 'mining_gossip',
+		command: 'mining',
 		walletAddress: wallet.address.toLowerCase()
 	}
 	
@@ -419,6 +419,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 		if (!_data) {
 			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
 		}
+
 		try {
 			const data = JSON.parse(_data)
 			const wallets = data.nodeWallets||[]
@@ -427,7 +428,6 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 				logger(inspect(wallets, false, 3, true))
 			}
 			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
-			
 			
 		} catch (ex) {
 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
@@ -475,5 +475,13 @@ const startGossipListening = (privateKey: string) => {
 	gossipNodes.forEach(n => {
 		connectToGossipNode(privateKey, n)
 	})
+	
+}
+
+export const getNodeWallet = (nodeIpaddress: string) => {
+	const index = gossipNodes.findIndex(n => n.ipaddress === nodeIpaddress)
+	if (index < 0 ) {
+		return null
+	}
 	
 }

@@ -761,7 +761,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
     serverReq.end()
 }
 
-export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj) => {
+export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 
 	switch (command.command) {
 
@@ -808,7 +808,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		case 'mining': {
 			logger(`mining...`)
 			
-			return addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, socket)
+			return addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, wallet, socket)
 		}
 
 		case 'mining_validator': {
@@ -829,6 +829,9 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 }
 
 const validatorPool: Map<number, Map<string, boolean>> = new Map()
+
+
+
 
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
@@ -1032,7 +1035,7 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 	return connect.clientSocket.write(`data: ${encryptedText}\n\n`)
 }
 
-export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string) => {
+export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string, wallet: ethers.Wallet|null) => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(headers, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
@@ -1082,7 +1085,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		return distorySocket(socket)
 	}
 	
-	return localNodeCommandSocket(socket, headers, command )
+	return localNodeCommandSocket(socket, headers, command, wallet )
 	
 }
 
@@ -1213,7 +1216,7 @@ interface livenessListeningPoolObj {
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 
-const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, res: TLSSocket|Socket) => {
+const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet| null, res: TLSSocket|Socket) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
@@ -1225,9 +1228,13 @@ const addIpaddressToLivenessListeningPool = (ipaddress: string, wallet: string, 
 	}
 	
 	livenessListeningPool.set (wallet, obj)
+
 	const returnData = {
 		ipaddress,
-		status: 200
+		epoch: CurrentEpoch,
+		status: 200,
+		nodeWallet: nodeWallet?.address?.toLowerCase(),
+		hash: await nodeWallet?.signMessage(CurrentEpoch.toString())
 	}
 
 	// @ts-ignore
@@ -1464,3 +1471,49 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 }
 
+const validatorMiningV2 = (command: minerObj) => {
+
+	const validatorData: nodeResponse = command.requestData
+	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash) {
+		logger(Colors.red(`validatorMining has null validatorData`))
+		logger(inspect(command, false, 3, true))
+		return false
+	}
+
+	
+	const wallet = command.walletAddress
+	const message = {epoch: validatorData.epoch, wallet}
+	const va = ethers.verifyMessage(JSON.stringify(message), validatorData.hash)
+
+	if (va.toLowerCase() !== validatorData.nodeWallet.toLowerCase()) {
+		logger(Colors.red(`validatorMining verifyMessage hash Error! va.toLowerCase() ${va.toLowerCase()} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
+		logger(inspect(command, false, 3, true))
+		return false
+	}
+
+
+	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
+
+
+}
+
+
+const kk = {
+	walletAddress: "0xb5c45cd82ed49824843c8d266df1cb0fc527ca31",
+	requestData: {
+		"status": 200,
+		"epoch": 260788,
+		"rate": "0.9644444444",
+		"hash": "0x84f4a33f323764de3fe49ed8f633c0221f15d4af3f531397efedf74ec9c9ef6d1e74c460e63a5bcacf14bd2afef1f337ee6a4f55da10e5058180e1543fee95461c",
+		"nodeWallet": "0x05a4538578677d7cf39a04e416a84991e166eada",
+		"online": 3,
+		"connetingNodes": 0,
+		"nodeDomain": "AE85A2AEEC768225",
+		"nodeIpAddr": "74.208.226.238",
+		"nodeWallets": [],
+		"currentCCNTP": "57.74486600",
+		"minerResponseHash": "0xc5750dce8a6446b55906c1c234b8b17067b54c1ca502cdacb0448d3323c6d1254ffcd44e10093ab317fee5071030a4cb1985be5d6864f8f555315b759907657f1b"
+	}
+}
+//@ts-ignore
+validatorMiningV2(kk)
