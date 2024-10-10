@@ -116,9 +116,9 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
 				const kkk = await getGuardianNodeWallet(v.nodeInfo)
 				logger(inspect(kkk, false, 3, true))
-				if (kkk) {
-					v.wallet = kkk.nodeWallet
-				}
+				
+				v.wallet = kkk.nodeWallet
+				
 				logger(inspect(v, false, 3, true))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
 				if (i < GossipLimited) {
