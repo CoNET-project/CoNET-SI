@@ -115,6 +115,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
 				const kkk = await getGuardianNodeWallet(v.nodeInfo)
+				logger(inspect(kkk, false, 3, true))
 				if (kkk) {
 					v.wallet = kkk.nodeWallet
 				}
@@ -411,7 +412,7 @@ const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> =
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
-		logger(inspect(_data, false, 3, true))
+		
 		resolve(_data)
 	})
 })
