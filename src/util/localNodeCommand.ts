@@ -864,7 +864,8 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo || nodeInfo.wallet !== nodeWallet) {
-		logger(Colors.red(`${nodeWallet} node hash from domain ${validatorData.nodeDomain} have not node information Error!`))
+		logger(Colors.red(`${nodeWallet} node hash from domain ${validatorData.nodeDomain} of nodeInfo.wallet = ${nodeInfo ?nodeInfo.wallet: ''} !== nodeWallet ${nodeWallet} have not node information Error!`))
+
 		return distorySocket(socket)
 	}
 	
