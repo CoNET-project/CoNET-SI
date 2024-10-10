@@ -118,7 +118,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				const kkk = await getGuardianNodeWallet(v.nodeInfo)
 				logger(inspect(kkk, false, 3, true))
 				
-				v.wallet = kkk.nodeWallet
+				v.wallet = v.nodeInfo.wallet = kkk.nodeWallet
 				
 				logger(inspect(v, false, 3, true))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
