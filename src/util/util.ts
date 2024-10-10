@@ -411,6 +411,7 @@ const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> =
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
+		logger(inspect(_data, false, 3, true))
 		resolve(_data)
 	})
 })
