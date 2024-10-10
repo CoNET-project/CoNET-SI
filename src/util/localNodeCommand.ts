@@ -1401,7 +1401,7 @@ interface IGossipStatus {
 	nodesWallets: Map<string, string[]>
 	totalMiners: number
 	nodeWallets: string[]
-	userWallets: []
+	userWallets: string []
 }
 
 export let gossipStatus: IGossipStatus = {
@@ -1445,6 +1445,7 @@ const moveData = (block: number) => {
 	previousGossipStatus.nodeWallets = nodeWallets
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
+	previousGossipStatus.userWallets = userWallets
 	gossipStatus = {
 		epoch: block,
 		totalConnectNode: 0,
