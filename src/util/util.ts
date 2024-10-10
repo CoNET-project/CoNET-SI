@@ -24,7 +24,8 @@ const GuardianNFT = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
 let GlobalIpAddress = ''
 
 const useNodeReceiptList: Map<string, NodList> = new Map()
-const routerInfo: Map<string, nodeInfo> = new Map()
+export const routerInfo: Map<string, nodeInfo> = new Map()
+
 let gossipNodes: nodeInfo[] = []
 export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false

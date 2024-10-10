@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import {startEventListening, CONETProvider} from '../util/util'
+import {startEventListening, CONETProvider, routerInfo} from '../util/util'
 import P from 'phin'
 
 const KB = 1000
@@ -828,8 +828,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 }
 
-const validatorPool: Map<number, Map<string, boolean>> = new Map()
-
+const validatorMinerPool: Map<number, Map<string, boolean>> = new Map()
+const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 
 const validatorMining = (command: minerObj, socket: Socket ) => {
 
@@ -852,23 +852,35 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
+	if (CurrentEpoch !== validatorData.epoch) {
+		return logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
+	}
+
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
 	logger(inspect(validatorData, false, 3, true))
 
-	if (CurrentEpoch !== validatorData.epoch) {
-		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
+	if (validatorData.isUser) {
+		const timeout = validatorUserPool.get(wallet)
+		clearTimeout(timeout)
+
+		const _timeout = setTimeout(() => {
+			validatorUserPool.delete(wallet)
+		}, 1000 * 60)
+
+		return validatorUserPool.set (wallet, _timeout)
 	}
 
-	const obj = validatorPool.get(validatorData.epoch)
+	const obj = validatorMinerPool.get (validatorData.epoch)
 
 	if (!obj) {
 		//	Passed EPOCH
 		if (validatorData.epoch < CurrentEpoch) {
 			return distorySocket(socket)
 		}
+
 		const newEpoch: Map<string, boolean> = new Map()
 		newEpoch.set(wallet, true)
-		validatorPool.set (validatorData.epoch, newEpoch)
+		validatorMinerPool.set (validatorData.epoch, newEpoch)
 		
 	} else {
 		obj.set(wallet, true)
@@ -1355,7 +1367,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 
 	CONETProvider.on('block', block => {
 		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
-		validatorPool.delete(CurrentEpoch -2)
+		validatorMinerPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
 		// gossipStart(block)
@@ -1395,13 +1407,14 @@ interface nodeResponse {
 	connetingNodes: number
 	nodeDomain?: string
 	nodeIpAddr?: string
+	isUser?: boolean
 }
 
 const moveData = (block: number) => {
 
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
 
-	const _wallets = validatorPool.get (block-1)
+	const _wallets = validatorMinerPool.get (block-1)
 
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	logger(inspect(nodeWallets, false, 3, true))
@@ -1470,24 +1483,3 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
-
-
-// const kk = {
-// 	walletAddress: "0xb5c45cd82ed49824843c8d266df1cb0fc527ca31",
-// 	requestData: {
-// 		"status": 200,
-// 		"epoch": 260788,
-// 		"rate": "0.9644444444",
-// 		"hash": "0x84f4a33f323764de3fe49ed8f633c0221f15d4af3f531397efedf74ec9c9ef6d1e74c460e63a5bcacf14bd2afef1f337ee6a4f55da10e5058180e1543fee95461c",
-// 		"nodeWallet": "0x05a4538578677d7cf39a04e416a84991e166eada",
-// 		"online": 3,
-// 		"connetingNodes": 0,
-// 		"nodeDomain": "AE85A2AEEC768225",
-// 		"nodeIpAddr": "74.208.226.238",
-// 		"nodeWallets": [],
-// 		"currentCCNTP": "57.74486600",
-// 		"minerResponseHash": "0xc5750dce8a6446b55906c1c234b8b17067b54c1ca502cdacb0448d3323c6d1254ffcd44e10093ab317fee5071030a4cb1985be5d6864f8f555315b759907657f1b"
-// 	}
-// }
-//@ts-ignore
-// validatorMiningV2(kk)
