@@ -841,12 +841,6 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-	if (CurrentEpoch !== validatorData.epoch) {
-		
-		logger(Colors.red(`${command.walletAddress} CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
-		return distorySocket(socket)
-	}
-
 	const wallet = command.walletAddress.toLowerCase()
 	const message = {epoch: validatorData.epoch, wallet}
 	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
