@@ -254,7 +254,6 @@ export const getRoute = async (keyID: string) => {
 
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
-
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`),inspect(routerInfo.keys(), false, 3, true))
 		return null
 	}
@@ -327,7 +326,6 @@ const scanPassedEpoch = async () => {
 		await checkBlock(n)
 	})
 }
-
 
 const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
 	

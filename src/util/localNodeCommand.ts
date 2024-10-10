@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import {startEventListening, CONETProvider, routerInfo} from '../util/util'
+import {CONETProvider, routerInfo, } from '../util/util'
 import P from 'phin'
 
 const KB = 1000
@@ -1278,6 +1278,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
 		livenessListeningPool.delete(wallet)
 	})
+
 	res.once('close', () => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
 		livenessListeningPool.delete(wallet)
@@ -1400,6 +1401,7 @@ interface IGossipStatus {
 	nodesWallets: Map<string, string[]>
 	totalMiners: number
 	nodeWallets: string[]
+	userWallets: []
 }
 
 export let gossipStatus: IGossipStatus = {
@@ -1407,7 +1409,8 @@ export let gossipStatus: IGossipStatus = {
 	epoch: 0,
 	nodesWallets: new Map(),
 	totalMiners: 0,
-	nodeWallets: []
+	nodeWallets: [],
+	userWallets: []
 }
 
 let previousGossipStatus = gossipStatus
@@ -1426,6 +1429,7 @@ interface nodeResponse {
 	nodeDomain: string
 	nodeIpAddr: string
 	isUser?: boolean
+	userWallets: string[]
 }
 
 const moveData = (block: number) => {
@@ -1435,6 +1439,7 @@ const moveData = (block: number) => {
 	const _wallets = validatorMinerPool.get (block-1)
 
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
+	const userWallets = [...validatorUserPool.keys()]
 	logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
 	previousGossipStatus.nodeWallets = nodeWallets
@@ -1445,7 +1450,8 @@ const moveData = (block: number) => {
 		totalConnectNode: 0,
 		nodesWallets: new Map(),
 		totalMiners: 0,
-		nodeWallets: []
+		nodeWallets: [],
+		userWallets: []
 	}
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
@@ -1491,7 +1497,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			nodeDomain,
 			nodeIpAddr,
 			nodeWallets: previousGossipStatus.nodeWallets,
-			minerResponseHash: ''
+			minerResponseHash: '',
+			userWallets: previousGossipStatus.userWallets
 		}
 
 		// logger(inspect(returnData, false, 3, true))
