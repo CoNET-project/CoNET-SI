@@ -854,7 +854,7 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
 	logger(inspect(validatorData, false, 3, true))
-	
+
 	if (CurrentEpoch !== validatorData.epoch) {
 		logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
 	}
@@ -1468,32 +1468,6 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	})
 
 	await Promise.all(processPool)
-
-}
-
-const validatorMiningV2 = (command: minerObj) => {
-
-	const validatorData: nodeResponse = command.requestData
-	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash) {
-		logger(Colors.red(`validatorMining has null validatorData`))
-		logger(inspect(command, false, 3, true))
-		return false
-	}
-
-	
-	const wallet = command.walletAddress
-	const message = {epoch: validatorData.epoch, wallet}
-	const va = ethers.verifyMessage(JSON.stringify(message), validatorData.hash)
-
-	if (va.toLowerCase() !== validatorData.nodeWallet.toLowerCase()) {
-		logger(Colors.red(`validatorMining verifyMessage hash Error! va.toLowerCase() ${va.toLowerCase()} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
-		logger(inspect(command, false, 3, true))
-		return false
-	}
-
-
-	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
-
 
 }
 

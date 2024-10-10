@@ -175,6 +175,7 @@ interface nodeInfo {
 	pgpArmored: string
 	pgpKeyID: string
 	domain: string
+	wallet: string
 }
 
 interface NodList {

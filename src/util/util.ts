@@ -51,7 +51,6 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 
 
 	const _nodesAddress: string[] = nodes[0].map((n: string) => n)
-	let NFTAssets: number[]
 
 	const NFTIds = _nodesAddress.map ((n, index) => 100 + index)
 	
@@ -63,7 +62,8 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 			regionName: '',
 			pgpArmored: '',
 			pgpKeyID: '',
-			domain: ''
+			domain: '',
+			wallet: ''
 		}
 
 		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
@@ -98,6 +98,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 
 	let i = 0
 	gossipNodes = []
+
 	mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
 		
 		const result = await getNodeInfo(v.nodeID)
@@ -113,21 +114,19 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				const pgpKey = await readKey({ armoredKey: v.nodeInfo.pgpArmored})
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
-				
-					//logger(Colors.grey(`Add Guardian Node[${v.nodeInfo.ipaddress}] keyID [${v.nodeInfo.pgpKeyID}]`))
-					routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
-				
-				
-
+				const kkk = await getGuardianNodeWallet(v.nodeInfo)
+				if (kkk && kkk?.nodeWallet) {
+					v.wallet = kkk.nodeWallet
+				}
+				logger(inspect(v, false, 3, true))
+				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
 				if (i < GossipLimited) {
 					if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
 						gossipNodes.push(v.nodeInfo)
 					}
-					
 					i ++
 				}
 			}
-			
 		}
 	}, err => {
 		logger(`initGuardianNodes finished!`)
@@ -184,6 +183,7 @@ const iface = new ethers.Interface(cCNTPABI)
 let currentEpoch: number
 let lastrate: number
 let localPublicKeyID = ''
+let localWallet: ethers.Wallet
 
 const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
@@ -327,18 +327,18 @@ const scanPassedEpoch = async () => {
 }
 
 
-const startGossip = (host: string, POST: string, callback: (err?: string, data?: string) => void) => {
+const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
 	
 
 	const option: RequestOptions = {
-		host: host,
+		hostname: node.domain,
 		port: 80,
 		method: 'POST',
 		protocol: 'http:',
 		headers: {
 			'Content-Type': 'application/json;charset=UTF-8'
 		},
-		path: "/post"
+		path: "/post",
 	}
 
 	let first = true
@@ -353,59 +353,55 @@ const startGossip = (host: string, POST: string, callback: (err?: string, data?:
 		let _Time: NodeJS.Timeout
 
 		res.on ('data', _data => {
-
+			clearTimeout(_Time)
 			data += _data.toString()
 			
 			if (/\r\n\r\n/.test(data)) {
-				clearTimeout(_Time)
+				
 				if (first) {
 					first = false
+					logger(Colors.magenta(`first`))
+					try{
+						const uu = JSON.parse(data)
+						callback('', uu)
+					} catch(ex) {
+						logger(Colors.red(`first JSON.parse Error`), data)
+					}
+					data = ''
+					res._destroy(null, () => {
+						logger(Colors.magenta(`startGossip stop connecting!`))
+					})
 				}
-				callback ('', data)
-				data = ''
-
-				_Time = setTimeout(() => {
-					logger(Colors.red(`startGossip [${host}] has 2 EPOCH got NONE Gossip Error! Try to restart! `))
-					kkk.destroy()
-				}, 24 * 1000)
 			}
 		})
 
 		res.once('error', err => {
-			kkk.destroy()
-			logger(Colors.red(`startGossip [${host}] res on ERROR! Try to restart! `), err.message)
+			logger(Colors.red(`startGossip [${node.ipaddress}] res on ERROR!`), err.message)
 		})
 
 		res.once('end', () => {
 			kkk.destroy()
-			logger(Colors.red(`startGossip [${host}] res on END! Try to restart! `))
 		})
 		
 	})
 
 	kkk.on('error', err => {
-		
-		setTimeout(() => {
-			logger(Colors.red(`startGossip [${host}] requestHttps on Error! Try to restart! `), err.message)
-			startGossip (host, POST, callback)
-		}, 1000)
-		
+		logger(Colors.red(`startGossip [${node.ipaddress}] requestHttps on Error! Try to restart! `), err.message)
 	})
 
 	kkk.end(POST)
 
 }
 
+const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> = (node: nodeInfo) => new Promise(async resolve => {
 
-const getGuardianNodeWallet = (privateKey: string, node: nodeInfo) => new Promise(async resolve => {
-	const wallet = new ethers.Wallet(privateKey)
 	const command = {
 		command: 'mining',
-		walletAddress: wallet.address.toLowerCase()
+		walletAddress: localWallet.address.toLowerCase()
 	}
 	
 	const message =JSON.stringify(command)
-	const signMessage = await wallet.signMessage(message)
+	const signMessage = await localWallet.signMessage(message)
 	const encryptObj = {
         message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
 		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
@@ -414,8 +410,8 @@ const getGuardianNodeWallet = (privateKey: string, node: nodeInfo) => new Promis
 
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-	startGossip (node.ipaddress, JSON.stringify({data: postData}), (err, _data ) => {
-		
+	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
+		resolve(_data)
 	})
 })
 
@@ -437,7 +433,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-	startGossip(node.ipaddress, JSON.stringify({data: postData}), (err, _data ) => {
+	startGossip(node, JSON.stringify({data: postData}), (err, _data ) => {
 		if (!_data) {
 			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
 		}
@@ -466,7 +462,7 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 	if (ip && ip.length) {
 		GlobalIpAddress = ip[0]
 	}
-
+	localWallet = new ethers.Wallet(privateKey)
 	await initGuardianNodes()
 	// startGossipListening(privateKey)
 	await scanPassedEpoch()
@@ -507,4 +503,3 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
-
