@@ -111,11 +111,15 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 			v.nodeInfo = result
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				v.nodeInfo.pgpArmored = Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString()
-				const pgpKey = await readKey({ armoredKey: v.nodeInfo.pgpArmored})
+				
+				const [pgpKey, kkk] = await Promise.all([
+					readKey({ armoredKey: v.nodeInfo.pgpArmored}),
+					getGuardianNodeWallet(v.nodeInfo)
+				])
+			
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
-				const kkk = await getGuardianNodeWallet(v.nodeInfo)
-				if (kkk && kkk?.nodeWallet) {
+				if (kkk) {
 					v.wallet = kkk.nodeWallet
 				}
 				logger(inspect(v, false, 3, true))
