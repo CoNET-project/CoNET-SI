@@ -835,29 +835,44 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
 
-	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash) {
+	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash||!command?.walletAddress) {
 		logger(Colors.red(`validatorMining has null validatorData`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
 
-	
-	const wallet = command.walletAddress
-	const message = {epoch: validatorData.epoch, wallet}
-	const va = ethers.verifyMessage(JSON.stringify(message), validatorData.hash)
+	if (CurrentEpoch !== validatorData.epoch) {
+		
+		logger(Colors.red(`${command.walletAddress} CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
+		return distorySocket(socket)
+	}
 
-	if (va.toLowerCase() !== validatorData.nodeWallet.toLowerCase()) {
-		logger(Colors.red(`validatorMining verifyMessage hash Error! va.toLowerCase() ${va.toLowerCase()} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
+	const wallet = command.walletAddress.toLowerCase()
+	const message = {epoch: validatorData.epoch, wallet}
+	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
+
+	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
+		logger(Colors.red(`validatorMining verifyMessage hash Error! nodeWallet ${nodeWallet} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
 
-	if (CurrentEpoch !== validatorData.epoch) {
-		return logger(Colors.red(`CurrentEpoch [${CurrentEpoch}] !== validatorData.epoch [${validatorData.epoch}] Error!`))
-	}
+	
 
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
 	logger(inspect(validatorData, false, 3, true))
+	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
+
+	if (!nodeInfo || nodeInfo.wallet !== nodeWallet) {
+		logger(Colors.red(`${nodeWallet} node hash from domain ${validatorData.nodeDomain} have not node information Error!`))
+		return distorySocket(socket)
+	}
+	
+	const validatorWallet = ethers.verifyMessage(validatorData.hash, validatorData.minerResponseHash).toLowerCase()
+	if (validatorWallet !== wallet) {
+		logger(Colors.red(`validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
+		return distorySocket(socket)
+	}
 
 	if (validatorData.isUser) {
 		const timeout = validatorUserPool.get(wallet)
@@ -867,7 +882,8 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 			validatorUserPool.delete(wallet)
 		}, 1000 * 60)
 
-		return validatorUserPool.set (wallet, _timeout)
+		validatorUserPool.set (wallet, _timeout)
+		return response200Html(socket, JSON.stringify(validatorData))
 	}
 
 	const obj = validatorMinerPool.get (validatorData.epoch)
@@ -1402,11 +1418,11 @@ interface nodeResponse {
 	online: number
 	validatorPool?:string
 	nodeWallet: string
-	minerResponseHash?: string
+	minerResponseHash: string
 	nodeWallets?: string[]
 	connetingNodes: number
-	nodeDomain?: string
-	nodeIpAddr?: string
+	nodeDomain: string
+	nodeIpAddr: string
 	isUser?: boolean
 }
 
@@ -1472,7 +1488,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			connetingNodes: previousGossipStatus.nodesWallets.size,
 			nodeDomain,
 			nodeIpAddr,
-			nodeWallets: previousGossipStatus.nodeWallets
+			nodeWallets: previousGossipStatus.nodeWallets,
+			minerResponseHash: ''
 		}
 
 		// logger(inspect(returnData, false, 3, true))
