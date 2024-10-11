@@ -1471,7 +1471,7 @@ const moveData = (block: number) => {
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
 
-const rateUrl = `https://apiv3.conet.network/api/miningRate?eposh=`
+const rateUrl = `https://apiv4.conet.network/api/miningRate?eposh=`
 interface rate {
 	totalMiners: number
 	minerRate: number
