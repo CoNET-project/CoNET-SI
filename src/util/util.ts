@@ -23,13 +23,31 @@ const GuardianNodesInfoV6 = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLower
 const GuardianNFT = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
 let GlobalIpAddress = ''
 
-const useNodeReceiptList: Map<string, NodList> = new Map()
+export const useNodeReceiptList: Map<string, NodList> = new Map()
 export const routerInfo: Map<string, nodeInfo> = new Map()
 
 let gossipNodes: nodeInfo[] = []
 export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false
 const GossipLimited = 20
+
+export const checkPayment = (fromAddr: string) => {
+
+	const nodes = useNodeReceiptList.get(fromAddr.toLowerCase())
+	
+	if (!nodes) {
+		logger(Colors.blue(`checkPayment [${fromAddr}] has none in list!`))
+		return false
+	}
+	
+	if (!nodes.isGuardianNode && nodes.Expired < currentEpoch) {
+		logger(Colors.blue(`checkPayment [${fromAddr}] Expired!`))
+		useNodeReceiptList.delete (fromAddr.toLowerCase())
+		return false
+	}
+
+	return true
+}
 
 
 const initGuardianNodes = async () => new Promise(async resolve => {
@@ -258,23 +276,6 @@ export const getRoute = async (keyID: string) => {
 		return null
 	}
 	return node.ipaddress
-}
-
-
-export const checkPayment = (fromAddr: string) => {
-
-	const nodes = useNodeReceiptList.get(fromAddr.toLowerCase())
-	if (!nodes) {
-		logger(Colors.blue(`checkPayment [${fromAddr}] has none in list!`))
-		return false
-	}
-	if (!nodes.isGuardianNode && nodes.Expired < currentEpoch) {
-		logger(Colors.blue(`checkPayment [${fromAddr}] Expired!`))
-		useNodeReceiptList.delete (fromAddr.toLowerCase())
-		return false
-	}
-
-	return true
 }
 
 

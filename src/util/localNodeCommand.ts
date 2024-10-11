@@ -22,13 +22,13 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {checkPayment, getRoute } from './util'
+import {getRoute } from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import {CONETProvider, routerInfo, } from '../util/util'
+import {CONETProvider, routerInfo, checkPayment, useNodeReceiptList } from '../util/util'
 import P from 'phin'
 
 const KB = 1000
@@ -761,19 +761,20 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
     serverReq.end()
 }
 
+
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
-			// const payment = checkPayment(command.walletAddress)
+			const payment = checkPayment(command.walletAddress)
 
-			// if (!payment) {
-			// 	logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-			// 	return distorySocket(socket, '402 Payment Required')
-			// }
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocket(socket, '402 Payment Required')
+			}
 			
-			// logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
+			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
 
 			const prosyData = command.requestData[0]
 			return socks5Connect(prosyData, socket)
@@ -781,12 +782,12 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
         case 'SaaS_Proxy': {
             
-			// const payment = checkPayment(command.walletAddress)
+			const payment = checkPayment(command.walletAddress)
 
-			// if (!payment) {
-			// 	logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-			// 	return distorySocket(socket, '402 Payment Required')
-			// }
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocket(socket, '402 Payment Required')
+			}
 			const requestHeaders = command.requestData[1]
             const requestOrgnal = command.requestData[0]
 
@@ -1454,6 +1455,19 @@ const moveData = (block: number) => {
 		nodeWallets: [],
 		userWallets: []
 	}
+
+	userWallets.forEach(n => {
+		const node: NodList = {
+			isGuardianNode: false,
+			wallet: n,
+			nodeID: 0,
+			nodeInfo: null,
+			Expired: block + 5
+		}
+
+		useNodeReceiptList.set(n, node)
+	})
+	
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
 
