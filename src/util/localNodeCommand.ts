@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import {CONETProvider, routerInfo, checkPayment, useNodeReceiptList } from '../util/util'
+import {CONETProvider, routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet } from '../util/util'
 import P from 'phin'
 
 const KB = 1000
@@ -832,7 +832,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 const validatorMinerPool: Map<number, Map<string, boolean>> = new Map()
 const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 
-const validatorMining = (command: minerObj, socket: Socket ) => {
+const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
 
@@ -862,6 +862,12 @@ const validatorMining = (command: minerObj, socket: Socket ) => {
 		logger(Colors.red(`${nodeWallet} node has no domain ${validatorData.nodeDomain} Error!`))
 		logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
+	}
+
+	if(!nodeInfo.wallet){
+		const info = await getGuardianNodeWallet(nodeInfo)
+		nodeInfo.wallet = info.nodeWallet
+		logger(Colors.blue(`getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
 
 	if (nodeInfo.wallet !== nodeWallet) {
@@ -1485,7 +1491,6 @@ export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) =
 	//	@ts-ignore
 	const ret: rate = res?.body
 	return ret
-	
 }
 
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {

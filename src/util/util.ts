@@ -101,6 +101,9 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		return null
 	}
 
+
+
+
 	_nodesAddress.forEach(async (n, index) => {
 		
 		const node: NodList = {
@@ -394,7 +397,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 
 }
 
-const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> = (node: nodeInfo) => new Promise(async resolve => {
+export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> = (node: nodeInfo) => new Promise(async resolve => {
 
 	const command = {
 		command: 'mining',
@@ -412,7 +415,6 @@ const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> =
 	const postData = await encrypt (encryptObj)
 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
-		
 		resolve(_data)
 	})
 })
