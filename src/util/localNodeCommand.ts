@@ -852,7 +852,6 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 
-	
 
 	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
 	logger(inspect(validatorData, false, 3, true))

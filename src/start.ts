@@ -18,6 +18,7 @@ process.on ('uncaughtException', (err) => {
 
 if (Cluster.isPrimary) {
 
+	let openpgp = false
 	const startNode = () => {
 		
 		const worker = Math.floor(cpus().length/2)
@@ -28,7 +29,8 @@ if (Cluster.isPrimary) {
 	}
 
 	const _sslCertificate = (keyid: string) => new Promise((resolve, reject) => {
-		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.conet.network`
+
+		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.${openpgp ? 'openpgp.online':'conet.network'}`
 		return exec(cmd, (error, stdout, stderr) => {
 			if (error) {
 				logger(Colors.red(error.message))
@@ -81,6 +83,13 @@ if (Cluster.isPrimary) {
 		
 		return await sslCertificate(publicKeyID, initData)
 	
+	}
+
+
+	const [,,...args] = process.argv
+	if (args[0] == 'true') {
+		logger(`start with openpgp.online!`)
+		openpgp = true
 	}
 
 	start()
