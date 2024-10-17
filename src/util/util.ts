@@ -335,7 +335,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 	
 
 	const option: RequestOptions = {
-		hostname: node.domain,
+		host: node.ipaddress,
 		port: 80,
 		method: 'POST',
 		protocol: 'http:',
