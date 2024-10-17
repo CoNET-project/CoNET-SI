@@ -63,8 +63,6 @@ if (Cluster.isPrimary) {
 		await saveSetup(initData, false)
 		startNode()
 	})
-		
-	
 
 	const start = async () => {
 
