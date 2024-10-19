@@ -706,8 +706,8 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
                                 const uu = l.split(/;|,/)[0]
                                 if (uu) {
                                     cookieNew.push(uu);
-                                    logger (Colors.blue(`connectWithHttp set-cookie requestHeaders['Cookie'] [${l}]`))
-                                    logger (inspect(requestHeaders, false, 3, true))
+                                    // logger (Colors.blue(`connectWithHttp set-cookie requestHeaders['Cookie'] [${l}]`))
+                                    // logger (inspect(requestHeaders, false, 3, true))
                                 }
                             }
                         }
@@ -715,7 +715,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
                     requestHeaders['Cookie'] = cookieNew.join(';')
                 }
 
-                logger (Colors.blue(`connectWithHttp got redirection [${_res.statusCode}] response from [${requestOrgnalUrl.origin}] to new Location [${reUrl}] with cookies! reDirect[${reDirect}] `), inspect(requestHeaders, false, 3, true))
+                logger (Colors.blue(`connectWithHttp got redirection [${_res.statusCode}] response from [${requestOrgnalUrl.origin}] to new Location [${reUrl}] with cookies! reDirect[${reDirect}] `))
                 requestOrgnal1.href = reUrl.href
 
                 return connectWithHttp(requestOrgnal1, clientRes, password, requestHeaders, reDirectCount)
@@ -728,7 +728,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 
 
     const httpConnecting = () => {
-        logger (Colors.blue(`connectWithHttp connecting reDirectCount = [${reDirectCount}]`), inspect(requestOrgnalUrl, false, 3, true))
+        logger (Colors.blue(`connectWithHttp connecting reDirectCount = [${reDirectCount}]`))
         delete requestHeaders['referer']
         delete requestHeaders['host']
         const option = {
@@ -791,9 +791,9 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			const requestHeaders = command.requestData[1]
             const requestOrgnal = command.requestData[0]
 
-            logger (Colors.blue(`SaaS_Proxy get Request\n`), inspect(requestOrgnal, false, 3, true))
-            logger (Colors.blue(`SaaS_Proxy requestHeaders\n`), inspect(requestHeaders, false, 3, true))
-            logger (`SaaS_Proxy clientReq headers\n`, headers)
+            // logger (Colors.blue(`SaaS_Proxy get Request\n`))
+            // logger (Colors.blue(`SaaS_Proxy requestHeaders\n`), inspect(requestHeaders, false, 3, true))
+            // logger (`SaaS_Proxy clientReq headers\n`, headers)
 			// logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
             const password = command.Securitykey
             // const _encrypt = new encrypteStream (keyJSON, command.iv, MB)
@@ -853,8 +853,8 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 
-	logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
-	logger(inspect(validatorData, false, 3, true))
+	// logger(Colors.magenta(`Miner ${wallet} Epoch validator [${validatorData.epoch}] Success!`))
+	// logger(inspect(validatorData, false, 3, true))
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
@@ -1446,7 +1446,7 @@ const moveData = (block: number) => {
 
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	const userWallets = [...validatorUserPool.keys()]
-	logger(inspect(nodeWallets, false, 3, true))
+	// logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
 	previousGossipStatus.nodeWallets = nodeWallets
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
