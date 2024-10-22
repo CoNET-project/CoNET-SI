@@ -9,6 +9,7 @@ import {exec} from 'node:child_process'
 import {inspect} from 'node:util'
 import {startExpressServer, stopServer} from './endpoint/sslManager'
 
+const sslExpiration = 1000 * 60 * 60 * 24 * 30 * 2.5
 process.on ('uncaughtException', (err) => {
 	console.error(err.stack)
 	console.log("CONET node catch uncaughtException!!!\nNode NOT Exiting...")
@@ -52,10 +53,14 @@ if (Cluster.isPrimary) {
 		})
 	})
 
-
+	
 	const sslCertificate = async (publicKeyID: string, initData: ICoNET_NodeSetup) => {
 		if (initData.sslDate) {
-			return startNode()
+			const now = new Date().getTime()
+			if (now - initData.sslDate < sslExpiration) {
+				return startNode()
+			}
+
 		}
 		logger(Colors.magenta(`Didn't init SSL Certificate! Try `))
 		logger(inspect(initData, false, 3, true))
