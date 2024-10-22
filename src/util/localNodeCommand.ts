@@ -386,7 +386,8 @@ export const saveSetup = ( setup: ICoNET_NodeSetup|null, debug: boolean ) => {
 			cpus: cpus().length,
 			passwd: setup.passwd,
 			platform_verison: setup.platform_verison,
-			dl_publicKeyArmored: setup.dl_publicKeyArmored
+			dl_publicKeyArmored: setup.dl_publicKeyArmored,
+			sslDate: setup.sslDate
 		}
 
 		return writeFile (setupFile, JSON.stringify (setupInfo), 'utf-8', err => {
