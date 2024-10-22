@@ -54,6 +54,9 @@ if (Cluster.isPrimary) {
 
 
 	const sslCertificate = async (publicKeyID: string, initData: ICoNET_NodeSetup) => new Promise(async (resolve, reject) => {
+		if (initData.sslDate) {
+			return startNode()
+		}
 		logger(Colors.magenta(`Didn't init SSL Certificate! Try `))
 		startExpressServer()
 		await _sslCertificate(publicKeyID)
