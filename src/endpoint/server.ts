@@ -211,7 +211,7 @@ class conet_si_server {
 			}
 
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-				logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
+				//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 				return getData (bodyLength, request_line, htmlHeaders)
 			}
 
@@ -241,7 +241,7 @@ class conet_si_server {
 				const requestProtocol = htmlHeaders[0]
 
 				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-					logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+					//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 					const bodyLength = getLengthHander (htmlHeaders)
 
 					if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
