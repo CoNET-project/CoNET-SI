@@ -144,7 +144,7 @@ class conet_si_server {
 				return distorySocket(socket)
 			}
 
-			logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+			//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 			let body
 			try {
 				body = JSON.parse(request_line[1])
@@ -256,7 +256,7 @@ class conet_si_server {
 							return distorySocket(socket)
 						}
 
-						logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 						let body
 						try {
 							body = JSON.parse(request_line[1])
