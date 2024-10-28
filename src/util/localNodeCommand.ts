@@ -1364,7 +1364,7 @@ const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string,
 
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
 	logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${res.remoteAddress}`))
-	logger(inspect(returnData, false, 3, true))
+	// logger(inspect(returnData, false, 3, true))
 	if (res.writable && !res.closed) {
 		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
 			if (err) {
