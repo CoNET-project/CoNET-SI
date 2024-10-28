@@ -3,6 +3,7 @@ import {inspect} from 'node:util'
 import cCNTPABI from './cCNTP.json'
 import { logger } from './logger'
 import Colors from 'colors/safe'
+
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import type {RequestOptions} from 'node:http'
@@ -227,7 +228,7 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	}
 	const args = uu?.args
 	
-	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000'||) {
+	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
 		return logger(Colors.grey(`detailTransfer skip [${tx}]`))
 	}
 	const wallet = args[0].toLowerCase()
@@ -241,10 +242,10 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
 	
 
-	const keepEpoch = Math.round(value/rate)
+	const keepEpoch = Math.round(value/lastrate)
 	const endEpoch = startEpoch + keepEpoch
 	if (endEpoch < currentEpoch) {
-		return logger(Colors.blue(`Brun cCNTP [${wallet}] , value [${value}] rate type = ${typeof rate} [${rate}] start [${startEpoch}] end = [${Colors.magenta(endEpoch.toString())}] current epoch = [${Colors.red(currentEpoch.toString())}]`))
+		return logger(Colors.blue(`Brun cCNTP [${wallet}] , value [${value}] rate type = ${typeof lastrate} [${lastrate}] start [${startEpoch}] end = [${Colors.magenta(endEpoch.toString())}] current epoch = [${Colors.red(currentEpoch.toString())}]`))
 	}
 	const pass: NodList = {
 		wallet: wallet,
