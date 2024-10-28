@@ -10,7 +10,7 @@ import {request} from 'node:http'
 import P from 'phin'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
-import { getServerIPV4Address, gossipStatus } from './localNodeCommand'
+import { getRate, getServerIPV4Address, gossipStatus } from './localNodeCommand'
 
 
 const conetHoleskyRPC = 'https://rpc.conet.network'
@@ -226,18 +226,20 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 		return logger(Colors.red(`iface.parseLog [${tx}] Error!`))
 	}
 	const args = uu?.args
-
-	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
+	
+	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000'||) {
 		return logger(Colors.grey(`detailTransfer skip [${tx}]`))
+	}
+	const wallet = args[0].toLowerCase()
+	//	admin brun
+	if (wallet === '0x418833b70f882c833ef0f0fcee3fb9d89c79d47c') {
+		return logger(Colors.grey(`detailTransfer skip [${wallet}]`))
 	}
 
 	const startEpoch = transObj.blockNumber
 	const value = parseFloat(ethers.formatEther(args[2]))
-	const wallet = args[0].toLowerCase()
-	const _rate = await getEpochRate(currentEpoch - transObj.blockNumber < 5 ? currentEpoch - 5 : transObj.blockNumber)
 	
-	const rate = (typeof _rate !== 'string'||_rate === '') ? lastrate : parseFloat(_rate)
-	lastrate = rate
+	
 
 	const keepEpoch = Math.round(value/rate)
 	const endEpoch = startEpoch + keepEpoch
@@ -278,7 +280,7 @@ export const getRoute = async (keyID: string) => {
 	return node.ipaddress
 }
 
-const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
+const getEpochRate1: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
 	const cloudStorageEndpointUrl = `${ipfsEndpoint}getFragment/${epoch}_free`
 	
 		P({
@@ -292,7 +294,7 @@ const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) =
 			return resolve (false)
 		})
 		.catch(ex => {
-			logger(`getEpochRate catch EX!`)
+			logger(`getEpochRate catch EX!`, ex.message)
 			return resolve (false)
 		})
 		

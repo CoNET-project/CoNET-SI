@@ -1478,10 +1478,12 @@ const moveData = (block: number) => {
 }
 
 const rateUrl = `https://apiv4.conet.network/api/miningRate?eposh=`
+
 interface rate {
 	totalMiners: number
 	minerRate: number
 }
+
 export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) => {
 	const url = rateUrl + epoch
 	const res = await P({
@@ -1493,12 +1495,14 @@ export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) =
 	return ret
 }
 
+export let lastRate = 0
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	const rate = await getRate(block-2)
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
+	lastRate = rate?.minerRate
 	
 	livenessListeningPool.forEach(async (n, key) => {
 		const res = n.res
