@@ -360,7 +360,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 				
 				if (first) {
 					first = false
-					logger(Colors.magenta(`first`))
+					// logger(Colors.magenta(`first`))
 					try{
 						const uu = JSON.parse(data)
 						callback('', uu)
@@ -369,7 +369,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 					}
 					data = ''
 					res._destroy(null, () => {
-						logger(Colors.magenta(`startGossip stop connecting!`))
+						//logger(Colors.magenta(`startGossip stop connecting!`))
 					})
 				}
 			}
