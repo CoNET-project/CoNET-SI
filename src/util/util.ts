@@ -137,11 +137,11 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
 				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
 				const kkk = await getGuardianNodeWallet(v.nodeInfo)
-				logger(inspect(kkk, false, 3, true))
+				//logger(inspect(kkk, false, 3, true))
 				
 				v.wallet = v.nodeInfo.wallet = kkk.nodeWallet
 				
-				logger(inspect(v, false, 3, true))
+				//logger(inspect(v, false, 3, true))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
 				if (i < GossipLimited) {
 					if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
@@ -275,12 +275,11 @@ export const getRoute = async (keyID: string) => {
 
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
-		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`),inspect(routerInfo.keys(), false, 3, true))
+		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
 		return null
 	}
 	return node.ipaddress
 }
-
 
 const getEpochRate: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
 	const cloudStorageEndpointUrl = `${ipfsEndpoint}getFragment/${epoch}_free`
@@ -447,7 +446,7 @@ const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 			const wallets = data.nodeWallets||[]
 			gossipStatus.nodesWallets.set(node.ipaddress, wallets)
 			if (wallets.length) {
-				logger(inspect(wallets, false, 3, true))
+				//logger(inspect(wallets, false, 3, true))
 			}
 			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
 			
