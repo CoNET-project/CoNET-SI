@@ -55,12 +55,12 @@ export const generateWalletAddress = async ( password: string ) => {
 }
 
 export const loadWalletAddress = async ( walletBase: string, password: string ) => {
-	logger (inspect(walletBase, false, 3, true))
+	//logger (inspect(walletBase, false, 3, true))
 	if (typeof walletBase === 'object') {
 		walletBase = JSON.stringify(walletBase)
 	}
 	const account = await Wallet.fromEncryptedJson (walletBase, password)
-	logger (inspect(account, false, 3, true))
+	//logger (inspect(account, false, 3, true))
 	return account
 }
 
@@ -353,7 +353,7 @@ export const register_to_DL = async ( nodeInit: ICoNET_NodeSetup|null ) => {
 		rejectUnauthorized: false
 	}
 
-	logger (`register_to_DL [${ inspect(option, false, 3, true )}] connect to DL server`)
+	//ogger (`register_to_DL [${ inspect(option, false, 3, true )}] connect to DL server`)
 
 	const response: any = await requestHttpsUrl (option, postJSON)
 
@@ -860,7 +860,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	if (!nodeInfo ) {
 		logger(Colors.red(`${nodeWallet} node has no domain ${validatorData.nodeDomain} Error!`))
-		logger(inspect(routerInfo.keys(), false, 3, true))
+		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
 

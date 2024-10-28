@@ -29,7 +29,6 @@ export const routerInfo: Map<string, nodeInfo> = new Map()
 let gossipNodes: nodeInfo[] = []
 export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
 let getNodeInfoProssing = false
-const GossipLimited = 20
 
 export const checkPayment = (fromAddr: string) => {
 
@@ -143,11 +142,9 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				
 				//logger(inspect(v, false, 3, true))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
-				if (i < GossipLimited) {
-					if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
-						gossipNodes.push(v.nodeInfo)
-					}
-					i ++
+				
+				if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
+					gossipNodes.push(v.nodeInfo)
 				}
 			}
 		}
