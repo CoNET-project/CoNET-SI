@@ -19,7 +19,7 @@ process.on ('uncaughtException', (err) => {
 
 if (Cluster.isPrimary) {
 
-	let openpgp = false
+	let domain = 0
 	const startNode = () => {
 		
 		const worker = Math.floor(cpus().length/2)
@@ -29,9 +29,25 @@ if (Cluster.isPrimary) {
 		
 	}
 
-	const _sslCertificate = (keyid: string) => new Promise((resolve, reject) => {
+	const getDomain = () => {
+		switch (domain) {
+			
+			case 1: {
+				return 'openpgp.online'
+			}
+			case 2: {
+				return 'conetlabs.org'
+			}
+			case 0:
+			default: {
+				return 'conet.online'
+			}
+		}
+	}
 
-		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.${openpgp ? 'openpgp.online':'conet.network'}`
+	const _sslCertificate = (keyid: string) => new Promise((resolve, reject) => {
+		
+		const cmd = `sudo certbot certonly -v --noninteractive --agree-tos --cert-name slickstack --register-unsafely-without-email --webroot -w ${__dirname}/endpoint -d ${keyid}.${getDomain()}`
 		return exec(cmd, (error, stdout, stderr) => {
 			if (error) {
 				logger(Colors.red(error.message))
@@ -94,9 +110,8 @@ if (Cluster.isPrimary) {
 
 
 	const [,,...args] = process.argv
-	if (args[0] == 'true') {
-		logger(`start with openpgp.online!`)
-		openpgp = true
+	if (args[0] ) {
+		domain = parseInt(args[0])||0
 	}
 
 	start()
