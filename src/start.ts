@@ -40,7 +40,7 @@ if (Cluster.isPrimary) {
 			}
 			case 0:
 			default: {
-				return 'conet.online'
+				return 'conet.network'
 			}
 		}
 	}
