@@ -229,12 +229,12 @@ const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	const args = uu?.args
 	
 	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
-		return logger(Colors.grey(`detailTransfer skip [${tx}]`))
+		return //logger(Colors.grey(`detailTransfer skip [${tx}]`))
 	}
 	const wallet = args[0].toLowerCase()
 	//	admin brun
 	if (wallet === '0x418833b70f882c833ef0f0fcee3fb9d89c79d47c') {
-		return logger(Colors.grey(`detailTransfer skip [${wallet}]`))
+		return //logger(Colors.grey(`detailTransfer skip [${wallet}]`))
 	}
 
 	const startEpoch = transObj.blockNumber
