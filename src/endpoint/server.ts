@@ -218,9 +218,9 @@ class conet_si_server {
 			distorySocket(socket)
 		})
 
-		socket.once('end', () => {
-			logger(Colors.green(`${socket.remoteAddress} on END`))
-		})
+		// socket.once('end', () => {
+		// 	logger(Colors.green(`${socket.remoteAddress} on END`))
+		// })
 	}
 
 	private startServer = () => {

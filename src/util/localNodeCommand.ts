@@ -971,17 +971,19 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 			resoestSocket.resume()
 		})
 	
-		socket.on ( 'end', () => {
-			logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
+		socket.once ( 'end', () => {
+			// logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
 			resoestSocket.end().destroy()
 		})
 	
-		socket.on ( 'error', err => {
+		socket.once ( 'error', err => {
+			resoestSocket.end().destroy()
 			logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
 	
 		})
 	
-		resoestSocket.on('error', err => {
+		resoestSocket.once('error', err => {
+			resoestSocket.end().destroy()
 			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
 		})
 	} catch (ex) {
