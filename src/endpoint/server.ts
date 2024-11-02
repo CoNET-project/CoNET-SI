@@ -134,7 +134,7 @@ class conet_si_server {
 
 
 	private sockerdata = (socket: Socket|TLSSocket) => {
-		logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
+		//logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
 		let first = true
 		let data = ''
 		const getData = (bodyLength: number, request_line: string[], htmlHeaders: string[]) => {
@@ -165,7 +165,7 @@ class conet_si_server {
 		}
 
 		const responseHeader = (option: boolean) => {
-			logger(`responseHeader send response headers to ${socket.remoteAddress}`)
+			// logger(`responseHeader send response headers to ${socket.remoteAddress}`)
 			const ret = `HTTP/1.1 ${option ? 204 : 200 } OK\r\n` +
 						//	@ts-ignore
 						`Date: ${new Date().toGMTString()}\r\n` +
