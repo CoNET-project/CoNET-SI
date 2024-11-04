@@ -31,7 +31,9 @@ if (Cluster.isPrimary) {
 
 	const getDomain = () => {
 		switch (domain) {
-			
+			case 3: {
+				return 'theconetian.com'
+			}
 			case 1: {
 				return 'openpgp.online'
 			}
