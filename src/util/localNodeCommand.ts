@@ -1409,6 +1409,7 @@ interface IGossipStatus {
 	totalMiners: number
 	nodeWallets: string[]
 	userWallets: string []
+	totalUsers: number
 }
 
 export let gossipStatus: IGossipStatus = {
@@ -1417,7 +1418,8 @@ export let gossipStatus: IGossipStatus = {
 	nodesWallets: new Map(),
 	totalMiners: 0,
 	nodeWallets: [],
-	userWallets: []
+	userWallets: [],
+	totalUsers: 0
 }
 
 let previousGossipStatus = gossipStatus
@@ -1437,6 +1439,7 @@ interface nodeResponse {
 	nodeIpAddr: string
 	isUser?: boolean
 	userWallets: string[]
+	totalUsers: number
 }
 
 const moveData = (block: number) => {
@@ -1459,7 +1462,8 @@ const moveData = (block: number) => {
 		nodesWallets: new Map(),
 		totalMiners: 0,
 		nodeWallets: [],
-		userWallets: []
+		userWallets: [],
+		totalUsers: 0
 	}
 
 	userWallets.forEach(n => {
@@ -1482,6 +1486,7 @@ const rateUrl = `https://apiv4.conet.network/api/miningRate?eposh=`
 interface rate {
 	totalMiners: number
 	minerRate: number
+	totalUsrs: number
 }
 
 export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) => {
@@ -1522,7 +1527,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			nodeIpAddr,
 			nodeWallets: previousGossipStatus.nodeWallets,
 			minerResponseHash: '',
-			userWallets: previousGossipStatus.userWallets
+			userWallets: previousGossipStatus.userWallets,
+			totalUsers: rate?.totalUsrs
 		}
 
 		// logger(inspect(returnData, false, 3, true))
