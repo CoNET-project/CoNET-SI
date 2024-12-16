@@ -886,9 +886,10 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		clearTimeout(timeout)
 
 		const _timeout = setTimeout(() => {
+			logger(`DELETE validatorWallet ${wallet} from pool total = ${validatorUserPool.size}`)
 			validatorUserPool.delete(wallet)
 		}, 1000 * 60)
-
+		logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
 	}
@@ -1511,7 +1512,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	
 	livenessListeningPool.forEach(async (n, key) => {
 		const res = n.res
-		const message = {epoch: block, wallet: key}
+		const message = {epoch: block.toString(), wallet: key}
 		// logger(inspect(message, false, 3, true))
 		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
 
