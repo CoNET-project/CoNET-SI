@@ -1290,7 +1290,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		livenessListeningPool.delete(wallet)
 	})
 
-	logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
+	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
 
 	return testMinerCOnnecting (res, responseData, wallet, ipaddress)
 }
