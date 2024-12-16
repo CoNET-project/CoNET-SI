@@ -954,7 +954,6 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 	} catch (ex){
 		host = await getHostIpv4(host)
 	}
-	
 
 	if ( port < 1 || port > 65535 || !host) {
 		return distorySocket(resoestSocket)
