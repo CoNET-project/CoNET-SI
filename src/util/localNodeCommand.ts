@@ -842,7 +842,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 	const wallet = command.walletAddress.toLowerCase()
-	const message = {epoch: validatorData.epoch, wallet}
+	const message = {epoch: parseInt(validatorData.epoch.toString()), wallet}
 	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
 
 	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
@@ -888,6 +888,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			logger(`DELETE validatorWallet ${wallet} from pool total = ${validatorUserPool.size}`)
 			validatorUserPool.delete(wallet)
 		}, 1000 * 60)
+
 		//logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
