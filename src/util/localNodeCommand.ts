@@ -1287,7 +1287,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	})
 
 	res.once('close', () => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
+		//logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
 		livenessListeningPool.delete(wallet)
 	})
 
