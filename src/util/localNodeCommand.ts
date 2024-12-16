@@ -956,7 +956,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 	}
 	
 
-	if ( port < 1 || port > 65535  || !prosyData.uuid || !host) {
+	if ( port < 1 || port > 65535 || !host) {
 		return distorySocket(resoestSocket)
 	}
 
