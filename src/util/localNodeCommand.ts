@@ -1392,7 +1392,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	nodeWallet = nodePrivate.address.toLowerCase()
 
 	CONETProvider.on('block', block => {
-		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
+		//logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		validatorMinerPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
@@ -1444,7 +1444,7 @@ interface nodeResponse {
 
 const moveData = (block: number) => {
 
-	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
+	//logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
 
 	const _wallets = validatorMinerPool.get (block-1)
 

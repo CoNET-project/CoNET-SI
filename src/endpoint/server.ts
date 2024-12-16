@@ -149,8 +149,8 @@ class conet_si_server {
 			try {
 				body = JSON.parse(request_line[1])
 			} catch (ex) {
-				logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-				logger(request_line[1])
+				//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+				//logger(request_line[1])
 				return distorySocket(socket)
 			}
 			
@@ -261,7 +261,7 @@ class conet_si_server {
 						try {
 							body = JSON.parse(request_line[1])
 						} catch (ex) {
-							logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+							//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
 							return distorySocket(socket)
 						}
 						
