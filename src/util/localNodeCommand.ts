@@ -847,7 +847,6 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
 		logger(Colors.red(`validatorMining verifyMessage hash Error! nodeWallet ${nodeWallet} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
-		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
 
