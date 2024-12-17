@@ -846,7 +846,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
 
 	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
-		logger(Colors.red(`validatorMining verifyMessage hash Error! nodeWallet ${nodeWallet} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()}`))
+		logger(Colors.red(`validatorMining verifyMessage hash Error! nodeWallet ${nodeWallet} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()} wallet = ${wallet}`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
