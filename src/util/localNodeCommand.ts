@@ -842,7 +842,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 	const wallet = command.walletAddress.toLowerCase()
-	const message = {epoch: parseInt(validatorData.epoch.toString()), wallet}
+	const message = {epoch: validatorData.epoch, wallet}
 	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
 
 	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
