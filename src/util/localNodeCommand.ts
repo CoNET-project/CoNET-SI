@@ -889,7 +889,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			validatorUserPool.delete(wallet)
 		}, 1000 * 60)
 
-		//logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
+		logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
 	}
