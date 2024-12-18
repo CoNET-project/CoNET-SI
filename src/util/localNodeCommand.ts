@@ -1516,9 +1516,9 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 		// logger(inspect(message, false, 3, true))
 		const signMessage = await nodeWprivateKey.signMessage(JSON.stringify(message))
 
-		const returnData: nodeResponse = {
+		const returnData = {
 			status: 200,
-			epoch: block,
+			epoch: block.toString(),
 			rate: rate?.minerRate,
 			hash: signMessage,
 			nodeWallet,
@@ -1531,8 +1531,6 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 			userWallets: previousGossipStatus.userWallets,
 			totalUsers: rate?.totalUsrs
 		}
-
-		// logger(inspect(returnData, false, 3, true))
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
 
 	})
