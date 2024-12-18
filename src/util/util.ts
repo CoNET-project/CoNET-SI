@@ -331,7 +331,6 @@ const getEpochRate1: (epoch: number) => Promise<boolean|string> = async (epoch) 
 // }
 
 const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
-	
 
 	const option: RequestOptions = {
 		host: node.ipaddress,
@@ -356,7 +355,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 		let _Time: NodeJS.Timeout
 
 		res.on ('data', _data => {
-			clearTimeout(_Time)
+			
 			data += _data.toString()
 			
 			if (/\r\n\r\n/.test(data)) {
@@ -418,45 +417,45 @@ export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: str
 	})
 })
 
-const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
+// const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	
-	const wallet = new ethers.Wallet(privateKey)
-	const command = {
-		command: 'mining',
-		walletAddress: wallet.address.toLowerCase()
-	}
+// 	const wallet = new ethers.Wallet(privateKey)
+// 	const command = {
+// 		command: 'mining',
+// 		walletAddress: wallet.address.toLowerCase()
+// 	}
 	
-	const message =JSON.stringify(command)
-	const signMessage = await wallet.signMessage(message)
-	const encryptObj = {
-        message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
-		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
-		config: { preferredCompressionAlgorithm: enums.compression.zlib } 		// compress the data with zlib
-    }
+// 	const message =JSON.stringify(command)
+// 	const signMessage = await wallet.signMessage(message)
+// 	const encryptObj = {
+//         message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
+// 		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
+// 		config: { preferredCompressionAlgorithm: enums.compression.zlib } 		// compress the data with zlib
+//     }
 
-	const postData = await encrypt (encryptObj)
-	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-	startGossip(node, JSON.stringify({data: postData}), (err, _data ) => {
-		if (!_data) {
-			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
-		}
+// 	const postData = await encrypt (encryptObj)
+// 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
+// 	startGossip(node, JSON.stringify({data: postData}), (err, _data ) => {
+// 		if (!_data) {
+// 			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
+// 		}
 
-		try {
-			const data = JSON.parse(_data)
-			const wallets = data.nodeWallets||[]
-			gossipStatus.nodesWallets.set(node.ipaddress, wallets)
-			if (wallets.length) {
-				//logger(inspect(wallets, false, 3, true))
-			}
-			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
+// 		try {
+// 			const data = JSON.parse(_data)
+// 			const wallets = data.nodeWallets||[]
+// 			gossipStatus.nodesWallets.set(node.ipaddress, wallets)
+// 			if (wallets.length) {
+// 				//logger(inspect(wallets, false, 3, true))
+// 			}
+// 			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
 			
-		} catch (ex) {
-			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
-			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
-		}
+// 		} catch (ex) {
+// 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
+// 			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
+// 		}
 
-	})
-}
+// 	})
+// }
 
 export const startEventListening = async (privateKey: string, keyID: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
@@ -488,16 +487,16 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 	
 }
 
-const startGossipListening = (privateKey: string) => {
-	if (!gossipNodes.length) {
-		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
-	}
-	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
-	gossipNodes.forEach(n => {
-		connectToGossipNode(privateKey, n)
-	})
+// const startGossipListening = (privateKey: string) => {
+// 	if (!gossipNodes.length) {
+// 		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
+// 	}
+// 	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
+// 	gossipNodes.forEach(n => {
+// 		connectToGossipNode(privateKey, n)
+// 	})
 	
-}
+// }
 
 export const getNodeWallet = (nodeIpaddress: string) => {
 	const index = gossipNodes.findIndex(n => n.ipaddress === nodeIpaddress)
