@@ -206,59 +206,59 @@ let lastrate: number
 let localPublicKeyID = ''
 let localWallet: ethers.Wallet
 
-const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
+// const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
 	
-	const transObj = await provider.getTransactionReceipt(tx)
+// 	const transObj = await provider.getTransactionReceipt(tx)
 
-	const toAddr = transObj?.to?.toLowerCase()
+// 	const toAddr = transObj?.to?.toLowerCase()
 	
-	if ( GuardianNodesInfoV6 === toAddr) {
-		return await initGuardianNodes()
-	}
+// 	if ( GuardianNodesInfoV6 === toAddr) {
+// 		return await initGuardianNodes()
+// 	}
 
-	if (!toAddr || toAddr !== newCNTP_v8 || transObj?.logs?.length !== 1 ) {
-		return //logger(Colors.gray(`Skip tx ${tx}`))
-	}
+// 	if (!toAddr || toAddr !== newCNTP_v8 || transObj?.logs?.length !== 1 ) {
+// 		return //logger(Colors.gray(`Skip tx ${tx}`))
+// 	}
 
-	let uu: ethers.LogDescription|null
-	try {
-		uu = iface.parseLog(transObj.logs[0])
-	} catch (ex) {
-		return logger(Colors.red(`iface.parseLog [${tx}] Error!`))
-	}
-	const args = uu?.args
+// 	let uu: ethers.LogDescription|null
+// 	try {
+// 		uu = iface.parseLog(transObj.logs[0])
+// 	} catch (ex) {
+// 		return logger(Colors.red(`iface.parseLog [${tx}] Error!`))
+// 	}
+// 	const args = uu?.args
 	
-	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
-		return //logger(Colors.grey(`detailTransfer skip [${tx}]`))
-	}
-	const wallet = args[0].toLowerCase()
-	//	admin brun
-	if (wallet === '0x418833b70f882c833ef0f0fcee3fb9d89c79d47c') {
-		return //logger(Colors.grey(`detailTransfer skip [${wallet}]`))
-	}
+// 	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
+// 		return //logger(Colors.grey(`detailTransfer skip [${tx}]`))
+// 	}
+// 	const wallet = args[0].toLowerCase()
+// 	//	admin brun
+// 	if (wallet === '0x418833b70f882c833ef0f0fcee3fb9d89c79d47c') {
+// 		return //logger(Colors.grey(`detailTransfer skip [${wallet}]`))
+// 	}
 
-	const startEpoch = transObj.blockNumber
-	const value = parseFloat(ethers.formatEther(args[2]))
+// 	const startEpoch = transObj.blockNumber
+// 	const value = parseFloat(ethers.formatEther(args[2]))
 	
 	
 
-	const keepEpoch = Math.round(value/lastrate)
-	const endEpoch = startEpoch + keepEpoch
-	if (endEpoch < currentEpoch) {
-		return logger(Colors.blue(`Brun cCNTP [${wallet}] , value [${value}] rate type = ${typeof lastrate} [${lastrate}] start [${startEpoch}] end = [${Colors.magenta(endEpoch.toString())}] current epoch = [${Colors.red(currentEpoch.toString())}]`))
-	}
-	const pass: NodList = {
-		wallet: wallet,
-		isGuardianNode: false,
-		Expired: endEpoch,
-		nodeID: 0,
-		nodeInfo: null,
-		value
-	}
-	useNodeReceiptList.set (wallet, pass)
-	logger(Colors.magenta(`add Silent Pass [${pass.wallet}] end Epoch = [${pass.Expired}] `))
+// 	const keepEpoch = Math.round(value/lastrate)
+// 	const endEpoch = startEpoch + keepEpoch
+// 	if (endEpoch < currentEpoch) {
+// 		return logger(Colors.blue(`Brun cCNTP [${wallet}] , value [${value}] rate type = ${typeof lastrate} [${lastrate}] start [${startEpoch}] end = [${Colors.magenta(endEpoch.toString())}] current epoch = [${Colors.red(currentEpoch.toString())}]`))
+// 	}
+// 	const pass: NodList = {
+// 		wallet: wallet,
+// 		isGuardianNode: false,
+// 		Expired: endEpoch,
+// 		nodeID: 0,
+// 		nodeInfo: null,
+// 		value
+// 	}
+// 	useNodeReceiptList.set (wallet, pass)
+// 	logger(Colors.magenta(`add Silent Pass [${pass.wallet}] end Epoch = [${pass.Expired}] `))
 	
-}
+// }
 
 const cleanupUseNodeReceiptList = (epoch: number) => {
 	useNodeReceiptList.forEach((v,key) => {
@@ -302,33 +302,33 @@ const getEpochRate1: (epoch: number) => Promise<boolean|string> = async (epoch) 
 	
 })
 
-const checkBlock = async (block: number) => {
-	//logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
-	const blockDetail = await CONETProvider.getBlock(block)
-	if (!blockDetail?.transactions) {
-		return logger(Colors.gray(`checkBlock block ${block} hasn't any transactions`))
-	}
+// const checkBlock = async (block: number) => {
+// 	//logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
+// 	const blockDetail = await CONETProvider.getBlock(block)
+// 	if (!blockDetail?.transactions) {
+// 		return logger(Colors.gray(`checkBlock block ${block} hasn't any transactions`))
+// 	}
 
-	const execPoll = []
-	for (let u of blockDetail.transactions) {
-		execPoll.push(detailTransfer(u, CONETProvider))
-	}
+// 	const execPoll = []
+// 	for (let u of blockDetail.transactions) {
+// 		execPoll.push(detailTransfer(u, CONETProvider))
+// 	}
 
-	await Promise.all([...execPoll])
-}
+// 	await Promise.all([...execPoll])
+// }
 
-const scanPassedEpoch = async () => {
-	const endEpoch = currentEpoch
-	const startEpoch = currentEpoch - (5*60) * 3
-	const execPool: number[] = []
-	for (let i = startEpoch; i <= endEpoch; i ++) {
-		execPool.push(i)
-	}
+// const scanPassedEpoch = async () => {
+// 	const endEpoch = currentEpoch
+// 	const startEpoch = currentEpoch - (5*60) * 3
+// 	const execPool: number[] = []
+// 	for (let i = startEpoch; i <= endEpoch; i ++) {
+// 		execPool.push(i)
+// 	}
 
-	await mapLimit(execPool,1, async (n, next) => {
-		await checkBlock(n)
-	})
-}
+// 	await mapLimit(execPool,1, async (n, next) => {
+// 		await checkBlock(n)
+// 	})
+// }
 
 const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
 	
@@ -468,21 +468,21 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 	localWallet = new ethers.Wallet(privateKey)
 	await initGuardianNodes()
 	// startGossipListening(privateKey)
-	await scanPassedEpoch()
+	// await scanPassedEpoch()
 	
 	CONETProvider.on('block', async block => {
 		currentEpoch = block
 		cleanupUseNodeReceiptList(block)
-		const blockDetail = await CONETProvider.getBlock(block)
-		if (!blockDetail?.transactions) {
-			return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
-		}
-		//@ts-ignore
-		const transactions: string[] = blockDetail.transactions
+		// const blockDetail = await CONETProvider.getBlock(block)
+		// if (!blockDetail?.transactions) {
+		// 	return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
+		// }
+		
+		// const transactions: string[] = blockDetail.transactions
 
-		await mapLimit(transactions, 1, async (n, next) => {
-			await detailTransfer(n, CONETProvider)
-		})
+		// await mapLimit(transactions, 1, async (n, next) => {
+		// 	await detailTransfer(n, CONETProvider)
+		// })
 		
 	})
 	
