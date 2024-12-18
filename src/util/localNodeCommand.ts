@@ -876,8 +876,14 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 	
 	const validatorWallet = ethers.verifyMessage(validatorData.hash, validatorData.minerResponseHash).toLowerCase()
+
 	if (validatorWallet !== wallet) {
 		logger(Colors.red(`validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
+		return distorySocket(socket)
+	}
+
+	const epochNumber = parseInt(validatorData.epoch.toString())
+	if (epochNumber < CurrentEpoch) {
 		return distorySocket(socket)
 	}
 
@@ -894,18 +900,13 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
 	}
-
-	const obj = validatorMinerPool.get (validatorData.epoch)
-
+	
+	const obj = validatorMinerPool.get (epochNumber)
+	
 	if (!obj) {
-		//	Passed EPOCH
-		if (validatorData.epoch < CurrentEpoch) {
-			return distorySocket(socket)
-		}
-
 		const newEpoch: Map<string, boolean> = new Map()
 		newEpoch.set(wallet, true)
-		validatorMinerPool.set (validatorData.epoch, newEpoch)
+		validatorMinerPool.set (epochNumber, newEpoch)
 		
 	} else {
 		obj.set(wallet, true)
