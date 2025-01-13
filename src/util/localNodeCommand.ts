@@ -908,7 +908,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 		return distorySocket(socket)
 	}
-	
+
 	const obj = validatorMinerPool.get (epochNumber)
 	
 	if (!obj) {
@@ -947,9 +947,9 @@ const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Pro
 	})
 })
 
-const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) => {
+const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
 
-    logger (Colors.blue (`socks5Connect connect to [${prosyData.host}:${prosyData.port}]`))
+    logger (Colors.blue (`${wallet} socks5Connect connect to [${prosyData.host}:${prosyData.port}]`))
 	const port = prosyData.port
 	let host = prosyData.host
 	if (!host) {
@@ -973,7 +973,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 		const socket = createConnection ( port, host, () => {
 
 			socket.pipe(resoestSocket).pipe(socket).on('error', err => {
-				logger(Colors.red(`socks5Connect pipe on Error`), err)
+				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
 			})
 	
 			const data = Buffer.from(prosyData.buffer, 'base64')
@@ -997,7 +997,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket) =
 			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
 		})
 	} catch (ex) {
-		logger(`createConnection On catch`, ex)
+		logger(`createConnection On catch ${wallet}`, ex)
 		resoestSocket.end().destroy()
 	}
 
