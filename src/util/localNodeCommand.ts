@@ -836,7 +836,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const validatorData: nodeResponse = command.requestData
 
 	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash||!command?.walletAddress) {
-		logger(Colors.red(`validatorMining has null validatorData`))
+		logger(Colors.red(`${command.walletAddress} validatorMining has null validatorData`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
@@ -857,7 +857,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
-		logger(Colors.red(`${nodeWallet} node has no domain ${validatorData.nodeDomain} Error!`))
+		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
@@ -865,7 +865,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	if(!nodeInfo.wallet){
 		const info = await getGuardianNodeWallet(nodeInfo)
 		nodeInfo.wallet = info.nodeWallet
-		logger(Colors.blue(`getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
+		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
 
 	if (nodeInfo.wallet !== nodeWallet) {
@@ -878,7 +878,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const validatorWallet = ethers.verifyMessage(validatorData.hash, validatorData.minerResponseHash).toLowerCase()
 
 	if (validatorWallet !== wallet) {
-		logger(Colors.red(`validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
+		logger(Colors.red(`${command.walletAddress} validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
 		return distorySocket(socket)
 	}
 
@@ -888,6 +888,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 	if (validatorData.isUser) {
+		logger(`validatorData ${wallet} is USER!`)
 		const timeout = validatorUserPool.get(wallet)
 		clearTimeout(timeout)
 
