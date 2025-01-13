@@ -778,7 +778,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
 
 			const prosyData = command.requestData[0]
-			return socks5Connect(prosyData, socket)
+			return socks5Connect(prosyData, socket, command.walletAddress)
 		}
 
         case 'SaaS_Proxy': {
