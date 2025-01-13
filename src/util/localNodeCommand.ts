@@ -861,32 +861,32 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
-
+	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass1`))
 	if(!nodeInfo.wallet){
 		const info = await getGuardianNodeWallet(nodeInfo)
 		nodeInfo.wallet = info.nodeWallet
 		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
-
+	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass2`))
 	if (nodeInfo.wallet !== nodeWallet) {
 		logger(Colors.red(`${nodeWallet} node hash from domain ${validatorData.nodeDomain} of nodeInfo.wallet = ${nodeInfo ?nodeInfo.wallet: ''} !== nodeWallet ${nodeWallet} have not node information Error!`))
 		
 		logger(inspect(nodeInfo, false, 3, true))
 		return distorySocket(socket)
 	}
-	
+	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass3`))
 	const validatorWallet = ethers.verifyMessage(validatorData.hash, validatorData.minerResponseHash).toLowerCase()
 
 	if (validatorWallet !== wallet) {
 		logger(Colors.red(`${command.walletAddress} validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
 		return distorySocket(socket)
 	}
-
+	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass4`))
 	const epochNumber = parseInt(validatorData.epoch.toString())
 	if (epochNumber < CurrentEpoch) {
 		return distorySocket(socket)
 	}
-
+	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass5`))
 	if (validatorData.isUser) {
 		logger(`validatorData ${wallet} is USER!`)
 		const timeout = validatorUserPool.get(wallet)
