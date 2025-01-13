@@ -764,7 +764,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
-
+	logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
