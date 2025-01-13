@@ -886,7 +886,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	
 	if (validatorData.isUser) {
 
-		if (CurrentEpoch - epochNumber > 2) {
+		if (CurrentEpoch - epochNumber > 5) {
 			logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 			return distorySocket(socket)
 		}
