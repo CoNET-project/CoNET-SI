@@ -883,13 +883,13 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 	
 	const epochNumber = parseInt(validatorData.epoch.toString())
-	if (epochNumber < CurrentEpoch) {
-		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
-		return distorySocket(socket)
-	}
-
-	logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} pass5`))
+	
 	if (validatorData.isUser) {
+
+		if (CurrentEpoch - epochNumber > 2) {
+			logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
+			return distorySocket(socket)
+		}
 		logger(`validatorData ${wallet} is USER!`)
 		const timeout = validatorUserPool.get(wallet)
 		clearTimeout(timeout)
@@ -902,6 +902,11 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
+	}
+	
+	if (CurrentEpoch - epochNumber > 0) {
+		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
+		return distorySocket(socket)
 	}
 	
 	const obj = validatorMinerPool.get (epochNumber)
