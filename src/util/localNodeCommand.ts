@@ -890,7 +890,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 			return distorySocket(socket)
 		}
-		logger(`validatorData ${wallet} is USER!`)
+		logger(`validatorData ${wallet} ephco ${epochNumber} CurrentEpoch ${CurrentEpoch} delay = [${CurrentEpoch - epochNumber}] goto USER Pool! `)
 		const timeout = validatorUserPool.get(wallet)
 		clearTimeout(timeout)
 
