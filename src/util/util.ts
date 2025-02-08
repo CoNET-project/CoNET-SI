@@ -14,21 +14,28 @@ import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getRate, getServerIPV4Address, gossipStatus } from './localNodeCommand'
 
 
-const conetHoleskyRPC = 'https://rpc.conet.network'
+const conetHoleskyRPC1 = 'https://rpc.conet.network'
+const CoNET_CancunRPC = 'https://cacun-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 const cCNTPAddr_old = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const newCNTP_v8 = '0xa4b389994A591735332A67f3561D60ce96409347'.toLowerCase()
 const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
 const GuardianNodesInfoV5_old = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
-const GuardianNodesInfoV6 = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLowerCase()
-const GuardianNFT = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
+const GuardianNodesInfoV6_Holesky = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLowerCase()
+
+
+const GuardianNFT1 = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
+const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
+const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
+
+
 let GlobalIpAddress = ''
 
 export const useNodeReceiptList: Map<string, NodList> = new Map()
 export const routerInfo: Map<string, nodeInfo> = new Map()
 
 let gossipNodes: nodeInfo[] = []
-export const CONETProvider = new ethers.JsonRpcProvider(conetHoleskyRPC)
+export const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
 let getNodeInfoProssing = false
 
 export const checkPayment = (fromAddr: string) => {
@@ -57,11 +64,13 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 	}
 	logger(`initGuardianNodes start running!`)
 	getNodeInfoProssing = true
-	const guardianSmartContract = new ethers.Contract(GuardianNFT, GuardianNodesV2ABI, CONETProvider)
-	const GuardianNodesInfoV3Contract = new ethers.Contract(GuardianNodesInfoV6, openPGPContractAbi, CONETProvider)
+
+	const guardianSmartContract_Cancun = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
+
+	const GuardianNodesInfoV3Contract_Cancun = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
 	let nodes
 	try {
-		nodes = await guardianSmartContract.getAllIdOwnershipAndBooster()
+		nodes = await guardianSmartContract_Cancun.getAllIdOwnershipAndBooster()
 	} catch (ex: any) {
 		getNodeInfoProssing = false
 		console.error(Colors.red(`guardianReferrals guardianSmartContract.getAllIdOwnershipAndBooster() Error!`), ex.mesage)
@@ -85,7 +94,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 			wallet: ''
 		}
 
-		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract.getNodeInfoById(nodeID)
+		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract_Cancun.getNodeInfoById(nodeID)
 
 		if (ipaddress) {
 			if (ipaddress !== GlobalIpAddress) {
@@ -100,9 +109,6 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 
 		return null
 	}
-
-
-
 
 	_nodesAddress.forEach(async (n, index) => {
 		

@@ -1115,6 +1115,8 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	try {
 		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
 		content = JSON.parse(Buffer.from(decryptedObj.data.toString(),'base64').toString())
+		
+		content.pgpSign
 	} catch (ex) {
 		logger (Colors.red(` decryptMessage EX ERROR, distorySocket!`))
 		return distorySocket(socket)
@@ -1125,6 +1127,9 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		logger(inspect(content, false,3, true))
 		return distorySocket(socket)
 	}
+
+
+
 	const command = checkSign (content.message, content.signMessage)
 
 	if (!command) {
@@ -1402,6 +1407,9 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	nodeWallet = nodePrivate.address.toLowerCase()
 
 	CONETProvider.on('block', block => {
+		if (block % 2) {
+			return
+		}
 		//logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		validatorMinerPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
