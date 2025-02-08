@@ -908,15 +908,17 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 		return distorySocket(socket)
 	}
-	logger(Colors.blue(`validatorMining wallet epoch [${epochNumber}] ${wallet} to POOL ${validatorMinerPool.size}`))
+	
 	const obj = validatorMinerPool.get (epochNumber)
 	
 	if (!obj) {
+		logger(Colors.blue(`validatorMining wallet with new epoch [${epochNumber}] ${wallet} to POOL ${validatorMinerPool.size}`))
 		const newEpoch: Map<string, boolean> = new Map()
 		newEpoch.set(wallet, true)
 		validatorMinerPool.set (epochNumber, newEpoch)
 		
 	} else {
+		logger(Colors.grey(`validatorMining wallet with old epoch [${epochNumber}] ${wallet} to POOL ${validatorMinerPool.size}`))
 		obj.set(wallet, true)
 	}
 
