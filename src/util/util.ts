@@ -15,7 +15,7 @@ import { getRate, getServerIPV4Address, gossipStatus } from './localNodeCommand'
 
 
 const conetHoleskyRPC1 = 'https://rpc.conet.network'
-const CoNET_CancunRPC = 'https://cacun-rpc.conet.network'
+const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 const cCNTPAddr_old = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
 const newCNTP_v8 = '0xa4b389994A591735332A67f3561D60ce96409347'.toLowerCase()
