@@ -1464,10 +1464,11 @@ interface nodeResponse {
 
 const moveData = (block: number) => {
 
-	//logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${block-1})`))
+	
 
-	const _wallets = validatorMinerPool.get (block-1)
-
+	const _wallets = validatorMinerPool.get (block-2)
+	
+	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets?.size}) `))
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	const userWallets = [...validatorUserPool.keys()]
 	// logger(inspect(nodeWallets, false, 3, true))
