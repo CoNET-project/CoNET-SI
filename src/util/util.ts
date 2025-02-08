@@ -133,7 +133,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		
 		if (!result) {
 			logger(Colors.magenta(`await getNodeInfo(${v.nodeID}) get Error ${result}`))
-			next(new Error('have no more Info'))
+			
 		}
 
 		if (result !== true) {
@@ -512,3 +512,4 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
+
