@@ -149,14 +149,14 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				
 				//logger(inspect(v, false, 3, true))
 				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
-				logger(`initGuardianNodes init node ${v.nodeID} IP address ${v.wallet}`)
+				logger(Colors.magenta(`initGuardianNodes init node ${v.nodeID} IP address ${v.wallet}`))
 				if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
 					gossipNodes.push(v.nodeInfo)
 				}
 			}
 		}
 	}, err => {
-		logger(`initGuardianNodes finished!`)
+		logger(Colors.magenta(`initGuardianNodes finished!`))
 		return resolve(true)
 	})
 })
