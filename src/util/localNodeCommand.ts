@@ -908,7 +908,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 		return distorySocket(socket)
 	}
-
+	logger(Colors.blue(`validatorMining wallet ${wallet} to POOL ${validatorMinerPool.size}`))
 	const obj = validatorMinerPool.get (epochNumber)
 	
 	if (!obj) {
