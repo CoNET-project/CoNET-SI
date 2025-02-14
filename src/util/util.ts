@@ -383,7 +383,7 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 		})
 
 		res.once('error', err => {
-			logger(Colors.red(`startGossip [${node.ipaddress}] res on ERROR!`), err.message)
+			//logger(Colors.red(`startGossip [${node.ipaddress}] res on ERROR!`), err.message)
 		})
 
 		res.once('end', () => {
@@ -477,7 +477,7 @@ export const startEventListening = async (privateKey: string, keyID: string) => 
 	// await scanPassedEpoch()
 	
 	CONETProvider.on('block', async block => {
-		
+
 		currentEpoch = block
 		cleanupUseNodeReceiptList(block)
 		// const blockDetail = await CONETProvider.getBlock(block)
