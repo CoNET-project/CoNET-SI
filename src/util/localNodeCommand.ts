@@ -1585,6 +1585,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	}
 
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
+	logger(inspect(rate, false, 3, true))
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
