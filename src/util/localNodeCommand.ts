@@ -30,7 +30,7 @@ import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
 import {CONETProvider, routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet } from '../util/util'
 import P from 'phin'
-
+import epoch_info_ABI from './epoch_info_managerABI.json'
 const KB = 1000
 const MB = 1000 * KB
 
@@ -1404,6 +1404,52 @@ let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 let nodeWallet = ''
 
+const getTx = async (tx: string) => {
+	return await CONETProvider.getTransactionReceipt(tx)
+}
+
+const epoch_mining_info_cancun_addr = '0xbd7Ffe8a04AbDE761D3ab4724E8b7f83d802e036'.toLocaleLowerCase()
+const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI)
+
+const checkTransfer = (tR: ethers.TransactionReceipt) => {
+	for (let log of tR.logs) {
+		const LogDescription = epoch_mining_infoSC.interface.parseLog(log)
+
+		if (LogDescription?.name === 'eIpdateInfo') {
+			const hash = tR.hash
+			logger(inspect(LogDescription.args, false, 3, true))
+			const totalMiners = LogDescription.args[0].toString()
+			const minerRate = parseFloat(ethers.formatEther(LogDescription.args[1].toString()))
+			const totalUsrs = LogDescription.args[2].toString()
+			const epoch = LogDescription.args[3].toString()
+			currentRate = {
+				totalMiners,  minerRate, totalUsrs, epoch
+			}
+
+
+		} else {
+			logger(LogDescription?.name)
+		}
+	}
+}
+
+
+const searchEpochEvent = async (block: number) => {
+	const blockTs = await CONETProvider.getBlock(block)
+	
+	if (!blockTs?.transactions) {
+        return //logger(Colors.gray(`holeskyBlockListenning ${block} has none`))
+    }
+	for (let tx of blockTs.transactions) {
+
+		const event = await getTx(tx)
+		
+		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
+			checkTransfer(event)
+		}
+	}
+}
+
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
@@ -1411,6 +1457,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	getFaucet(nodePrivate)
 
 	CONETProvider.on('block', block => {
+		searchEpochEvent(block)
 		if (block % 2) {
 			return
 		}
@@ -1506,10 +1553,12 @@ const moveData = (block: number) => {
 const apiEndpoint = `https://apiv4.conet.network/api/`
 const rateUrl = `${apiEndpoint}miningRate?eposh=`
 const FaucetURL = `${apiEndpoint}conet-faucet`
+
 interface rate {
 	totalMiners: number
 	minerRate: number
 	totalUsrs: number
+	epoch: number
 }
 
 const httpsPostToUrl = (url: string, body: string) => new Promise(resolve =>{
@@ -1560,30 +1609,15 @@ export const getFaucet = async (wallet: Wallet) => {
 	await httpsPostToUrl(FaucetURL, data)
 }
 
-export const getRate: (epoch: number) => Promise<rate|null> = async (epoch: number) => {
-	const url = rateUrl + epoch
-	try {
-		const res = await P({
-			url,
-			parse: 'json'
-		})
-		//	@ts-ignore
-		const ret: rate = res?.body
-		return ret
-	} catch (ex:any) {
-		return null
-	}
-	
-}
+let currentRate: rate|null = null
 
 
 export let lastRate = 0
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
-	const rate = await getRate(block-2)
+	const rate = currentRate
 	if (!rate) {
-		return logger(Colors.grey(`stratliveness EPOCH ${block} Error!  await getRate return null!!`))
+		return logger(Colors.red(`stratlivenessV2 currentRate is NULL error STOP!`))
 	}
-
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 	logger(inspect(rate, false, 3, true))
 
@@ -1620,3 +1654,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
+
+
+
+searchEpochEvent(105980)

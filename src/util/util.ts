@@ -11,7 +11,7 @@ import {request} from 'node:http'
 import P from 'phin'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
-import { getRate, getServerIPV4Address, gossipStatus } from './localNodeCommand'
+import { getServerIPV4Address } from './localNodeCommand'
 
 const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
