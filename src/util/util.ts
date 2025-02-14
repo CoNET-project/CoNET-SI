@@ -50,7 +50,6 @@ export const checkPayment = (fromAddr: string) => {
 		useNodeReceiptList.delete (fromAddr.toLowerCase())
 		return false
 	}
-
 	return true
 }
 
