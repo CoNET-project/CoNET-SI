@@ -918,7 +918,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		validatorMinerPool.set (epochNumber, newEpoch)
 		
 	} else {
-		logger(Colors.grey(`validatorMining wallet with old epoch [${epochNumber}] ${wallet} to POOL ${obj.size}`))
+		//logger(Colors.grey(`validatorMining wallet with old epoch [${epochNumber}] ${wallet} to POOL ${obj.size}`))
 		obj.set(wallet, true)
 	}
 
