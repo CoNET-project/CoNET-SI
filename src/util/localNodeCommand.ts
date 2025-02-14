@@ -912,7 +912,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const obj = validatorMinerPool.get (epochNumber)
 	
 	if (!obj) {
-		logger(Colors.blue(`validatorMining wallet with new epoch [${epochNumber}] ${wallet} to POOL ${1}`))
+		//logger(Colors.blue(`validatorMining wallet with new epoch [${epochNumber}] ${wallet} to POOL ${1}`))
 		const newEpoch: Map<string, boolean> = new Map()
 		newEpoch.set(wallet, true)
 		validatorMinerPool.set (epochNumber, newEpoch)

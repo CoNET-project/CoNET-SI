@@ -272,12 +272,12 @@ class conet_si_server {
 					}
 
 					const readMore = () => {
-						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 						socket.once('data', _data => {
 							
 							request_line[1] += _data
 							if (request_line[1].length < bodyLength) {
-								logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+								//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 								return readMore ()
 							}
 							
