@@ -764,7 +764,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
-	logger(`wallet ${command.walletAddress} command = ${command.command}`)
+	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
@@ -890,7 +890,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 			return distorySocket(socket)
 		}
-		logger(`validatorData ${wallet} ephco ${epochNumber} CurrentEpoch ${CurrentEpoch} delay = [${CurrentEpoch - epochNumber}] goto USER Pool! `)
+		//logger(`validatorData ${wallet} ephco ${epochNumber} CurrentEpoch ${CurrentEpoch} delay = [${CurrentEpoch - epochNumber}] goto USER Pool! `)
 		const timeout = validatorUserPool.get(wallet)
 		clearTimeout(timeout)
 
@@ -1560,22 +1560,30 @@ export const getFaucet = async (wallet: Wallet) => {
 	await httpsPostToUrl(FaucetURL, data)
 }
 
-export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) => {
+export const getRate: (epoch: number) => Promise<rate|null> = async (epoch: number) => {
 	const url = rateUrl + epoch
-	const res = await P({
-		url,
-		parse: 'json'
-	})
-	//	@ts-ignore
-	const ret: rate = res?.body
-	return ret
+	try {
+		const res = await P({
+			url,
+			parse: 'json'
+		})
+		//	@ts-ignore
+		const ret: rate = res?.body
+		return ret
+	} catch (ex:any) {
+		return null
+	}
+	
 }
 
 
 export let lastRate = 0
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	const rate = await getRate(block-2)
-
+	if (!rate) {
+		return logger(Colors.grey(`stratliveness EPOCH ${block} Error!  await getRate return null!!`))
+	}
+	
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
