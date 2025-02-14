@@ -857,7 +857,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
-		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
+		//logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
@@ -887,7 +887,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	if (validatorData.isUser) {
 
 		if (CurrentEpoch - epochNumber > 5) {
-			logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
+			//logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 			return distorySocket(socket)
 		}
 		//logger(`validatorData ${wallet} ephco ${epochNumber} CurrentEpoch ${CurrentEpoch} delay = [${CurrentEpoch - epochNumber}] goto USER Pool! `)
@@ -899,13 +899,13 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			validatorUserPool.delete(wallet)
 		}, 1000 * 60 * 5)
 
-		logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
+		//logger(`Added validatorWallet ${wallet} to pool total = ${validatorUserPool.size}`)
 		validatorUserPool.set (wallet, _timeout)
 		return response200Html(socket, JSON.stringify(validatorData))
 	}
 	
 	if (CurrentEpoch - epochNumber > 0) {
-		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
+		//logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
 		return distorySocket(socket)
 	}
 	
@@ -1583,7 +1583,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	if (!rate) {
 		return logger(Colors.grey(`stratliveness EPOCH ${block} Error!  await getRate return null!!`))
 	}
-	
+
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()
