@@ -1385,10 +1385,10 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 	if (res.writable && !res.closed) {
 		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
 			if (err) {
-				logger(Colors.grey (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
+				logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 				livenessListeningPool.delete(wallet)
 			} else {
-				logger(Colors.magenta(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
+				logger(Colors.grey(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
 			}
 			
 			return resolve (true)
@@ -1396,7 +1396,7 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 		
 	}
 	livenessListeningPool.delete(wallet)
-	logger(Colors.grey (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
+	logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 	return resolve (true)
 })
 
