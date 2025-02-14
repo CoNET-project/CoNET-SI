@@ -1407,7 +1407,7 @@ let nodeWallet = ''
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
-
+	getFaucet(nodePrivate)
 	CONETProvider.on('block', block => {
 		if (block % 2) {
 			return
@@ -1501,13 +1501,61 @@ const moveData = (block: number) => {
 	
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
 }
-
-const rateUrl = `https://apiv4.conet.network/api/miningRate?eposh=`
-
+const apiEndpoint = `https://apiv4.conet.network/api/`
+const rateUrl = `${apiEndpoint}miningRate?eposh=`
+const FaucetURL = `${apiEndpoint}conet-faucet`
 interface rate {
 	totalMiners: number
 	minerRate: number
 	totalUsrs: number
+}
+
+const httpsPostToUrl = (url: string, body: string) => new Promise(resolve =>{
+	const _url = new URL (url)
+	const option: RequestOptions = {
+		host: _url.host,
+		port: 443,
+		method: 'POST',
+		protocol: 'https:',
+		headers: {
+			'Content-Type': 'application/json;charset=UTF-8'
+		},
+		path: _url.pathname,
+	}
+	const waitingTimeout = setTimeout(() => {
+		logger(Colors.red(`httpsPostToUrl on('Timeout') [${url} ${JSON.parse(body)}!`))
+		return resolve (false)
+	}, 60 * 1000)
+
+	const kkk = requestHttps(option, res => {
+		clearTimeout(waitingTimeout)
+		setTimeout(() => {
+			resolve (true)
+		}, 1000)
+		
+		res.once('end', () => {
+			if (res.statusCode !==200) {
+				return logger(`httpsPostToUrl ${url} statusCode = [${res.statusCode}] != 200 error!`)
+			}
+
+		})
+		
+	})
+
+	kkk.once('error', err => {
+		logger(Colors.red(`httpsPostToUrl on('error') [${url}] requestHttps on Error! no call relaunch`), err.message)
+	})
+
+	kkk.end(body)
+
+})
+
+export const getFaucet = async (wallet: Wallet) => {
+
+	const data = JSON.stringify({ walletAddr: wallet.address})
+
+	logger(Colors.blue(`getFaucet for ${wallet.address}`))
+	await httpsPostToUrl(FaucetURL, data)
 }
 
 export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) => {
@@ -1521,9 +1569,11 @@ export const getRate: (epoch: number) => Promise<rate> = async (epoch: number) =
 	return ret
 }
 
+
 export let lastRate = 0
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	const rate = await getRate(block-2)
+
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 
 	// clusterNodes = await getApiNodes()

@@ -131,8 +131,6 @@ class conet_si_server {
         this.initSetupData ()
     }
 
-
-
 	private sockerdata = (socket: Socket|TLSSocket) => {
 		//logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
 		let first = true

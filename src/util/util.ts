@@ -464,6 +464,8 @@ export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: str
 // 	})
 // }
 
+
+
 export const startEventListening = async (privateKey: string, keyID: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
 	localPublicKeyID = keyID
