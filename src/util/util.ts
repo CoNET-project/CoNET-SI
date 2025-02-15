@@ -38,6 +38,8 @@ const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_c
 
 const paymendUser: Map<string, boolean> = new Map()
 
+
+
 export const checkPayment = async(fromAddr: string) => {
 
 	const pay = paymendUser.get(fromAddr)

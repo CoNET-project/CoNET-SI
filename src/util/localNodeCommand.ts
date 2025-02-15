@@ -29,8 +29,14 @@ import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
 import { routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser } from '../util/util'
+
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
+import nodeRestartABI from './nodeRestartABI.json'
+
+
+
+
 const KB = 1000
 const MB = 1000 * KB
 
@@ -1411,6 +1417,9 @@ const getTx = async (tx: string) => {
 const epoch_mining_info_cancun_addr = '0xbd7Ffe8a04AbDE761D3ab4724E8b7f83d802e036'.toLocaleLowerCase()
 const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI)
 
+const nodeRestartEvent_addr = '0xE67818313F9947104503c8795cd72020696f14a6'.toLocaleLowerCase()
+const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI)
+
 const checkTransfer = (tR: ethers.TransactionReceipt) => {
 	for (let log of tR.logs) {
 		const LogDescription = epoch_mining_infoSC.interface.parseLog(log)
@@ -1433,6 +1442,17 @@ const checkTransfer = (tR: ethers.TransactionReceipt) => {
 	}
 }
 
+const checkRestartTransfer = (tR: ethers.TransactionReceipt) => {
+	logger(`checkRestartTransfer`)
+	for (let log of tR.logs) {
+		const LogDescription = epoch_RestartEvent_SC_readonly.interface.parseLog(log)
+
+		if (LogDescription?.name === 'restart') {
+			exec("sudo reboot")
+		}
+	}
+}
+
 
 const searchEpochEvent = async (block: number) => {
 	const blockTs = await CONETProvider.getBlock(block)
@@ -1440,13 +1460,19 @@ const searchEpochEvent = async (block: number) => {
 	if (!blockTs?.transactions) {
         return //logger(Colors.gray(`holeskyBlockListenning ${block} has none`))
     }
+
 	for (let tx of blockTs.transactions) {
 
 		const event = await getTx(tx)
 		
 		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
 			checkTransfer(event)
+		} else if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
+
+			checkRestartTransfer(event)
 		}
+
+
 	}
 }
 
@@ -1654,3 +1680,6 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
+
+
+searchEpochEvent(116038)
