@@ -5,7 +5,6 @@ import Cluster from 'node:cluster'
 import {Socket, createServer} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining} from '../util/localNodeCommand'
-import {startEventListening} from '../util/util'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -124,7 +123,6 @@ class conet_si_server {
 		}
 
 		this.startServer ()
-		startEventListening(wallet.signingKey.privateKey, newID)
 	}
 
 	constructor () {

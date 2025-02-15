@@ -433,7 +433,7 @@ export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: str
     }
 
 	const postData = await encrypt (encryptObj)
-	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
+	//logger(Colors.blue(`connectToGossipNode ${node.domain}`))
 	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
 		resolve(_data)
 	})
@@ -481,34 +481,34 @@ export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: str
 
 
 
-export const startEventListening = async (privateKey: string, keyID: string) => {
+export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
 	localPublicKeyID = keyID
 	const ip = getServerIPV4Address ( false )
 	if (ip && ip.length) {
 		GlobalIpAddress = ip[0]
 	}
-	localWallet = new ethers.Wallet(privateKey)
+	localWallet = nodePrivate
 	await initGuardianNodes()
 	// startGossipListening(privateKey)
 	// await scanPassedEpoch()
 	
-	CONETProvider.on('block', async block => {
+	// CONETProvider.on('block', async block => {
 
-		currentEpoch = block
-		cleanupUseNodeReceiptList(block)
-		// const blockDetail = await CONETProvider.getBlock(block)
-		// if (!blockDetail?.transactions) {
-		// 	return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
-		// }
+	// 	// currentEpoch = block
+	// 	// cleanupUseNodeReceiptList(block)
+	// 	// const blockDetail = await CONETProvider.getBlock(block)
+	// 	// if (!blockDetail?.transactions) {
+	// 	// 	return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
+	// 	// }
 		
-		// const transactions: string[] = blockDetail.transactions
+	// 	// const transactions: string[] = blockDetail.transactions
 
-		// await mapLimit(transactions, 1, async (n, next) => {
-		// 	await detailTransfer(n, CONETProvider)
-		// })
+	// 	// await mapLimit(transactions, 1, async (n, next) => {
+	// 	// 	await detailTransfer(n, CONETProvider)
+	// 	// })
 		
-	})
+	// })
 	
 }
 

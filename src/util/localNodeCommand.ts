@@ -22,7 +22,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {getRoute } from './util'
+import {getRoute, startUp} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
@@ -1481,7 +1481,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	nodeWallet = nodePrivate.address.toLowerCase()
 
 	getFaucet(nodePrivate)
-
+	startUp(nodePrivate, domain)
 	CONETProvider.on('block', block => {
 		searchEpochEvent(block)
 		if (block % 2) {
