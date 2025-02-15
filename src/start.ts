@@ -10,12 +10,6 @@ import {inspect} from 'node:util'
 import {startExpressServer, stopServer} from './endpoint/sslManager'
 
 const sslExpiration = 1000 * 60 * 60 * 24 * 30
-process.on ('uncaughtException', (err) => {
-	console.error(err.stack)
-	console.log("CONET node catch uncaughtException!!!\nNode NOT Exiting...")
-})
-
-
 
 if (Cluster.isPrimary) {
 
