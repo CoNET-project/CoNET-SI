@@ -1456,7 +1456,7 @@ const checkRestartTransfer = (tR: ethers.TransactionReceipt) => {
 
 const searchEpochEvent = async (block: number) => {
 	const blockTs = await CONETProvider.getBlock(block)
-	
+	logger(`searchEpochEvent ${block}`)
 	if (!blockTs?.transactions) {
         return //logger(Colors.gray(`holeskyBlockListenning ${block} has none`))
     }
