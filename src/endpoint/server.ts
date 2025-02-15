@@ -219,6 +219,10 @@ class conet_si_server {
 		// socket.once('end', () => {
 		// 	logger(Colors.green(`${socket.remoteAddress} on END`))
 		// })
+
+		socket.on('error', err => {
+			
+		})
 	}
 
 	private startServer = () => {
