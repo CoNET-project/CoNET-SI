@@ -1464,16 +1464,17 @@ const searchEpochEvent = async (block: number) => {
 	for (let tx of blockTs.transactions) {
 
 		const event = await getTx(tx)
-		
+		if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
+			checkRestartTransfer(event)
+		}
+
+		if (block % 2) {
+			return
+		}
 		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
 			return checkTransfer(event)
 		}
 		
-		if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
-
-			checkRestartTransfer(event)
-		}
-
 
 	}
 }
@@ -1485,12 +1486,12 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	getFaucet(nodePrivate)
 	startUp(nodePrivate, domain)
 	CONETProvider.on('block', block => {
-		
+		searchEpochEvent(block)
 		if (block % 2) {
 			return
 		}
 		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
-		searchEpochEvent(block)
+		
 		validatorMinerPool.delete(CurrentEpoch -2)
 		CurrentEpoch = block
 		moveData(block)
