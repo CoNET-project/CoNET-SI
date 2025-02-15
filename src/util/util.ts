@@ -13,6 +13,7 @@ import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
 import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
+import { throws } from 'node:assert'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
@@ -148,7 +149,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		
 		if (!result) {
 			logger(Colors.magenta(`await getNodeInfo(${v.nodeID}) get Error ${result}`))
-			new Error('')
+			throw new Error('')
 		}
 
 		if (result !== true) {
