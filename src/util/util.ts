@@ -12,17 +12,13 @@ import P from 'phin'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
+import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
 
-const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
+
+export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
-const cCNTPAddr_old = '0x530cf1B598D716eC79aa916DD2F05ae8A0cE8ee2'.toLowerCase()
-const newCNTP_v8 = '0xa4b389994A591735332A67f3561D60ce96409347'.toLowerCase()
-const GuardianNodes_ContractV3 = '0x453701b80324C44366B34d167D40bcE2d67D6047'
-const GuardianNodesInfoV5_old = '0x617b3CE079c653c8A9Af1B5957e69384919a7084'.toLowerCase()
-const GuardianNodesInfoV6_Holesky = '0x9e213e8B155eF24B466eFC09Bcde706ED23C537a'.toLowerCase()
+export const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
 
-
-const GuardianNFT1 = '0x35c6f84C5337e110C9190A5efbaC8B850E960384'
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 
@@ -33,26 +29,46 @@ export const useNodeReceiptList: Map<string, NodList> = new Map()
 export const routerInfo: Map<string, nodeInfo> = new Map()
 
 let gossipNodes: nodeInfo[] = []
-export const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
+
 let getNodeInfoProssing = false
 
-export const checkPayment = (fromAddr: string) => {
+const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0E94'
 
-	const nodes = useNodeReceiptList.get(fromAddr.toLowerCase())
-	
-	if (!nodes) {
-		logger(Colors.blue(`checkPayment [${fromAddr}] has none in list!`))
+const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
+
+const paymendUser: Map<string, boolean> = new Map()
+
+export const checkPayment = async(fromAddr: string) => {
+
+	const pay = paymendUser.get(fromAddr)
+
+	if (pay) {
+		return true
+	}
+
+	let _nftIDs: ethers.BigNumberish
+	let _expires: ethers.BigNumberish
+	let _expiresDays: ethers.BigNumberish
+	let _premium: boolean
+	try {
+		[_nftIDs, _expires, _expiresDays, _premium] = await CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr)
+	} catch (ex: any) {
+		logger(Colors.red(`checkPayment CoNETDePIN_PassportSC_readonly.getCurrentPassport Error!, ${ex.message}`))
 		return false
 	}
-	
-	if (!nodes.isGuardianNode && nodes.Expired < currentEpoch) {
-		logger(Colors.blue(`checkPayment [${fromAddr}] Expired!`))
-		useNodeReceiptList.delete (fromAddr.toLowerCase())
+	const today = parseFloat(new Date().getTime().toString())
+	const expires =  parseFloat(_expires.toString()) * 1000			//		Convert to milliseconds
+
+	if (!_nftIDs|| expires < today) {
 		return false
 	}
+	paymendUser.set(fromAddr, true)
 	return true
 }
 
+export const putUserMiningToPaymendUser = (fromAddr: string) => {
+	paymendUser.set(fromAddr, true)
+}
 
 const initGuardianNodes = async () => new Promise(async resolve => {
 	if (getNodeInfoProssing) {
@@ -512,4 +528,3 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
-

@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import {CONETProvider, routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet } from '../util/util'
+import { routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser } from '../util/util'
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
 const KB = 1000
@@ -53,7 +53,7 @@ export const generateWalletAddress = async ( password: string ) => {
 	const acc = await accountw.encrypt (password)
 	return (acc)
 }
-
+const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
 export const loadWalletAddress = async ( walletBase: string, password: string ) => {
 	//logger (inspect(walletBase, false, 3, true))
 	if (typeof walletBase === 'object') {
@@ -1545,7 +1545,7 @@ const moveData = (block: number) => {
 			Expired: block + 5
 		}
 
-		useNodeReceiptList.set(n, node)
+		putUserMiningToPaymendUser(n)
 	})
 	
 	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
@@ -1654,7 +1654,3 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
-
-
-
-searchEpochEvent(105980)
