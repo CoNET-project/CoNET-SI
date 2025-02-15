@@ -1448,7 +1448,7 @@ const checkRestartTransfer = (tR: ethers.TransactionReceipt) => {
 		const LogDescription = epoch_RestartEvent_SC_readonly.interface.parseLog(log)
 
 		if (LogDescription?.name === 'restart') {
-			exec("sudo reboot")
+			exec("sudo systemctl restart conet")
 		}
 	}
 }
