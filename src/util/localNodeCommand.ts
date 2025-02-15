@@ -1680,6 +1680,3 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 
 }
-
-
-searchEpochEvent(116038)
