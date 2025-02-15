@@ -1466,15 +1466,11 @@ const searchEpochEvent = async (block: number) => {
 		const event = await getTx(tx)
 		if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
 			checkRestartTransfer(event)
-		}
-
-		if (block % 2) {
-			return
+			continue
 		}
 		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
-			return checkTransfer(event)
+			checkTransfer(event)
 		}
-		
 
 	}
 }
