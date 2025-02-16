@@ -170,6 +170,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
 					gossipNodes.push(v.nodeInfo)
 				}
+				logger(`added node info ${v.wallet}:${v.nodeInfo.pgpKeyID} total nodes = ${routerInfo.size}`)
 			}
 		}
 	}, err => {
