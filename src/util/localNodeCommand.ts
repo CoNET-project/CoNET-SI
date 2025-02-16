@@ -1461,7 +1461,7 @@ const getRestart = async (block: number) => {
 					logger(`getRestart ############################  retsratBlockNumber = ${restartBlockNumber}`)
 					serttData.restartBlockNumber = restartBlockNumber
 					await saveSetup(serttData, false)
-					return exec("sudo systemctl restart conet")
+					return exec("/home/peter/.sh/upgrade && sudo systemctl restart conet")
 				}
 			}
 			
@@ -1475,6 +1475,7 @@ const getRestart = async (block: number) => {
 let searchEpochEventProcess = false
 
 const searchEpochEvent = (block: number) => new Promise (async resolve=>{
+	logger(`searchEpochEvent started on block [${block}]`)
 	if (searchEpochEventProcess) {
 		resolve (false)
 		return
