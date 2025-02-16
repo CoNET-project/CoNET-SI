@@ -836,7 +836,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 }
 
-const validatorMinerPool: Map<number, Map<string, boolean>> = new Map()
+const validatorMinerPool: Map<string, boolean> = new Map()
 const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 
 const validatorMining = async (command: minerObj, socket: Socket ) => {
@@ -917,19 +917,8 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		return distorySocket(socket)
 	}
 	
-	const obj = validatorMinerPool.get (epochNumber)
+	validatorMinerPool.set (wallet, true)
 	
-	if (!obj) {
-		//logger(Colors.blue(`validatorMining wallet with new epoch [${epochNumber}] ${wallet} to POOL ${1}`))
-		const newEpoch: Map<string, boolean> = new Map()
-		newEpoch.set(wallet, true)
-		validatorMinerPool.set (epochNumber, newEpoch)
-		
-	} else {
-		//logger(Colors.grey(`validatorMining wallet with old epoch [${epochNumber}] ${wallet} to POOL ${obj.size}`))
-		obj.set(wallet, true)
-	}
-
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
@@ -1495,11 +1484,11 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 	])
 
 	searchEpochEventProcess = false
-	
+
 	searchEpochEventRestartTimeout = setTimeout(() => {
 		logger(`searchEpochEvent TimeOut restart now`)
 		exec("sudo systemctl restart conet.service")
-	}, 1000 * 6 * 10)
+	}, 1000 * 10)
 
 	resolve (true)
 })
@@ -1523,7 +1512,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 
 		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		
-		validatorMinerPool.delete(CurrentEpoch -2)
+		
 		CurrentEpoch = block
 		moveData(block)
 		// gossipStart(block)
@@ -1573,19 +1562,20 @@ interface nodeResponse {
 }
 
 let moveDataProcess = false
+
 const moveData = (block: number) => {
 	if (moveDataProcess) {
 		return
 	}
 	moveDataProcess = true
-	const _wallets = validatorMinerPool.get (block-2)
+	const _wallets = [...validatorMinerPool.keys()]
 	if (!_wallets) {
 		moveDataProcess = false
 		logger(Colors.magenta(`moveData doing ${block} validatorPool.get NULL size Error!`))
 		return 
 	}
-	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets?.size}) `))
-	const nodeWallets = _wallets ? [..._wallets.keys()] : []
+	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets.length}) `))
+	const nodeWallets = _wallets
 	const userWallets = [...validatorUserPool.keys()]
 	// logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
@@ -1614,6 +1604,7 @@ const moveData = (block: number) => {
 
 		putUserMiningToPaymendUser(n)
 	})
+
 	moveDataProcess = false
 	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalConnectNode ${previousGossipStatus.totalConnectNode}  totalMiners ${totalMiners}`))
 }
