@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser } from '../util/util'
+import { routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, initGuardianNodes} from '../util/util'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -1501,8 +1501,9 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	serttData = await getSetup()
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
-	getFaucet(nodePrivate)
-	startUp(nodePrivate, domain)
+	await getFaucet(nodePrivate)
+	await startUp(nodePrivate, domain)
+	await initGuardianNodes()
 	currentRate = {
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
 	}

@@ -73,7 +73,7 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 	paymendUser.set(fromAddr, true)
 }
 
-const initGuardianNodes = async () => new Promise(async resolve => {
+export const initGuardianNodes = async () => new Promise(async resolve => {
 	if (getNodeInfoProssing) {
 		 logger(`initGuardianNodes already running!`)
 		 return resolve(false)
@@ -486,7 +486,7 @@ export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 		GlobalIpAddress = ip[0]
 	}
 	localWallet = nodePrivate
-	await initGuardianNodes()
+	
 	// startGossipListening(privateKey)
 	// await scanPassedEpoch()
 	
