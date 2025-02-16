@@ -1475,7 +1475,9 @@ const getRestart = async (block: number) => {
 let searchEpochEventProcess = false
 
 const searchEpochEvent = (block: number) => new Promise (async resolve=>{
-	logger(`searchEpochEvent started on block [${block}]\n\n`)
+	logger(`searchEpochEvent started on block [${block}]`)
+	logger('')
+	logger('')
 	if (searchEpochEventProcess) {
 		resolve (false)
 		return
