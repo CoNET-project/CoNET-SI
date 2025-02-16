@@ -1461,7 +1461,7 @@ const getRestart = async (block: number) => {
 					logger(`getRestart ############################  retsratBlockNumber = ${restartBlockNumber}`)
 					serttData.restartBlockNumber = restartBlockNumber
 					await saveSetup(serttData, false)
-					return exec("/home/peter/.sh/upgrade && sudo systemctl restart conet")
+					return exec("/home/peter/.sh/upgrade && sudo reboot")
 				}
 			}
 			
