@@ -191,7 +191,8 @@ if ( Cluster.isPrimary ) {
 				cpus: cpus().length,
 				passwd: password, 
 				platform_verison: setup.version,
-				dl_publicKeyArmored: ''
+				dl_publicKeyArmored: '',
+				restartBlockNumber: 0
 			}
 
 

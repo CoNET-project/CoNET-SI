@@ -394,7 +394,8 @@ export const saveSetup = ( setup: ICoNET_NodeSetup|null, debug: boolean ) => {
 			passwd: setup.passwd,
 			platform_verison: setup.platform_verison,
 			dl_publicKeyArmored: setup.dl_publicKeyArmored,
-			sslDate: setup.sslDate
+			sslDate: setup.sslDate,
+			restartBlockNumber: setup.restartBlockNumber||0
 		}
 
 		return writeFile (setupFile, JSON.stringify (setupInfo), 'utf-8', err => {
@@ -1411,81 +1412,78 @@ let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 let nodeWallet = ''
 
-const getTx = async (tx: string) => {
-	return await CONETProvider.getTransactionReceipt(tx)
+const epoch_mining_info_cancun_addr = '0x31680dc539cb1835d7C1270527bD5D209DfBC547'.toLocaleLowerCase()
+const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, CONETProvider)
+
+const nodeRestartEvent_addr = '0x2b5e7A8477dB4977eC8309605B5293f3CD00fC39'
+const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, CONETProvider)
+
+const checkCurrentRate = async () => {
+	let _epoch: BigInt
+	let _totalMiners: BigInt
+	let _minerRate: ethers.BigNumberish
+	let _totalUsrs: BigInt
+
+	try {
+		[_epoch, _totalMiners, _minerRate, _totalUsrs] = await epoch_mining_infoSC.currentInfo()
+	} catch (ex: any) {
+		return logger(`checkCurrentRate Error! ${ex.message}`)
+	}
+
+	if (parseInt(_epoch.toString()) > 0) {
+		const totalMiners = parseInt(_totalMiners.toString())
+		const minerRate = parseInt(ethers.formatEther(_minerRate))
+		const totalUsrs = parseInt(_totalUsrs.toString())
+		const epoch = parseInt(_epoch.toString())
+		currentRate = {
+			totalMiners,  minerRate, totalUsrs, epoch
+		}
+	}
+	
+	
 }
+let serttData: ICoNET_NodeSetup|null
 
-const epoch_mining_info_cancun_addr = '0xbd7Ffe8a04AbDE761D3ab4724E8b7f83d802e036'.toLocaleLowerCase()
-const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI)
 
-const nodeRestartEvent_addr = '0xE67818313F9947104503c8795cd72020696f14a6'.toLocaleLowerCase()
-const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI)
-
-const checkTransfer = (tR: ethers.TransactionReceipt) => {
-	for (let log of tR.logs) {
-		const LogDescription = epoch_mining_infoSC.interface.parseLog(log)
-
-		if (LogDescription?.name === 'eIpdateInfo') {
-			const hash = tR.hash
-			logger(inspect(LogDescription.args, false, 3, true))
-			const totalMiners = LogDescription.args[0].toString()
-			const minerRate = parseFloat(ethers.formatEther(LogDescription.args[1].toString()))
-			const totalUsrs = LogDescription.args[2].toString()
-			const epoch = LogDescription.args[3].toString()
-			currentRate = {
-				totalMiners,  minerRate, totalUsrs, epoch
+const getRestart = async () => {
+	try {
+		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.retsratBlockNumber())
+		if (restartBlockNumber) {
+			if (serttData) {
+				if (serttData.restartBlockNumber < restartBlockNumber ) {
+					serttData.restartBlockNumber = restartBlockNumber
+					await saveSetup(serttData, false)
+					exec("sudo systemctl restart conet")
+				}
 			}
-
-
-		} else {
-			logger(LogDescription?.name)
+			
 		}
+	} catch (ex: any) {
+		logger(`getRestart Error! ${ex.message}`)
 	}
-}
-
-const checkRestartTransfer = (tR: ethers.TransactionReceipt) => {
-	logger(`checkRestartTransfer`)
-	for (let log of tR.logs) {
-		const LogDescription = epoch_RestartEvent_SC_readonly.interface.parseLog(log)
-
-		if (LogDescription?.name === 'restart') {
-			exec("sudo systemctl restart conet")
-		}
-	}
+	
 }
 
 let searchEpochEventProcess = false
-const searchEpochEvent = (block: number) => new Promise (async resolve=>{
+
+const searchEpochEvent = () => new Promise (async resolve=>{
 	if (searchEpochEventProcess) {
 		resolve (false)
 		return
 	}
 
 	searchEpochEventProcess = true
-	const blockTs = await CONETProvider.getBlock(block)
-	
-	if (!blockTs?.transactions) {
-		searchEpochEventProcess = false
-		resolve (false)
-        return //logger(Colors.gray(`holeskyBlockListenning ${block} has none`))
-    }
-	const listArray = blockTs.transactions.map(n => n)
-	await mapLimit(listArray, 1, async (n, next ) => {
-		const event = await getTx(tx)
-		if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
-			await checkRestartTransfer(event)
-		} 
-		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
-			await checkTransfer(event)
-		}
-	}, err => {
-		searchEpochEventProcess = false
-		resolve(true)
-	})
-	
+	await Promise.all([
+		checkCurrentRate(),
+		getRestart()
+	])
+
+	searchEpochEventProcess = false
+	resolve (true)
 })
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
+	serttData = await getSetup()
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 	getFaucet(nodePrivate)
@@ -1493,8 +1491,10 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	currentRate = {
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
 	}
+	
+
 	CONETProvider.on('block', block => {
-		searchEpochEvent(block)
+		searchEpochEvent()
 		if (block % 2) {
 			return
 		}
@@ -1659,6 +1659,7 @@ let currentRate: rate|null = null
 export let lastRate = 0
 
 let stratlivenessV2Process = false
+
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	if (stratlivenessV2Process) {
 		return
@@ -1706,3 +1707,5 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 	stratlivenessV2Process = false
 }
+
+checkCurrentRate()

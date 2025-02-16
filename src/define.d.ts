@@ -21,6 +21,7 @@ interface ICoNET_NodeSetup {
 	platform_verison: string
 	dl_publicKeyArmored: string
 	sslDate?: number
+	restartBlockNumber: number
 }
 
 interface ICoNET_DL {
