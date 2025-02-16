@@ -147,7 +147,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		
 		const result = await getNodeInfo(v.nodeID)
 		
-		if (!result) {
+		if (result === null) {
 			return logger(Colors.magenta(`await getNodeInfo(${v.nodeID}) get Error ${result}`))
 		}
 
