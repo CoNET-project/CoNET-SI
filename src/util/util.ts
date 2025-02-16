@@ -361,6 +361,30 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 
 }
 
+export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> = (node: nodeInfo) => new Promise(async resolve => {
+	if (!localWallet?.address) {
+		return resolve ({nodeWallet: ''})
+	}
+	const command = {
+		command: 'mining',
+		walletAddress: localWallet?.address?.toLowerCase()
+	}
+	
+	const message =JSON.stringify(command)
+	const signMessage = await localWallet.signMessage(message)
+	const encryptObj = {
+        message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
+		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
+		config: { preferredCompressionAlgorithm: enums.compression.zlib } 		// compress the data with zlib
+    }
+
+	const postData = await encrypt (encryptObj)
+	//logger(Colors.blue(`connectToGossipNode ${node.domain}`))
+	startGossip (node, JSON.stringify({data: postData}), (err, _data: any) => {
+		resolve(_data)
+	})
+})
+
 // const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
 	
 // 	const wallet = new ethers.Wallet(privateKey)

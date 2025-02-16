@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes} from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes} from '../util/util'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -871,10 +871,13 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 	if(!nodeInfo.wallet){
-		
-		
-		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet Error!`))
-		return distorySocket(socket)
+		const info = await getGuardianNodeWallet(nodeInfo)
+		if (!info.nodeWallet) {
+			logger(`getGuardianNodeWallet Local host not ready !`)
+			return distorySocket(socket)
+		}
+		nodeInfo.wallet = info.nodeWallet
+		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
 
 	if (nodeInfo.wallet !== nodeWallet) {
