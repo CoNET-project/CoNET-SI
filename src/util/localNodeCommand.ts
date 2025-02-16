@@ -33,6 +33,7 @@ import { routerInfo, checkPayment, useNodeReceiptList, getGuardianNodeWallet, Co
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
 import nodeRestartABI from './nodeRestartABI.json'
+import { mapLimit } from 'async'
 
 
 
@@ -1453,27 +1454,36 @@ const checkRestartTransfer = (tR: ethers.TransactionReceipt) => {
 	}
 }
 
+let searchEpochEventProcess = false
+const searchEpochEvent = (block: number) => new Promise (async resolve=>{
+	if (searchEpochEventProcess) {
+		resolve (false)
+		return
+	}
 
-const searchEpochEvent = async (block: number) => {
+	searchEpochEventProcess = true
 	const blockTs = await CONETProvider.getBlock(block)
-	logger(`searchEpochEvent ${block}`)
+	
 	if (!blockTs?.transactions) {
+		searchEpochEventProcess = false
+		resolve (false)
         return //logger(Colors.gray(`holeskyBlockListenning ${block} has none`))
     }
-
-	for (let tx of blockTs.transactions) {
-
+	const listArray = blockTs.transactions.map(n => n)
+	await mapLimit(listArray, 1, async (n, next ) => {
 		const event = await getTx(tx)
 		if (event?.to?.toLowerCase() === nodeRestartEvent_addr) {
-			checkRestartTransfer(event)
-			continue
-		}
+			await checkRestartTransfer(event)
+		} 
 		if ( event?.to?.toLowerCase() === epoch_mining_info_cancun_addr) {
-			checkTransfer(event)
+			await checkTransfer(event)
 		}
-
-	}
-}
+	}, err => {
+		searchEpochEventProcess = false
+		resolve(true)
+	})
+	
+})
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
@@ -1486,6 +1496,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		if (block % 2) {
 			return
 		}
+
 		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
 		
 		validatorMinerPool.delete(CurrentEpoch -2)
@@ -1537,10 +1548,12 @@ interface nodeResponse {
 	totalUsers: number
 }
 
+let moveDataProcess = false
 const moveData = (block: number) => {
-
-	
-
+	if (moveDataProcess) {
+		return
+	}
+	moveDataProcess = true
 	const _wallets = validatorMinerPool.get (block-2)
 	
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets?.size}) `))
@@ -1573,8 +1586,8 @@ const moveData = (block: number) => {
 
 		putUserMiningToPaymendUser(n)
 	})
-	
-	logger(Colors.magenta(`gossipStart sendEpoch ${block-1} totalConnectNode ${previousGossipStatus.totalConnectNode} totalMiners ${totalMiners}`))
+	moveDataProcess = false
+	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalConnectNode ${previousGossipStatus.totalConnectNode}  totalMiners ${totalMiners}`))
 }
 const apiEndpoint = `https://apiv4.conet.network/api/`
 const rateUrl = `${apiEndpoint}miningRate?eposh=`
@@ -1637,13 +1650,20 @@ export const getFaucet = async (wallet: Wallet) => {
 
 let currentRate: rate|null = null
 
-
 export let lastRate = 0
+
+let stratlivenessV2Process = false
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
+	if (stratlivenessV2Process) {
+		return
+	}
+	stratlivenessV2Process = true
 	const rate = currentRate
 	if (!rate) {
+		stratlivenessV2Process = false
 		return logger(Colors.red(`stratlivenessV2 currentRate is NULL error STOP!`))
 	}
+
 	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 	logger(inspect(rate, false, 3, true))
 
@@ -1678,5 +1698,5 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	})
 
 	await Promise.all(processPool)
-
+	stratlivenessV2Process = false
 }
