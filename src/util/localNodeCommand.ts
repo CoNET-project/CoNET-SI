@@ -1498,12 +1498,13 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 })
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
+	initGuardianNodes()
 	serttData = await getSetup()
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 	await getFaucet(nodePrivate)
 	await startUp(nodePrivate, domain)
-	await initGuardianNodes()
+	
 	currentRate = {
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
 	}
