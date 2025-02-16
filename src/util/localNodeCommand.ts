@@ -1503,7 +1503,11 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	localNodeKey = nodePrivate
-	getAllNodes()
+	const result = await getAllNodes()
+	if (!result) {
+		startEPOCH_EventListeningForMining(nodePrivate, domain, nodeIpAddr)
+		return
+	}
 	serttData = await getSetup()
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()

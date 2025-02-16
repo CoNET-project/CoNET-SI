@@ -89,10 +89,12 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		scanNodes = parseInt(maxNodes.toString())
 
 	} catch (ex) {
+		getAllNodesProcess = false
 		resolve (false)
 		return logger (`getAllNodes currentNodeID Error`, ex)
 	}
 	if (!scanNodes) {
+		getAllNodesProcess = false
 		resolve (false)
 		return logger(`getAllNodes STOP scan because scanNodes == 0`)
 	}
@@ -126,6 +128,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		const index = Guardian_Nodes.findIndex(n => n.nftNumber === i) - 1
 		Guardian_Nodes = Guardian_Nodes.slice(0, index)
 		logger(Colors.red(`mapLimit catch ex! Guardian_Nodes = ${Guardian_Nodes.length} `))
+		getAllNodesProcess = false
 		resolve(true)
 	})
 })
