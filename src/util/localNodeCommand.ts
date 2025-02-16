@@ -871,7 +871,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 
 	if(!nodeInfo.wallet){
-		const info = await getGuardianNodeWallet(nodeInfo)
+		const info = await getGuardianNodeWallet(nodeInfo, localNodeKey)
 		if (!info.nodeWallet) {
 			logger(`getGuardianNodeWallet Local host not ready !`)
 			return distorySocket(socket)
@@ -1502,6 +1502,7 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 })
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
+	localNodeKey = nodePrivate
 	getAllNodes()
 	serttData = await getSetup()
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
@@ -1675,7 +1676,7 @@ let currentRate: rate|null = null
 export let lastRate = 0
 
 let stratlivenessV2Process = false
-
+let localNodeKey: Wallet
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	if (stratlivenessV2Process) {
 		return

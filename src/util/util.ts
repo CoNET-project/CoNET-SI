@@ -361,17 +361,15 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 
 }
 
-export const getGuardianNodeWallet: (node: nodeInfo) => Promise<{nodeWallet: string}> = (node: nodeInfo) => new Promise(async resolve => {
-	if (!localWallet?.address) {
-		return resolve ({nodeWallet: ''})
-	}
+export const getGuardianNodeWallet: (node: nodeInfo, _localWallet: ethers.Wallet) => Promise<{nodeWallet: string}> = (node: nodeInfo, _localWallet: ethers.Wallet) => new Promise(async resolve => {
+
 	const command = {
 		command: 'mining',
-		walletAddress: localWallet?.address?.toLowerCase()
+		walletAddress: _localWallet?.address?.toLowerCase()
 	}
 	
 	const message =JSON.stringify(command)
-	const signMessage = await localWallet.signMessage(message)
+	const signMessage = await _localWallet.signMessage(message)
 	const encryptObj = {
         message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
 		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
