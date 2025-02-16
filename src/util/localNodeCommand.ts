@@ -865,7 +865,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
-		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
+		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error! routerInfo size = ${routerInfo.size}`))
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}

@@ -173,7 +173,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 			}
 		}
 	}, err => {
-		logger(Colors.magenta(`initGuardianNodes finished!`))
+		logger(Colors.magenta(`initGuardianNodes finished! routerInfo size = ${routerInfo.size}`))
 		return resolve(true)
 	})
 })
