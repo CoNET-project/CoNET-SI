@@ -35,9 +35,9 @@ let getNodeInfoProssing = false
 const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0E94'
 
 const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
-
+const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
 const paymendUser: Map<string, boolean> = new Map()
-
+const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
 
 
 export const checkPayment = async(fromAddr: string) => {
@@ -82,7 +82,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
 
 	getAllNodesProcess = true
 
-	const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
+	
 	let scanNodes = 0
 	try {
 		const maxNodes: BigInt = await GuardianNodes.currentNodeID()
@@ -113,7 +113,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		})
 	}
 		
-	const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
+	
 	let i = 0
 	mapLimit(Guardian_Nodes, 10, async (n: nodeInfo, next) => {
 		i = n.nftNumber
@@ -250,54 +250,6 @@ export const getRoute = async (keyID: string) => {
 	return node.ipaddress
 }
 
-const getEpochRate1: (epoch: number) => Promise<boolean|string> = async (epoch) => new Promise(resolve => {
-	const cloudStorageEndpointUrl = `${ipfsEndpoint}getFragment/${epoch}_free`
-	
-		P({
-			url: cloudStorageEndpointUrl,
-			parse: 'json'
-		}).then (res => {
-			if (res?.body) {
-				//@ts-ignore
-				return resolve(res?.body['minerRate'])
-			}
-			return resolve (false)
-		})
-		.catch(ex => {
-			logger(`getEpochRate catch EX!`, ex.message)
-			return resolve (false)
-		})
-		
-	
-})
-
-// const checkBlock = async (block: number) => {
-// 	//logger(Colors.gray(`checkBlock doing epoch [${Colors.blue(block.toString())}]`))
-// 	const blockDetail = await CONETProvider.getBlock(block)
-// 	if (!blockDetail?.transactions) {
-// 		return logger(Colors.gray(`checkBlock block ${block} hasn't any transactions`))
-// 	}
-
-// 	const execPoll = []
-// 	for (let u of blockDetail.transactions) {
-// 		execPoll.push(detailTransfer(u, CONETProvider))
-// 	}
-
-// 	await Promise.all([...execPoll])
-// }
-
-// const scanPassedEpoch = async () => {
-// 	const endEpoch = currentEpoch
-// 	const startEpoch = currentEpoch - (5*60) * 3
-// 	const execPool: number[] = []
-// 	for (let i = startEpoch; i <= endEpoch; i ++) {
-// 		execPool.push(i)
-// 	}
-
-// 	await mapLimit(execPool,1, async (n, next) => {
-// 		await checkBlock(n)
-// 	})
-// }
 
 const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
 
@@ -386,46 +338,6 @@ export const getGuardianNodeWallet: (node: nodeInfo, _localWallet: ethers.Wallet
 	})
 })
 
-// const connectToGossipNode = async (privateKey: string, node: nodeInfo ) => {
-	
-// 	const wallet = new ethers.Wallet(privateKey)
-// 	const command = {
-// 		command: 'mining',
-// 		walletAddress: wallet.address.toLowerCase()
-// 	}
-	
-// 	const message =JSON.stringify(command)
-// 	const signMessage = await wallet.signMessage(message)
-// 	const encryptObj = {
-//         message: await createMessage({text: Buffer.from(JSON.stringify ({message, signMessage})).toString('base64')}),
-// 		encryptionKeys: await readKey({ armoredKey: node.pgpArmored}),
-// 		config: { preferredCompressionAlgorithm: enums.compression.zlib } 		// compress the data with zlib
-//     }
-
-// 	const postData = await encrypt (encryptObj)
-// 	logger(Colors.blue(`connectToGossipNode ${node.domain}`))
-// 	startGossip(node, JSON.stringify({data: postData}), (err, _data ) => {
-// 		if (!_data) {
-// 			return logger(Colors.magenta(`connectToGossipNode ${node.ipaddress} push ${_data} is null!`))
-// 		}
-
-// 		try {
-// 			const data = JSON.parse(_data)
-// 			const wallets = data.nodeWallets||[]
-// 			gossipStatus.nodesWallets.set(node.ipaddress, wallets)
-// 			if (wallets.length) {
-// 				//logger(inspect(wallets, false, 3, true))
-// 			}
-// 			logger(`connectToGossipNode ${node.ipaddress} wallets ${data.nodeWallets} to gossipStatus nodesWallets Pool length = ${gossipStatus.nodesWallets.size}`)
-			
-// 		} catch (ex) {
-// 			logger(Colors.blue(`${node.ipaddress} => \n${_data}`))
-// 			logger(Colors.red(`connectToGossipNode JSON.parse(_data) Error!`))
-// 		}
-
-// 	})
-// }
-
 
 
 export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
@@ -437,38 +349,9 @@ export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 	}
 	localWallet = nodePrivate
 	
-	// startGossipListening(privateKey)
-	// await scanPassedEpoch()
-	
-	// CONETProvider.on('block', async block => {
-
-	// 	// currentEpoch = block
-	// 	// cleanupUseNodeReceiptList(block)
-	// 	// const blockDetail = await CONETProvider.getBlock(block)
-	// 	// if (!blockDetail?.transactions) {
-	// 	// 	return logger(Colors.gray(`startEventListening block ${block} hasn't any transactions`))
-	// 	// }
-		
-	// 	// const transactions: string[] = blockDetail.transactions
-
-	// 	// await mapLimit(transactions, 1, async (n, next) => {
-	// 	// 	await detailTransfer(n, CONETProvider)
-	// 	// })
-		
-	// })
 	
 }
 
-// const startGossipListening = (privateKey: string) => {
-// 	if (!gossipNodes.length) {
-// 		return logger(Colors.red(`startGossipListening Error! gossipNodes is null!`))
-// 	}
-// 	logger(Colors.blue(`startGossipListening gossipNodes = ${gossipNodes.length}`))
-// 	gossipNodes.forEach(n => {
-// 		connectToGossipNode(privateKey, n)
-// 	})
-	
-// }
 
 export const getNodeWallet = (nodeIpaddress: string) => {
 	const index = gossipNodes.findIndex(n => n.ipaddress === nodeIpaddress)
