@@ -1432,7 +1432,7 @@ const checkCurrentRate = async () => {
 
 	if (parseInt(_epoch.toString()) > 0) {
 		const totalMiners = parseInt(_totalMiners.toString())
-		const minerRate = parseInt(ethers.formatEther(_minerRate))
+		const minerRate = parseFloat(ethers.formatEther(_minerRate))
 		const totalUsrs = parseInt(_totalUsrs.toString())
 		const epoch = parseInt(_epoch.toString())
 		currentRate = {
@@ -1449,14 +1449,16 @@ const getRestart = async () => {
 	try {
 		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.retsratBlockNumber())
 		if (restartBlockNumber) {
+			
 			if (serttData) {
 				if (serttData.restartBlockNumber < restartBlockNumber ) {
+					logger(`getRestart ############################  retsratBlockNumber = ${restartBlockNumber}`)
 					serttData.restartBlockNumber = restartBlockNumber
 					await saveSetup(serttData, false)
-					exec("sudo systemctl restart conet")
+					return exec("sudo systemctl restart conet")
 				}
 			}
-			
+			logger(`getRestart ############################  retsratBlockNumber = ${restartBlockNumber} serttData restartBlockNumber = ${serttData?.restartBlockNumber}`)
 		}
 	} catch (ex: any) {
 		logger(`getRestart Error! ${ex.message}`)
