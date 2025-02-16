@@ -873,7 +873,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	if(!nodeInfo.wallet){
 		const info = await getGuardianNodeWallet(nodeInfo)
 		nodeInfo.wallet = info.nodeWallet
-		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
+		//logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
 
 	if (nodeInfo.wallet !== nodeWallet) {
