@@ -1555,7 +1555,11 @@ const moveData = (block: number) => {
 	}
 	moveDataProcess = true
 	const _wallets = validatorMinerPool.get (block-2)
-	
+	if (!_wallets) {
+		moveDataProcess = false
+		logger(Colors.magenta(`moveData doing ${block} validatorPool.get NULL size Error!`))
+		return 
+	}
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets?.size}) `))
 	const nodeWallets = _wallets ? [..._wallets.keys()] : []
 	const userWallets = [...validatorUserPool.keys()]
