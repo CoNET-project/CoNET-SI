@@ -1474,8 +1474,13 @@ const getRestart = async (block: number) => {
 
 let searchEpochEventProcess = false
 
-const searchEpochEvent = (block: number) => new Promise (async resolve=>{
+let searchEpochEventRestartTimeout:  NodeJS.Timeout
+
+const searchEpochEvent = (block: number) => new Promise (async resolve=> {
+
 	logger(`searchEpochEvent started on block [${block}]`)
+	clearTimeout(searchEpochEventRestartTimeout)
+
 	logger('')
 	logger('')
 	if (searchEpochEventProcess) {
@@ -1490,6 +1495,12 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=>{
 	])
 
 	searchEpochEventProcess = false
+	
+	searchEpochEventRestartTimeout = setTimeout(() => {
+		logger(`searchEpochEvent TimeOut restart now`)
+		exec("sudo systemctl restart conet.service")
+	}, 1000 * 6 * 10)
+
 	resolve (true)
 })
 
