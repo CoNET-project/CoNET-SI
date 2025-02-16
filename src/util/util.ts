@@ -98,7 +98,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 
 	const NFTIds = _nodesAddress.map ((n, index) => 100 + index)
 	
-	const getNodeInfo = async (nodeID: number) => {
+	const getNodeInfo: (nodeID: number) => Promise<nodeInfo|null> = (nodeID: number) => new Promise(async resolve => {
 
 		//	logger(Colors.gray(`getNodeInfo [${nodeID}]`))
 		const nodeInfo: nodeInfo = {
@@ -118,14 +118,14 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				nodeInfo.regionName = regionName
 				nodeInfo.pgpArmored = pgp
 				// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
-				return nodeInfo
+				return resolve(nodeInfo)
 			}
 
-			return null
+			
 		}
 
-		return null
-	}
+		return resolve(null)
+	})
 
 	_nodesAddress.forEach(async (n, index) => {
 		
