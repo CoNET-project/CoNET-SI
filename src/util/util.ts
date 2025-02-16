@@ -120,7 +120,8 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 				// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
 				return nodeInfo
 			}
-			return true
+
+			return null
 		}
 
 		return null
@@ -146,9 +147,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 	mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
 		
 		const result = await getNodeInfo(v.nodeID)
-		
-		
-		if (typeof result === 'object' && result?.ipaddress) {
+		if (result?.ipaddress) {
 			
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				v.nodeInfo.pgpArmored = Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString()
