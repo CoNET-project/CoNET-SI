@@ -26,7 +26,6 @@ const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 
 let GlobalIpAddress = ''
 
-export const useNodeReceiptList: Map<string, NodList> = new Map()
 export const routerInfo: Map<string, nodeInfo> = new Map()
 
 let gossipNodes: nodeInfo[] = []
@@ -73,106 +72,64 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 	paymendUser.set(fromAddr, true)
 }
 
-export const initGuardianNodes = async () => new Promise(async resolve => {
-	if (getNodeInfoProssing) {
-		 logger(`initGuardianNodes already running!`)
-		 return resolve(false)
-	}
-	logger(`initGuardianNodes start running!`)
-	getNodeInfoProssing = true
-
-	const guardianSmartContract_Cancun = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
-
-	const GuardianNodesInfoV3Contract_Cancun = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
-	let nodes
-	try {
-		nodes = await guardianSmartContract_Cancun.getAllIdOwnershipAndBooster()
-	} catch (ex: any) {
-		getNodeInfoProssing = false
-		console.error(Colors.red(`guardianReferrals guardianSmartContract.getAllIdOwnershipAndBooster() Error!`), ex.mesage)
-		return resolve(false)
-	}
-
-
-	const _nodesAddress: string[] = nodes[0].map((n: string) => n)
-
-	const NFTIds = _nodesAddress.map ((n, index) => 100 + index)
+let getAllNodesProcess = false
+let Guardian_Nodes: nodeInfo[] = []
+export const getAllNodes = () => new Promise(async resolve=> {
 	
-	const getNodeInfo: (nodeID: number) => Promise<nodeInfo|null> = (nodeID: number) => new Promise(async _resolve => {
+	if (getAllNodesProcess) {
+		return resolve (true)
+	}
 
-		//	logger(Colors.gray(`getNodeInfo [${nodeID}]`))
-		const nodeInfo: nodeInfo = {
-			ipaddress: '',
+	getAllNodesProcess = true
+
+	const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
+	let scanNodes = 0
+	try {
+		const maxNodes: BigInt = await GuardianNodes.currentNodeID()
+		scanNodes = parseInt(maxNodes.toString())
+
+	} catch (ex) {
+		resolve (false)
+		return logger (`getAllNodes currentNodeID Error`, ex)
+	}
+	if (!scanNodes) {
+		resolve (false)
+		return logger(`getAllNodes STOP scan because scanNodes == 0`)
+	}
+
+
+
+	for (let i = 0; i < scanNodes; i ++) {
+		Guardian_Nodes.push({
 			regionName: '',
+			ipaddress: '',
 			pgpArmored: '',
-			pgpKeyID: '',
+			nftNumber: 100 + i,
 			domain: '',
+			pgpKeyID: '',
 			wallet: ''
-		}
-
-		const [ipaddress, regionName, pgp] = await GuardianNodesInfoV3Contract_Cancun.getNodeInfoById(nodeID)
-
-		if (ipaddress) {
-			if (ipaddress !== GlobalIpAddress) {
-				nodeInfo.ipaddress = ipaddress
-				nodeInfo.regionName = regionName
-				nodeInfo.pgpArmored = pgp
-				// nodeInfo.pgpArmored = await GuardianNodesInfoV3Contract.getNodePGP(nodeInfo.ipaddress)
-				return _resolve(nodeInfo)
-			}
-
-			
-		}
-
-		return _resolve(null)
-	})
-
-	_nodesAddress.forEach(async (n, index) => {
+		})
+	}
 		
-		const node: NodList = {
-			isGuardianNode: true,
-			wallet: n.toLowerCase(),
-			nodeID: NFTIds[index],
-			nodeInfo:null,
-			Expired: 0
-		}
-
-		useNodeReceiptList.set(node.wallet, node)
-		//logger(Colors.grey(`Add Guardian owner wallet [${node.wallet}] to list!`))
-	})
-
+	const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
 	let i = 0
-	gossipNodes = []
-
-	mapLimit(useNodeReceiptList.entries(), 5, async ([n, v], next) => {
-		
-		const result = await getNodeInfo(v.nodeID)
-		if (result?.ipaddress) {
-			
-			if (v.nodeInfo && v.nodeInfo.pgpArmored){
-				v.nodeInfo.pgpArmored = Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString()
-				const pgpKey = await readKey({ armoredKey: v.nodeInfo.pgpArmored})
-				v.nodeInfo.pgpKeyID = pgpKey.getKeyIDs()[1].toHex().toUpperCase()
-				v.nodeInfo.domain = v.nodeInfo.pgpKeyID + '.conet.network'
-				const kkk = await getGuardianNodeWallet(v.nodeInfo)
-				//logger(inspect(kkk, false, 3, true))
-				
-				v.wallet = v.nodeInfo.wallet = kkk.nodeWallet
-				
-				//logger(inspect(v, false, 3, true))
-				routerInfo.set(v.nodeInfo.pgpKeyID, v.nodeInfo)
-				
-				if (localPublicKeyID !== v.nodeInfo.pgpKeyID) {
-					gossipNodes.push(v.nodeInfo)
-				}
-				logger(`added node info ${v.wallet}:${v.nodeInfo.pgpKeyID} total nodes = ${routerInfo.size}`)
-			}
-		}
+	mapLimit(Guardian_Nodes, 10, async (n: nodeInfo, next) => {
+		i = n.nftNumber
+		const nodeInfo = await GuardianNodesInfo.getNodeInfoById(n.nftNumber)
+		n.regionName = nodeInfo.regionName
+		n.ipaddress = nodeInfo.ipaddress
+		n.pgpArmored = Buffer.from(nodeInfo.pgp,'base64').toString()
+		const pgpKey1 = await readKey({ armoredKey: n.pgpArmored})
+		n.domain = pgpKey1.getKeyIDs()[1].toHex().toUpperCase()
+		routerInfo.set(n.domain, n)
 	}, err => {
-		logger(Colors.magenta(`initGuardianNodes finished! routerInfo size = ${routerInfo.size}`))
-		return resolve(true)
+		const index = Guardian_Nodes.findIndex(n => n.nftNumber === i) - 1
+		Guardian_Nodes = Guardian_Nodes.slice(0, index)
+		logger(Colors.red(`mapLimit catch ex! Guardian_Nodes = ${Guardian_Nodes.length} `))
+		resolve(true)
 	})
 })
+
 
 export const aesGcmEncrypt = async (plaintext: string, password: string) => {
 	const pwUtf8 = new TextEncoder().encode(password)                                 // encode password as UTF-8
@@ -279,16 +236,6 @@ let localWallet: ethers.Wallet
 	
 // }
 
-const cleanupUseNodeReceiptList = (epoch: number) => {
-	useNodeReceiptList.forEach((v,key) => {
-		if (v.isGuardianNode) {
-			return
-		}
-		if (v.Expired < epoch) {
-			useNodeReceiptList.delete(key)
-		}
-	})
-}
 
 export const getRoute = async (keyID: string) => {
 

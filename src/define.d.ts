@@ -177,6 +177,7 @@ interface nodeInfo {
 	pgpKeyID: string
 	domain: string
 	wallet: string
+	nftNumber: number
 }
 
 interface NodList {
