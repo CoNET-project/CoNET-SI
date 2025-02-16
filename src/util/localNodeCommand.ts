@@ -842,17 +842,17 @@ const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
-
+	
 	if (!validatorData|| !validatorData.nodeWallet|| !validatorData.hash||!command?.walletAddress) {
 		logger(Colors.red(`${command.walletAddress} validatorMining has null validatorData`))
 		logger(inspect(command, false, 3, true))
 		return distorySocket(socket)
 	}
-
+	
 	const wallet = command.walletAddress.toLowerCase()
 	const message = {epoch: validatorData.epoch.toString(), wallet}
 	const nodeWallet = ethers.verifyMessage(JSON.stringify(message), validatorData.hash).toLowerCase()
-
+	logger(`validatorMining [${wallet}]  ********************`)
 	if (nodeWallet !== validatorData.nodeWallet.toLowerCase()) {
 		logger(Colors.red(`validatorMining verifyMessage hash Error! nodeWallet ${nodeWallet} !== validatorData.nodeWallet.toLowerCase() ${validatorData.nodeWallet.toLowerCase()} wallet = ${wallet}`))
 		logger(inspect(command, false, 3, true))
@@ -865,7 +865,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
-		//logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
+		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error!`))
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
@@ -922,7 +922,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	}
 	
 	validatorMinerPool.set (wallet, true)
-	
+	logger(`added miner[${wallet}] to validatorMinerPool size = ${validatorMinerPool.size}`)
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
