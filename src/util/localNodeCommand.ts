@@ -889,15 +889,19 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 		logger(Colors.red(`${command.walletAddress} validator Wallet ${validatorWallet} different than command.walletAddress ${wallet} Error!`))
 		return distorySocket(socket)
 	}
+
+
 	
 	const epochNumber = parseInt(validatorData.epoch.toString())
 	
+	if (CurrentEpoch - epochNumber > 5) {
+		logger(Colors.red(`wallet ${command.walletAddress} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber} 5 `))
+		return distorySocket(socket)
+	}
+
 	if (validatorData.isUser) {
 
-		if (CurrentEpoch - epochNumber > 5) {
-			//logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} epochNumber ${epochNumber} < CurrentEpoch ${CurrentEpoch} = ${CurrentEpoch - epochNumber}`))
-			return distorySocket(socket)
-		}
+
 		//logger(`validatorData ${wallet} ephco ${epochNumber} CurrentEpoch ${CurrentEpoch} delay = [${CurrentEpoch - epochNumber}] goto USER Pool! `)
 		const timeout = validatorUserPool.get(wallet)
 		clearTimeout(timeout)
@@ -1572,8 +1576,9 @@ const moveData = (block: number) => {
 	if (!_wallets) {
 		moveDataProcess = false
 		logger(Colors.magenta(`moveData doing ${block} validatorPool.get NULL size Error!`))
-		return 
+		return
 	}
+
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets.length}) `))
 	const nodeWallets = _wallets
 	const userWallets = [...validatorUserPool.keys()]
@@ -1594,19 +1599,11 @@ const moveData = (block: number) => {
 	}
 
 	userWallets.forEach(n => {
-		const node: NodList = {
-			isGuardianNode: false,
-			wallet: n,
-			nodeID: 0,
-			nodeInfo: null,
-			Expired: block + 5
-		}
-
 		putUserMiningToPaymendUser(n)
 	})
 
 	moveDataProcess = false
-	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalConnectNode ${previousGossipStatus.totalConnectNode}  totalMiners ${totalMiners}`))
+	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalConnectNode ${previousGossipStatus.totalConnectNode}  totalMiners ${totalMiners} total Users ${userWallets}`))
 }
 const apiEndpoint = `https://apiv4.conet.network/api/`
 const rateUrl = `${apiEndpoint}miningRate?eposh=`
