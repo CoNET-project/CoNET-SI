@@ -148,7 +148,7 @@ const initGuardianNodes = async () => new Promise(async resolve => {
 		const result = await getNodeInfo(v.nodeID)
 		
 		
-		if (typeof (result) === 'object' && result?.ipaddress) {
+		if (typeof result === 'object' && result?.ipaddress) {
 			
 			if (v.nodeInfo && v.nodeInfo.pgpArmored){
 				v.nodeInfo.pgpArmored = Buffer.from(v.nodeInfo.pgpArmored, 'base64').toString()
