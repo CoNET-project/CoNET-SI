@@ -1458,7 +1458,7 @@ const getRestart = async () => {
 					return exec("sudo systemctl restart conet")
 				}
 			}
-			logger(`getRestart ############################  retsratBlockNumber = ${restartBlockNumber} serttData restartBlockNumber = ${serttData?.restartBlockNumber}`)
+			
 		}
 	} catch (ex: any) {
 		logger(`getRestart Error! ${ex.message}`)
@@ -1709,5 +1709,3 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 	stratlivenessV2Process = false
 }
-
-checkCurrentRate()
