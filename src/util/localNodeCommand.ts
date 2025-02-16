@@ -1418,7 +1418,10 @@ const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, e
 const nodeRestartEvent_addr = '0x2b5e7A8477dB4977eC8309605B5293f3CD00fC39'
 const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, CONETProvider)
 
-const checkCurrentRate = async () => {
+const checkCurrentRate = async (block: number) => {
+	if ( block % 2) {
+		return
+	}
 	let _epoch: BigInt
 	let _totalMiners: BigInt
 	let _minerRate: ethers.BigNumberish
@@ -1445,7 +1448,10 @@ const checkCurrentRate = async () => {
 let serttData: ICoNET_NodeSetup|null
 
 
-const getRestart = async () => {
+const getRestart = async (block: number) => {
+	if (block % 10 !== 0 ) {
+		return
+	}
 	try {
 		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.retsratBlockNumber())
 		if (restartBlockNumber) {
@@ -1468,7 +1474,7 @@ const getRestart = async () => {
 
 let searchEpochEventProcess = false
 
-const searchEpochEvent = () => new Promise (async resolve=>{
+const searchEpochEvent = (block: number) => new Promise (async resolve=>{
 	if (searchEpochEventProcess) {
 		resolve (false)
 		return
@@ -1476,8 +1482,8 @@ const searchEpochEvent = () => new Promise (async resolve=>{
 
 	searchEpochEventProcess = true
 	await Promise.all([
-		checkCurrentRate(),
-		getRestart()
+		checkCurrentRate(block),
+		getRestart(block)
 	])
 
 	searchEpochEventProcess = false
@@ -1496,7 +1502,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	
 
 	CONETProvider.on('block', block => {
-		searchEpochEvent()
+		searchEpochEvent(block)
 		if (block % 2) {
 			return
 		}
