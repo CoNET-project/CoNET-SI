@@ -774,7 +774,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 	switch (command.command) {
 
 		case 'SaaS_Sock5': {
-			const payment = checkPayment(command.walletAddress)
+			const payment = await checkPayment(command.walletAddress)
 
 			if (!payment) {
 				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
