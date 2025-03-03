@@ -78,9 +78,12 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 }
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
+//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' 217.160.189.159/solana-rpc
 
 const solanaRPC = 'https://api.mainnet-beta.solana.com'
+
 const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) => {
+	logger (Colors.magenta(`forwardToSolana from ${socket.remoteAddress} ${body}`))
 	const req = HttpsRequest({
 		hostname: solanaRPC,
 		port: 443,
