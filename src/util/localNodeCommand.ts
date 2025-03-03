@@ -22,7 +22,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {getRoute, startUp} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
@@ -1412,8 +1412,9 @@ let nodeWallet = ''
 const epoch_mining_info_cancun_addr = '0x31680dc539cb1835d7C1270527bD5D209DfBC547'.toLocaleLowerCase()
 const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, CONETProvider)
 
-const nodeRestartEvent_addr = '0x2b5e7A8477dB4977eC8309605B5293f3CD00fC39'
-const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, CONETProvider)
+const conet_Mainnet = new ethers.JsonRpcProvider (CoNET_mainnet_RPC)
+const nodeRestartEvent_addr = '0x261BE4f90b84298eb84322A6Dc64ffD4D0c46D34'
+const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, conet_Mainnet)
 
 const checkCurrentRate = async (block: number) => {
 	if ( block % 2) {
@@ -1533,7 +1534,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		// gossipStart(block)
 		stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
 	})
-	
+
 	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
 
