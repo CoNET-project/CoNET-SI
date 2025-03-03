@@ -89,7 +89,6 @@ const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) 
 		port: 443,
 		path: '/',
 		method: requestProtocol.split(' ')[0],
-		protocol: 'https:',
 		headers: {
 			'Content-Length': Buffer.byteLength(body),
 			"Content-Type": 'application/json',
