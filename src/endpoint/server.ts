@@ -9,8 +9,7 @@ import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
-import Http2 from 'node:http2'
-import {request as HttpsRequest} from 'node:https'
+import { request as HttpsRequest } from 'node:https'
 import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -77,18 +76,11 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 		response += `Content-Length\r\n\r\n`
 	socket.end(response)
 }
-/**
- * curl -v --include \
-     --no-buffer \
-     --header "Connection: Upgrade" \
-     --header "Upgrade: websocket" \
-     --header "Host: api.mainnet-beta.solana.com" \
-	 https://api.mainnet-beta.solana.com
- */
-//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
-//		curl --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://9977e9a45187dd80.conet.network/solana-rpc
 
-const solanaRPC = 'https://api.mainnet-beta.solana.com'
+//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
+//		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
+
+const solanaRPC = 'api.mainnet-beta.solana.com'
 
 const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) => {
 	logger (Colors.magenta(`forwardToSolana from ${socket.remoteAddress} ${body}`))
@@ -256,13 +248,18 @@ class conet_si_server {
 			const requestPath = requestProtocol.split(' ')[1]
 			const bodyLength = getLengthHander (htmlHeaders)
 
+			if (first) {
+				if (/^GET \/ HTTP\//.test(requestProtocol)) {
+					return responseRootHomePage(socket)
+				}
+				first = false
+				return responseHeader(/^OPTIONS /.test(requestProtocol))
+			}
+
 			if (request_line[1].length < bodyLength) {
 				return 
 			}
 
-			if (/^GET \/ HTTP\//.test(requestProtocol)) {
-				return responseRootHomePage(socket)
-			}
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 				return getData (socket, request, requestProtocol, this)
@@ -272,11 +269,11 @@ class conet_si_server {
 				logger (inspect(htmlHeaders, false, 3, true))
 				return responseOPTIONS(socket)
 			}
-
 			const path = requestProtocol.split(' ')[1]
 			if (/\/solana\-rpc/i.test(path)) {
 				return forwardToSolana (socket, request_line[1], requestProtocol)
 			}
+
 
 			distorySocket(socket)
 		})
