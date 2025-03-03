@@ -95,14 +95,14 @@ const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) 
 			"Content-Type": 'api.mainnet-beta.solana.com'
 		}
 	}, _socks => {
-		socket.pipe(socket).on('error', err => {
-
+		_socks.pipe(socket).on('error', err => {
+			logger(`forwardToSolana socket.pipe on error! ${err.message}`)
 		})
 
 	})
 
-	req.on('error', () => {
-
+	req.on('error', err => {
+		logger(`forwardToSolana req.on on error! ${err.message}`)
 	})
 
 	req.end(body)
