@@ -109,22 +109,18 @@ const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) 
 }
 
 const getData = (socket: Socket, request: string, requestProtocol: string, conet_si_server: conet_si_server) => {
-	const path = requestProtocol.split(' ')[1]
+
 	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
 		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
 		return distorySocket(socket)
 	}
-	logger(`getData ${requestProtocol} `)
 	let body
 	const request_line = request.split('\r\n\r\n')
-
-
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
 		return distorySocket(socket)
 	}
-
 
 	const htmlHeaders = request_line[0].split('\r\n')
 	//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
