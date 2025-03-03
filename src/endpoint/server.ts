@@ -78,7 +78,7 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 }
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
-//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://9977e9a45187dd80.conet.network/solana-rpc
+//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
 
 const solanaRPC = 'https://api.mainnet-beta.solana.com'
 
@@ -117,9 +117,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	logger(`getData ${requestProtocol} `)
 	let body
 	const request_line = request.split('\r\n\r\n')
-	if (/\/solana\-rpc/.test(path)) {
-		return forwardToSolana (socket, request_line[1], requestProtocol)
-	}
+
 
 	try {
 		body = JSON.parse(request_line[1])
@@ -273,7 +271,10 @@ class conet_si_server {
 				logger (inspect(htmlHeaders, false, 3, true))
 				return responseOPTIONS(socket)
 			}
-
+			const path = requestProtocol.split(' ')[1]
+			if (/\/solana\-rpc/i.test(path)) {
+				return forwardToSolana (socket, request_line[1], requestProtocol)
+			}
 
 
 			distorySocket(socket)
