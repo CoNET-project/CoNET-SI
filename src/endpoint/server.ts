@@ -248,18 +248,13 @@ class conet_si_server {
 			const requestPath = requestProtocol.split(' ')[1]
 			const bodyLength = getLengthHander (htmlHeaders)
 
-			if (first) {
-				if (/^GET \/ HTTP\//.test(requestProtocol)) {
-					return responseRootHomePage(socket)
-				}
-				first = false
-				return responseHeader(/^OPTIONS /.test(requestProtocol))
-			}
-
 			if (request_line[1].length < bodyLength) {
 				return 
 			}
 
+			if (/^GET \/ HTTP\//.test(requestProtocol)) {
+				return responseRootHomePage(socket)
+			}
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
 				return getData (socket, request, requestProtocol, this)
@@ -269,11 +264,11 @@ class conet_si_server {
 				logger (inspect(htmlHeaders, false, 3, true))
 				return responseOPTIONS(socket)
 			}
+
 			const path = requestProtocol.split(' ')[1]
 			if (/\/solana\-rpc/i.test(path)) {
 				return forwardToSolana (socket, request_line[1], requestProtocol)
 			}
-
 
 			distorySocket(socket)
 		})
@@ -303,32 +298,6 @@ class conet_si_server {
 				const htmlHeaders = request_line[0].split('\r\n')
 				const requestProtocol = htmlHeaders[0]
 				const requestPath = requestProtocol.split(' ')[1]
-
-				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-					//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
-					const bodyLength = getLengthHander (htmlHeaders)
-
-					const readMore = () => {
-						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-						socket.once('data', _data => {
-							
-							request_line[1] += _data
-							if (request_line[1].length < bodyLength) {
-								//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-								return readMore ()
-							}
-							
-							return getData (socket, request, requestProtocol, this)
-						})
-					}
-
-					if (request_line[1].length < bodyLength) {
-						return readMore ()
-					}
-
-					return getData (socket, request, requestProtocol, this)
-					
-				}
 
 				if (/^GET \/ HTTP\//.test(requestProtocol)) {
 					logger (inspect(htmlHeaders, false, 3, true))
