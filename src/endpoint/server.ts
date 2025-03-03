@@ -80,7 +80,7 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
 
-const solanaRPC = 'https://api.mainnet-beta.solana.com'
+const solanaRPC = 'api.mainnet-beta.solana.com'
 
 const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) => {
 	logger (Colors.magenta(`forwardToSolana from ${socket.remoteAddress} ${body}`))
@@ -92,7 +92,9 @@ const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) 
 		protocol: 'https:',
 		headers: {
 			'Content-Length': Buffer.byteLength(body),
-			"Content-Type": 'api.mainnet-beta.solana.com'
+			"Content-Type": 'application/json',
+			"user-agent": "curl/7.81.0",
+			accept: "*/*"
 		}
 	}, _socks => {
 		_socks.pipe(socket).on('error', err => {
