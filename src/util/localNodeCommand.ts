@@ -1533,6 +1533,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		// gossipStart(block)
 		stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
 	})
+	
 	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
 

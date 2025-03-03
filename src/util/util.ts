@@ -17,9 +17,10 @@ import { throws } from 'node:assert'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
+export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 export const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
-
+const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 
@@ -33,12 +34,34 @@ let gossipNodes: nodeInfo[] = []
 let getNodeInfoProssing = false
 
 const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0E94'
+const CoNETDePIN_Passport_mainnet_addr = '0x054498c353452A6F29FcA5E7A0c4D13b2D77fF08'
 
 const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
+const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, CoNETDePIN_PassportABI, CONETP_mainnet_rovider)
+
 const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
 const paymendUser: Map<string, boolean> = new Map()
 const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
 
+	//		_nftIDs, _expires, _expiresDays, _premium
+
+const _checkNFT = (nft: any[], fromAddr: string) => {
+	let _nftIDs: ethers.BigNumberish
+	let _expires: ethers.BigNumberish
+	let _expiresDays: ethers.BigNumberish
+	let _premium: boolean
+	[_nftIDs, _expires, _expiresDays, _premium] = nft
+	logger(inspect(nft, false, 3, true))
+	const today = parseFloat(new Date().getTime().toString())
+
+	const expires =  parseFloat(_expires.toString()) * 1000			//		Convert to milliseconds
+
+	if (!_nftIDs|| expires < today) {
+		return false
+	}
+	paymendUser.set(fromAddr, true)
+	return true
+}
 
 export const checkPayment = async(fromAddr: string) => {
 
@@ -48,24 +71,25 @@ export const checkPayment = async(fromAddr: string) => {
 		return true
 	}
 
-	let _nftIDs: ethers.BigNumberish
-	let _expires: ethers.BigNumberish
-	let _expiresDays: ethers.BigNumberish
-	let _premium: boolean
 	try {
-		[_nftIDs, _expires, _expiresDays, _premium] = await CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr)
+		const [cancun, mainnet] = await Promise.all([
+			CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr),
+			CoNETDePIN_PassportSC_mainnet_readonly.getCurrentPassport(fromAddr)
+		])
+		const [a1, a2] = await Promise.all([
+			_checkNFT(cancun, fromAddr),
+			_checkNFT(mainnet, fromAddr),
+		])
+		if (a1 || a2) {
+			return true
+		}
+
 	} catch (ex: any) {
 		logger(Colors.red(`checkPayment CoNETDePIN_PassportSC_readonly.getCurrentPassport Error!, ${ex.message}`))
 		return false
 	}
-	const today = parseFloat(new Date().getTime().toString())
-	const expires =  parseFloat(_expires.toString()) * 1000			//		Convert to milliseconds
 
-	if (!_nftIDs|| expires < today) {
-		return false
-	}
-	paymendUser.set(fromAddr, true)
-	return true
+	
 }
 
 export const putUserMiningToPaymendUser = (fromAddr: string) => {
@@ -355,4 +379,8 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 		return null
 	}
 	
+}
+const test = async () => {
+	const aa = await checkPayment('0x27f1662fe0659af472bc1249d88f1cc43e224e4a')
+	logger(Colors.magenta(`test aa = ${aa}`))
 }

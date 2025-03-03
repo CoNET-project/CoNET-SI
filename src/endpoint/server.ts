@@ -60,7 +60,57 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 	
 }
 
+const solanaRPC = (socket: Socket) => {
+	
+}
 
+//		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
+const responseOPTIONS = (socket: Socket|TLSSocket) => {
+	let response = `HTTP/1.1 204 No Content\r\n`
+		response += `Server: nginx/1.24.0 (Ubuntu)\r\n`
+		//	@ts-ignore
+		response += `Date: ${new Date().toGMTString()}\r\n`
+		response += `Connection: keep-alive\r\n`
+		response += `Access-Control-Allow-Origin: *\r\n`
+		response += `Access-Control-Allow-Credentials: true\r\n`
+		response += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
+		response += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
+		response += `Content-Length\r\n\r\n`
+	socket.end(response)
+}
+
+const getData = (socket: Socket, bodyLength: number, request_line: string[], htmlHeaders: string[], path: string, conet_si_server: conet_si_server) => {
+
+	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
+		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
+		return distorySocket(socket)
+	}
+
+	if (/\/solana\-rpc/.test(path)) {
+
+	}
+
+	//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+	let body
+	try {
+		body = JSON.parse(request_line[1])
+	} catch (ex) {
+		//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
+		//logger(request_line[1])
+		return distorySocket(socket)
+	}
+	
+	if (!body.data || typeof body.data !== 'string') {
+		logger (Colors.magenta(`startServer HTML body is ont string error!`))
+		logger(request_line[1])
+		distorySocket(socket)
+	}
+
+	
+
+	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
+}
 
 class conet_si_server {
 
@@ -68,9 +118,9 @@ class conet_si_server {
 	private password = ''
 	private debug = true
 	private workerNumber = 0
-	private nodeWallet: Wallet|null = null
+	public  nodeWallet: Wallet|null = null
 	public nodePool = []
-	private publicKeyID = ''
+	public publicKeyID = ''
 	private nodeIpAddr = ''
 	public initData:ICoNET_NodeSetup|null = null
 
@@ -133,32 +183,7 @@ class conet_si_server {
 		//logger(Colors.gray(`sockerdata has new connect ${socket.remoteAddress}`))
 		let first = true
 		let data = ''
-		const getData = (bodyLength: number, request_line: string[], htmlHeaders: string[]) => {
 
-			if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
-				logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
-				return distorySocket(socket)
-			}
-
-			//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-			let body
-			try {
-				body = JSON.parse(request_line[1])
-			} catch (ex) {
-				//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-				//logger(request_line[1])
-				return distorySocket(socket)
-			}
-			
-			if (!body.data || typeof body.data !== 'string') {
-				logger (Colors.magenta(`startServer HTML body is ont string error!`))
-				logger(request_line[1])
-				distorySocket(socket)
-				
-			}
-			//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-			return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID, this.nodeWallet)
-		}
 
 		const responseHeader = (option: boolean) => {
 			// logger(`responseHeader send response headers to ${socket.remoteAddress}`)
@@ -192,6 +217,7 @@ class conet_si_server {
 			const request_line = request.split('\r\n\r\n')
 			const htmlHeaders = request_line[0].split('\r\n')
 			const requestProtocol = htmlHeaders[0]
+			const requestPath = requestProtocol.split(' ')[1]
 			const bodyLength = getLengthHander (htmlHeaders)
 
 			if (first) {
@@ -208,8 +234,15 @@ class conet_si_server {
 
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
-				return getData (bodyLength, request_line, htmlHeaders)
+				return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
 			}
+
+			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
+				logger (inspect(htmlHeaders, false, 3, true))
+				return responseOPTIONS(socket)
+			}
+
+
 
 			distorySocket(socket)
 		})
@@ -236,42 +269,13 @@ class conet_si_server {
 				if (request_line.length < 2) {
 					return distorySocket(socket)
 				}
-
 				const htmlHeaders = request_line[0].split('\r\n')
 				const requestProtocol = htmlHeaders[0]
+				const requestPath = requestProtocol.split(' ')[1]
 
 				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 					//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 					const bodyLength = getLengthHander (htmlHeaders)
-
-					if (bodyLength < 0 || bodyLength > 1024 * 1024 ) {
-						logger (Colors.red(`startServer get header has no bodyLength [${ bodyLength }] destory CONNECT!`))
-						return distorySocket(socket)
-					}
-
-					const getData = () => {
-
-						if (!this.initData || !this.initData?.pgpKeyObj?.privateKeyObj) {
-							logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(this.initData, false, 3, true), '\n')
-							return distorySocket(socket)
-						}
-
-						//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-						let body
-						try {
-							body = JSON.parse(request_line[1])
-						} catch (ex) {
-							//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-							return distorySocket(socket)
-						}
-						
-						if (!body.data || typeof body.data !== 'string') {
-							logger (Colors.magenta(`startServer HTML body format error!`))
-							return distorySocket(socket)
-						}
-						//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-						return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, this.initData.pgpKeyObj.privateKeyObj, this.publicKeyID, this.nodeWallet)
-					}
 
 					const readMore = () => {
 						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
@@ -283,16 +287,15 @@ class conet_si_server {
 								return readMore ()
 							}
 							
-							getData ()
+							return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
 						})
 					}
 
 					if (request_line[1].length < bodyLength) {
-
 						return readMore ()
 					}
 
-					return getData ()
+					return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
 					
 				}
 
@@ -301,6 +304,10 @@ class conet_si_server {
 					return responseRootHomePage(socket)
 				}
 
+				if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
+					logger (inspect(htmlHeaders, false, 3, true))
+					return responseOPTIONS(socket)
+				}
 				
 				return distorySocket(socket)
 			})
