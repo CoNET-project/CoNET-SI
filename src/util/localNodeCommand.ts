@@ -877,7 +877,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			return distorySocket(socket)
 		}
 		nodeInfo.wallet = info.nodeWallet
-		logger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
+		//ogger(Colors.blue(`${command.walletAddress} getGuardianNodeWallet return node ${nodeInfo.ipaddress} wallet ${info.nodeWallet}`))
 	}
 
 	if (nodeInfo.wallet !== nodeWallet) {
@@ -1476,7 +1476,7 @@ let searchEpochEventRestartTimeout:  NodeJS.Timeout
 
 const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 
-	logger(`searchEpochEvent started on block [${block}]`)
+	//logger(`searchEpochEvent started on block [${block}]`)
 	clearTimeout(searchEpochEventRestartTimeout)
 
 	logger('')
