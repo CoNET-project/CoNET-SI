@@ -9,6 +9,7 @@ import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
+import { request as HttpsRequest } from 'node:https'
 import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -60,9 +61,6 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 	
 }
 
-const solanaRPC = (socket: Socket) => {
-	
-}
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 const responseOPTIONS = (socket: Socket|TLSSocket) => {
@@ -79,26 +77,56 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 	socket.end(response)
 }
 
-const getData = (socket: Socket, bodyLength: number, request_line: string[], htmlHeaders: string[], path: string, conet_si_server: conet_si_server) => {
+//		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 
+const solanaRPC = 'https://api.mainnet-beta.solana.com'
+const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) => {
+	const req = HttpsRequest({
+		hostname: solanaRPC,
+		port: 443,
+		path: '/',
+		method: requestProtocol.split(' ')[0],
+		protocol: 'https:',
+		headers: {
+			'Content-Length': Buffer.byteLength(body),
+			"Content-Type": 'api.mainnet-beta.solana.com'
+		}
+	}, _socks => {
+		socket.pipe(socket).on('error', err => {
+
+		})
+
+	})
+
+	req.on('error', () => {
+
+	})
+
+	req.end(body)
+}
+
+const getData = (socket: Socket, request: string, requestProtocol: string, conet_si_server: conet_si_server) => {
+	const path = requestProtocol.split(' ')[1]
 	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
 		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
 		return distorySocket(socket)
 	}
-
+	let body
+	const request_line = request.split('\r\n\r\n')
 	if (/\/solana\-rpc/.test(path)) {
-
+		return forwardToSolana (socket, request_line[1], requestProtocol)
 	}
 
-	//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-	let body
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
-		//logger (Colors.magenta(`startServer HTML body JSON parse ERROR!`))
-		//logger(request_line[1])
 		return distorySocket(socket)
 	}
+
+
+	const htmlHeaders = request_line[0].split('\r\n')
+	//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+
 	
 	if (!body.data || typeof body.data !== 'string') {
 		logger (Colors.magenta(`startServer HTML body is ont string error!`))
@@ -234,7 +262,7 @@ class conet_si_server {
 
 			if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
 				//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength=${bodyLength}`))
-				return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
+				return getData (socket, request, requestProtocol, this)
 			}
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
@@ -287,7 +315,7 @@ class conet_si_server {
 								return readMore ()
 							}
 							
-							return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
+							return getData (socket, request, requestProtocol, this)
 						})
 					}
 
@@ -295,7 +323,7 @@ class conet_si_server {
 						return readMore ()
 					}
 
-					return getData (socket, bodyLength, request_line, htmlHeaders, requestPath, this)
+					return getData (socket, request, requestProtocol, this)
 					
 				}
 
