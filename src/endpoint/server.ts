@@ -9,7 +9,7 @@ import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
-import { request as HttpsRequest } from 'node:https'
+import HTTP2 from 'node:http2'
 import {Wallet} from 'ethers'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -80,33 +80,48 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
 
-const solanaRPC = 'api.mainnet-beta.solana.com'
+const solanaRPC = 'https://api.mainnet-beta.solana.com'
 
 const forwardToSolana = (socket: Socket, body: string, requestProtocol: string) => {
 	logger (Colors.magenta(`forwardToSolana from ${socket.remoteAddress} ${body}`))
-	const req = HttpsRequest({
-		hostname: solanaRPC,
-		port: 443,
-		path: '/',
-		method: requestProtocol.split(' ')[0],
-		headers: {
-			'Content-Length': Buffer.byteLength(body),
-			"Content-Type": 'application/json',
-			"user-agent": "curl/7.81.0",
-			accept: "*/*"
-		}
-	}, _socks => {
-		_socks.pipe(socket).on('error', err => {
-			logger(`forwardToSolana socket.pipe on error! ${err.message}`)
-		})
-
+	const headers = {
+		'Content-Length': Buffer.byteLength(body),
+		"Content-Type": 'application/json',
+		"user-agent": "curl/7.81.0",
+		accept: "*/*"
+	}
+	const client = HTTP2.connect(solanaRPC)
+	client.on('error', (err) => console.error(err))
+	const req = client.request({ 
+		':path': '/',
+		':method': requestProtocol.split(' ')[0],
+		'Content-Length': Buffer.byteLength(body),
+		"Content-Type": 'application/json',
+		"user-agent": "curl/7.81.0",
+		accept: "*/*"
 	})
+	req.pipe(socket)
 
-	req.on('error', err => {
-		logger(`forwardToSolana req.on on error! ${err.message}`)
-	})
+	req.write(body)
+	req.end()
+	// const req = connect({
+	// 	hostname: solanaRPC,
+	// 	port: 443,
+	// 	path: '/',
+	// 	method: requestProtocol.split(' ')[0],
 
-	req.end(body)
+	// }, _socks => {
+	// 	_socks.pipe(socket).on('error', err => {
+	// 		logger(`forwardToSolana socket.pipe on error! ${err.message}`)
+	// 	})
+
+	// })
+
+	// req.on('error', err => {
+	// 	logger(`forwardToSolana req.on on error! ${err.message}`)
+	// })
+
+	// req.end(body)
 }
 
 const getData = (socket: Socket, request: string, requestProtocol: string, conet_si_server: conet_si_server) => {
