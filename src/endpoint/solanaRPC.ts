@@ -113,14 +113,15 @@ const getHeaderJSON = (requestHanders: string[]) => {
 
 	})
 	_ret += "}"
+	let ret = {}
 	try {
-		const ret = JSON.parse(_ret)
-		return ret
+		ret = JSON.parse(_ret)
+		
 	} catch (ex: any) {
 		logger(Colors.red(`getHeaderJSON JSON parse Error`))
 		logger(inspect(_ret, false, 3, true))
 	}
-	return {}
+	return ret
 	
 }
 
