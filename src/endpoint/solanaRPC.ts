@@ -164,8 +164,6 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		res.on('data', chunk => {
 			console.log(`on data chunk = ${chunk.toString()}`)
 		})
-
-		
 		
 		res.once ('end', () => {
 			console.log(`on end chunk = close`)
@@ -185,9 +183,10 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	req.once('end', () => {
 		socket.end()
 	})
-	if (body.length) {
-		req.end(body)
-	}
+	
+	
+	req.end(body)
+	
 	
 }
 
