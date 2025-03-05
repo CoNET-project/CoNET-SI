@@ -203,7 +203,7 @@ const forwardToSolana1 = (socket: Net.Socket, body: string, requestHanders: stri
 	let upgrade = false
 	requestHanders.forEach(n => {
 		if (/^Upgrade\:/i.test(n)) {
-			upgrade
+			upgrade = true
 		}
 	})
 
@@ -246,7 +246,9 @@ const forwardToSolana1 = (socket: Net.Socket, body: string, requestHanders: stri
 	req.on('end', () => {
 		socket.end()
 	})
-
+	if (upgrade) {
+		return req.write(body)
+	}
 	req.end(body)
 	
 }
@@ -333,7 +335,6 @@ const startServer = (port: number, publicKey: string) => {
 		
 		return console.table([
 			{ 'CoNET SI node': `Layer Minus Node start success! Url https://${publicKey}.conet.network` }
-			
 		])
 	})
 }
@@ -353,4 +354,4 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-startServer(4000, 'pppp')
+// startServer(4000, 'pppp')
