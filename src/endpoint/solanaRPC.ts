@@ -99,6 +99,8 @@ let headers = `HTTP/1.1 200\r\n`
 	headers += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 
 const getHeaderJSON = (requestHanders: string[]) => {
+	logger(Colors.magenta(`getHeaderJSON`))
+	logger(inspect(requestHanders, false, 3, true))
 	let _ret = "{"
 	requestHanders.forEach((n, index) => {
 		const key = n.split(': ')
