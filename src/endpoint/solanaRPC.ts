@@ -99,14 +99,12 @@ let headers = `HTTP/1.1 200\r\n`
 	headers += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 
 const getHeaderJSON = (requestHanders: string[]) => {
-	logger(Colors.magenta(`getHeaderJSON`))
-	logger(inspect(requestHanders, false, 3, true))
 	let _ret = "{"
 	requestHanders.forEach((n, index) => {
 		const key = n.split(': ')
 		
 		if (key[0] !=='' && key[1] !== '' && !/(^Host|^Origin|^Referer|^Sec\-|^Accept\-Encoding)/i.test(key[0])) {
-			logger(Colors.blue(`key[0] ${key[0]} && key[1] ${key[1]}`))
+
 			key[1] = key[1].replaceAll('"', '')
 			_ret += `"${key[0]}": "${key[1]}"`
 			if (index < requestHanders.length-1) {
@@ -348,4 +346,4 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-startServer(4000, 'pppp')
+// startServer(4000, 'pppp')

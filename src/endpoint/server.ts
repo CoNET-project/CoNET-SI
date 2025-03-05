@@ -307,7 +307,7 @@ class conet_si_server {
 				const path = requestProtocol.split(' ')[1]
 
 				if (/\/solana\-rpc/i.test(path)) {
-					return forwardToSolana (socket, request_line[1], request_line)
+					return forwardToSolana (socket, request_line[1], htmlHeaders)
 				}
 				return distorySocket(socket)
 			})
