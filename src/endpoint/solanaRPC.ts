@@ -204,8 +204,8 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 			console.log(`on error chunk = close`)
 			socket.end()
 		})
-		if (Upgrade) {
-			res.pipe(socket).pipe(res)
+		if (!Upgrade) {
+			res.pipe(socket)
 		}
 		
 	})
@@ -215,6 +215,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	})
 
 	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+		logger(`req.on('upgrade')`)
 		proxySocket.on('error', err => {
 			logger(Colors.red(`proxySocket.on('error')`), err.message)
 		})
@@ -232,7 +233,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		}
 
 		socket.write(createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers))
-		
+		proxySocket.pipe(socket).pipe(proxySocket)
 
 	})
 
