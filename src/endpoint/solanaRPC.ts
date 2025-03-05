@@ -103,7 +103,7 @@ const getHeaderJSON = (requestHanders: string[]) => {
 	requestHanders.forEach((n, index) => {
 		const key = n.split(': ')
 		
-		if (key[0] !=='' && key[1] !== '' && !/(^Host|^Origin|^Referer|^Sec\-|^Accept\-Encoding)/i.test(key[0])) {
+		if (key[0] !=='' && key[1] !== '' && !/(^Host|^Origin|^Referer|^Accept\-Encoding)/i.test(key[0])) {
 
 			key[1] = key[1].replaceAll('"', '')
 			_ret += `"${key[0]}": "${key[1]}"`
@@ -153,9 +153,6 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		const length = _headers['content-length']
 		let responseHeader = headers + `content-length: ${length}\r\n`
 		responseHeader += `date: ${new Date().toUTCString()}\r\n`
-		responseHeader += _headers['sec-websocket-extensions'] ? `Sec-Websocket-Extensions: ${_headers['sec-websocket-extensions']}\r\n`: ''
-		responseHeader += _headers['sec-websocket-key'] ? `sec-websocket-key: ${_headers['sec-websocket-key']}\r\n`: ''
-		responseHeader += _headers['sec-websocket-version'] ? `sec-websocket-version: ${_headers['sec-websocket-version']}\r\n`: ''
 		responseHeader += _headers['connection'] ? `Connection: ${_headers['connection']}\r\n`: ''
 		responseHeader += _headers['Aalow'] ? `Allow: ${_headers['allow']}\r\n`: ''
 		responseHeader += `${_headers['upgrade'] ? 'Upgrade: '+ _headers['upgrade']+ '\r\n\r\n' : '\r\n'}`
