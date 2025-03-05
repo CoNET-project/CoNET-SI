@@ -130,7 +130,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	req.once('response', (_headers, _flags) => {
 		const length = _headers['content-length']
 		let responseHeader = headers + `content-length: ${length}\r\n`
-		responseHeader += `date: ${new Date().toUTCString()}\r\n\r\n`
+		responseHeader += `date: ${new Date().toUTCString()}\r\n`
 		responseHeader += `Connection: ${_headers['connection']}\r\n`
 		responseHeader += `${_headers['upgrade'] ? 'Upgrade: '+ _headers['upgrade']+ '\r\n\r\n' : '\r\n'}`
 		socket.write(responseHeader)
@@ -235,3 +235,5 @@ const startServer = (port: number, publicKey: string) => {
 		])
 	})
 }
+
+startServer(4000, 'pppp')
