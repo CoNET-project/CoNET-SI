@@ -216,6 +216,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
 		logger(`req.on('upgrade')`)
+		logger(inspect(proxyRes.headers, false, 3, true))
 		proxySocket.on('error', err => {
 			logger(Colors.red(`proxySocket.on('error')`), err.message)
 		})
@@ -231,8 +232,13 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		if (proxyHead && proxyHead.length) {
 			proxySocket.unshift(proxyHead)
 		}
+		logger(inspect(proxyRes.headers, false, 3, true))
+		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
+		
+		logger(inspect(socketHandle, false, 3, true))
 
-		socket.write(createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers))
+		socket.write(socketHandle)
+		
 		proxySocket.pipe(socket).pipe(proxySocket)
 
 	})
