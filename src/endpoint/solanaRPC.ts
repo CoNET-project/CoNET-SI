@@ -135,8 +135,8 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	}
 
 	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	logger(Colors.magenta(`getHeaderJSON!`))
-	logger(inspect(rehandles, false, 3, true))
+	
+	
 	const option: Https.RequestOptions = {
 		host: solanaRPC_host,
 		port: 443,
@@ -144,6 +144,8 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		method,
 		headers: rehandles
 	}
+	logger(Colors.magenta(`getHeaderJSON!`))
+	logger(inspect(option, false, 3, true))
 	const req = Https.request(option, res => {
 		
 		const _headers = res.headers
