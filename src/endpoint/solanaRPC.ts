@@ -197,13 +197,14 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		
 		res.once ('end', () => {
 			console.log(`on end chunk = close`)
-			socket.end()
+			
 		})
 
 		res.once('error', () => {
 			console.log(`on error chunk = close`)
-			socket.end()
+			
 		})
+
 		if (!Upgrade) {
 			res.pipe(socket)
 		}
@@ -244,7 +245,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	})
 
 	req.once('end', () => {
-		socket.end()
+		
 	})
 	
 	if (!Upgrade) {
