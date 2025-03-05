@@ -235,5 +235,3 @@ const startServer = (port: number, publicKey: string) => {
 		])
 	})
 }
-
-startServer(4000, 'publickey')
