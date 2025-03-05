@@ -113,11 +113,13 @@ const getHeaderJSON = (requestHanders: string[]) => {
 		}
 
 	})
+	if (_ret[_ret.length - 1] === ',') {
+		_ret = _ret.slice(0, _ret.length-1)
+	}
 	_ret += "}"
 	let ret = {}
 	try {
 		ret = JSON.parse(_ret)
-		
 	} catch (ex: any) {
 		logger(Colors.red(`getHeaderJSON JSON parse Error`))
 		logger(inspect(_ret, false, 3, true))
