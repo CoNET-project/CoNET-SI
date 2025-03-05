@@ -29,7 +29,6 @@ const responseOPTIONS = (socket: Net.Socket) => {
 		response += `Access-Control-Allow-Origin: *\r\n`
 		response += `Access-Control-Allow-Credentials: true\r\n`
 		response += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
-		response += `Upgrade: websocket\r\n`
 		response += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 		response += `Content-Length\r\n\r\n`
 	socket.end(response)
@@ -236,3 +235,5 @@ const startServer = (port: number, publicKey: string) => {
 		])
 	})
 }
+
+startServer(4000, 'publickey')
