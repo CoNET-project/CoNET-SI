@@ -8,6 +8,7 @@ import Http2 from 'node:http2'
 import {readFileSync} from 'node:fs'
 import { join } from 'node:path'
 import Https from 'node:https'
+import Http from 'node:http'
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
@@ -126,6 +127,22 @@ const getHeaderJSON = (requestHanders: string[]) => {
 	return ret
 	
 }
+var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
+	return Object.keys(headers).reduce(function (head, key) {
+	  var value = headers[key]
+
+	  if (!Array.isArray(value)) {
+		head.push(key + ': ' + value)
+		return head
+	  }
+
+	  for (var i = 0; i < value.length; i++) {
+		head.push(key + ': ' + value[i])
+	  }
+	  return head
+	}, [line])
+	.join('\r\n') + '\r\n\r\n'
+}
 
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
@@ -135,8 +152,12 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	const rehandles = getHeaderJSON(requestHanders.slice(1))
 	let Upgrade = false
+
 	if (/^Upgrade/i.test(method)) {
 		Upgrade = true
+		socket.setTimeout(0)
+		socket.setNoDelay(true)
+		socket.setKeepAlive(true, 0)
 	}
 	
 	const option: Https.RequestOptions = {
@@ -149,8 +170,12 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	logger(Colors.magenta(`getHeaderJSON!`))
 	logger(inspect(option, false, 3, true))
+
+
 	const req = Https.request(option, res => {
-		let responseHeader = headers
+		res.headers
+		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : headers
+
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
 			const value = res.rawHeaders[i+1]
@@ -162,8 +187,9 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		
 		socket.write(responseHeader + '\r\n')
 		logger(responseHeader)
-		res.pipe(socket)
+		
 
+		
 
 		res.on('data', chunk => {
 			console.log(`on data chunk = ${chunk.toString()}`)
@@ -178,9 +204,35 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 			console.log(`on error chunk = close`)
 			socket.end()
 		})
+		if (Upgrade) {
+			res.pipe(socket).pipe(res)
+		}
+		
 	})
 
 	req.on('error', err => {
+
+	})
+
+	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+		proxySocket.on('error', err => {
+			logger(Colors.red(`proxySocket.on('error')`), err.message)
+		})
+
+		proxySocket.on('end', function () {
+			logger(Colors.red(`proxySocket.on('end')`))
+		})
+
+		proxySocket.setTimeout(0)
+		proxySocket.setNoDelay(true)
+		proxySocket.setKeepAlive(true, 0)
+
+		if (proxyHead && proxyHead.length) {
+			proxySocket.unshift(proxyHead)
+		}
+
+		socket.write(createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers))
+		
 
 	})
 
@@ -191,65 +243,6 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	
 	req.end(body)
 	
-	
-}
-
-const forwardToSolana1 = (socket: Net.Socket, body: string, requestHanders: string[]) => {
-	logger (Colors.magenta(`forwardToSolana from ${socket.remoteAddress} ${body}`))
-	if (/^OPTIONS/i.test(requestHanders[0].split(' ')[0]) ) {
-		logger(inspect(requestHanders, false, 3, true))
-		return responseOPTIONS(socket)
-	}
-	let upgrade = false
-	requestHanders.forEach(n => {
-		if (/^Upgrade\:/i.test(n)) {
-			upgrade = true
-		}
-	})
-
-	const solanaClient = Http2.connect(solanaRPCURL)
-	solanaClient.on('error', (err) => console.error(err))
-	const method = requestHanders[0].split(' ')[0]
-	const option: Http2.OutgoingHttpHeaders = {
-		':path': '/',
-		host: solanaRPC_host,
-		'User-Agent': 'curl/8.7.1',
-		Accept: '*/*',
-		'Content-Type': 'application/json',
-		'Content-Length': body.length,
-		':method': method
-	}
-
-	requestHanders.forEach(n => {
-		if (/^Upgrade\:/i.test(n)) {
-			return option.upgrade = n.split(':')[0]
-		}
-	})
-	logger(inspect(requestHanders, false, 3, true))
-
-	const req = solanaClient.request(option)
-
-	req.once('response', (_headers, _flags) => {
-		const length = _headers['content-length']
-		let responseHeader = headers + `content-length: ${length}\r\n`
-		responseHeader += `date: ${new Date().toUTCString()}\r\n`
-		responseHeader += `Connection: ${_headers['connection']}\r\n`
-		responseHeader += `${_headers['upgrade'] ? 'Upgrade: '+ _headers['upgrade']+ '\r\n\r\n' : '\r\n'}`
-		socket.write(responseHeader)
-		req.pipe(socket).pipe(req)
-	})
-	
-	req.on('data', chunk => {
-		console.log(`on data chunk = ${chunk.toString()}`)
-	})
-
-	req.on('end', () => {
-		socket.end()
-	})
-	if (upgrade) {
-		return req.write(body)
-	}
-	req.end(body)
 	
 }
 
