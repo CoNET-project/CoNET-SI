@@ -129,7 +129,9 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	if (/^OPTIONS/i.test(method) ) {
 		return responseOPTIONS(socket)
 	}
+
 	const rehandles = getHeaderJSON(requestHanders.slice(1))
+	logger(Colors.magenta(`getHeaderJSON!`))
 	logger(inspect(rehandles, false, 3, true))
 	const option: Https.RequestOptions = {
 		host: solanaRPC_host,
@@ -342,4 +344,4 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-// startServer(4000, 'pppp')
+startServer(4000, 'pppp')
