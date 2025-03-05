@@ -234,7 +234,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		}
 		logger(inspect(proxyRes.headers, false, 3, true))
 		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
-		
+
 		logger(inspect(socketHandle, false, 3, true))
 
 		socket.write(socketHandle)
@@ -247,8 +247,10 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		socket.end()
 	})
 	
+	if (!Upgrade) {
+		req.end(body)
+	}
 	
-	req.end(body)
 	
 	
 }
