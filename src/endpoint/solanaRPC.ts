@@ -137,6 +137,9 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 	  }
 
 	  for (var i = 0; i < value.length; i++) {
+		if (/Access-Control-Allow-Origin/.test(key)) {
+			value[i] = '*'
+		}
 		head.push(key + ': ' + value[i])
 	  }
 	  return head
@@ -197,7 +200,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		
 		res.once ('end', () => {
 			console.log(`on end chunk = close`)
-			
+			socket.end()
 		})
 
 		res.once('error', () => {
@@ -245,7 +248,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	})
 
 	req.once('end', () => {
-		
+		socket.end()
 	})
 	
 	if (!Upgrade) {
