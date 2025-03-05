@@ -92,7 +92,6 @@ curl --include \
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 	
 let headers = `HTTP/1.1 200\r\n`
-	headers += `content-type: application/json; charset=utf-8\r\n`
 	headers += `Access-Control-Allow-Origin: *\r\n`
 	headers += `Access-Control-Allow-Credentials: true\r\n`
 	headers += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
@@ -135,7 +134,10 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	}
 
 	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	
+	let Upgrade = false
+	if (/^Upgrade/i.test(method)) {
+		Upgrade = true
+	}
 	
 	const option: Https.RequestOptions = {
 		host: solanaRPC_host,
@@ -144,19 +146,21 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		method,
 		headers: rehandles
 	}
+
 	logger(Colors.magenta(`getHeaderJSON!`))
 	logger(inspect(option, false, 3, true))
 	const req = Https.request(option, res => {
+		let responseHeader = headers
+		for (let i = 0; i < res.rawHeaders.length; i += 2) {
+			const key = res.rawHeaders[i]
+			const value = res.rawHeaders[i+1]
+			if (!/^Access-Control/i.test(key)) {
+				responseHeader += `${key}: ${value}\r\n`
+			}
+		}
+
 		
-		const _headers = res.headers
-		logger(inspect(_headers, false, 3, true))
-		const length = _headers['content-length']
-		let responseHeader = headers + `content-length: ${length}\r\n`
-		responseHeader += `date: ${new Date().toUTCString()}\r\n`
-		responseHeader += _headers['connection'] ? `Connection: ${_headers['connection']}\r\n`: ''
-		responseHeader += _headers['Aalow'] ? `Allow: ${_headers['allow']}\r\n`: ''
-		responseHeader += `${_headers['upgrade'] ? 'Upgrade: '+ _headers['upgrade']+ '\r\n\r\n' : '\r\n'}`
-		socket.write(responseHeader)
+		socket.write(responseHeader + '\r\n')
 		logger(responseHeader)
 		res.pipe(socket)
 
@@ -349,4 +353,4 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-// startServer(4000, 'pppp')
+startServer(4000, 'pppp')
