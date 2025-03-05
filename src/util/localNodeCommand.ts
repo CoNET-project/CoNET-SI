@@ -1441,7 +1441,6 @@ const checkCurrentRate = async (block: number) => {
 		}
 	}
 	
-	
 }
 let serttData: ICoNET_NodeSetup|null
 

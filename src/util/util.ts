@@ -76,12 +76,26 @@ export const checkPayment = async(fromAddr: string) => {
 			CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr),
 			CoNETDePIN_PassportSC_mainnet_readonly.getCurrentPassport(fromAddr)
 		])
-		const [a1, a2] = await Promise.all([
-			_checkNFT(cancun, fromAddr),
-			_checkNFT(mainnet, fromAddr),
-		])
-		if (a1 || a2) {
-			return true
+		//	check balance
+		let balanceCancun = 0
+		let balancemainnet = 0
+		
+		if (cancun[0]) {
+			balanceCancun = await CoNETDePIN_PassportSC_readonly.balanceOf(fromAddr, cancun[0])
+		}
+		if (mainnet[0]) {
+			balancemainnet = await CoNETDePIN_PassportSC_mainnet_readonly.balanceOf(fromAddr, mainnet[0])
+		}
+
+		if (balanceCancun + balancemainnet > 0) {
+			const [a1, a2] = await Promise.all([
+				_checkNFT(cancun, fromAddr),
+				_checkNFT(mainnet, fromAddr),
+			])
+	
+			if (a1 || a2) {
+				return true
+			}
 		}
 
 	} catch (ex: any) {
@@ -89,6 +103,7 @@ export const checkPayment = async(fromAddr: string) => {
 		return false
 	}
 
+	return false
 	
 }
 
@@ -384,3 +399,4 @@ const test = async () => {
 	const aa = await checkPayment('0x27f1662fe0659af472bc1249d88f1cc43e224e4a')
 	logger(Colors.magenta(`test aa = ${aa}`))
 }
+test()
