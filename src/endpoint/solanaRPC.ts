@@ -103,7 +103,7 @@ const getHeaderJSON = (requestHanders: string[]) => {
 	requestHanders.forEach((n, index) => {
 		const key = n.split(': ')
 		
-		if (key[0] && !/^Host|^Origin|^Referer|^Sec\-Fetch|sec\-ch|^Accept\-Encoding/i.test(key[0])) {
+		if (key[0] && key[1] && !/^Host|^Origin|^Referer|^Sec\-Fetch|sec\-ch|^Accept\-Encoding/i.test(key[0])) {
 			key[1] = key[1].replaceAll('"', '')
 			_ret += `"${key[0]}": "${key[1]}"`
 			if (index < requestHanders.length-1) {

@@ -236,10 +236,10 @@ class conet_si_server {
 				logger (inspect(htmlHeaders, false, 3, true))
 				return responseOPTIONS(socket)
 			}
-			const path = requestProtocol.split(' ')[1]
-			if (/\/solana\-rpc/i.test(path)) {
-				return forwardToSolana (socket, request_line[1], request_line)
-			}
+			// const path = requestProtocol.split(' ')[1]
+			// if (/\/solana\-rpc/i.test(path)) {
+			// 	return forwardToSolana (socket, request_line[1], request_line)
+			// }
 			distorySocket(socket)
 		})
 
