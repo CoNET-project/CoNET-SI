@@ -81,10 +81,10 @@ export const checkPayment = async(fromAddr: string) => {
 		let balancemainnet = 0
 		
 		if (cancun[0]) {
-			balanceCancun = await CoNETDePIN_PassportSC_readonly.balanceOf(fromAddr, cancun[0])
+			balanceCancun = parseInt(await CoNETDePIN_PassportSC_readonly.balanceOf(fromAddr, cancun[0]))
 		}
 		if (mainnet[0]) {
-			balancemainnet = await CoNETDePIN_PassportSC_mainnet_readonly.balanceOf(fromAddr, mainnet[0])
+			balancemainnet =parseInt( await CoNETDePIN_PassportSC_mainnet_readonly.balanceOf(fromAddr, mainnet[0]))
 		}
 
 		if (balanceCancun + balancemainnet > 0) {
@@ -396,7 +396,7 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	
 }
 const test = async () => {
-	const aa = await checkPayment('0x27f1662fe0659af472bc1249d88f1cc43e224e4a')
+	const aa = await checkPayment('0xAD5875dED9621bf44042DF186fc88BAD6A57c09e')
 	logger(Colors.magenta(`test aa = ${aa}`))
 }
 test()
