@@ -373,8 +373,6 @@ export const getGuardianNodeWallet: (node: nodeInfo, _localWallet: ethers.Wallet
 	})
 })
 
-
-
 export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 	currentEpoch = await CONETProvider.getBlockNumber()
 	localPublicKeyID = keyID
@@ -395,8 +393,8 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
-const test = async () => {
-	const aa = await checkPayment('0xAD5875dED9621bf44042DF186fc88BAD6A57c09e')
-	logger(Colors.magenta(`test aa = ${aa}`))
-}
-test()
+// const test = async () => {
+// 	const aa = await checkPayment('0xAD5875dED9621bf44042DF186fc88BAD6A57c09e')
+// 	logger(Colors.magenta(`test aa = ${aa}`))
+// }
+// test()
