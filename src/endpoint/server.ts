@@ -107,6 +107,63 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
+const socketData = (socket: Socket, server: conet_si_server) => {
+	socket.once('data', data => {
+
+		const request = data.toString()
+		
+		const request_line = request.split('\r\n\r\n')
+		
+		if (request_line.length < 2) {
+			return distorySocket(socket)
+		}
+		const htmlHeaders = request_line[0].split('\r\n')
+		const requestProtocol = htmlHeaders[0]
+
+		if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
+			//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+			const bodyLength = getLengthHander (htmlHeaders)
+
+			const readMore = () => {
+				//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+				socket.once('data', _data => {
+					
+					request_line[1] += _data
+					if (request_line[1].length < bodyLength) {
+						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						return readMore ()
+					}
+					
+					return getData (socket, request, requestProtocol, server)
+				})
+			}
+
+			if (request_line[1].length < bodyLength) {
+				return readMore ()
+			}
+
+			return getData (socket, request, requestProtocol, server)
+			
+		}
+
+		if (/^GET \/ HTTP\//.test(requestProtocol)) {
+			logger (inspect(htmlHeaders, false, 3, true))
+			return responseRootHomePage(socket)
+		}
+
+		if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
+			logger (inspect(htmlHeaders, false, 3, true))
+			return responseOPTIONS(socket)
+		}
+		const path = requestProtocol.split(' ')[1]
+
+		if (/\/solana\-rpc/i.test(path)) {
+			return forwardToSolana (socket, request_line[1], htmlHeaders)
+		}
+		return distorySocket(socket)
+	})
+}
+
 class conet_si_server {
 
 	private PORT=0
@@ -256,61 +313,7 @@ class conet_si_server {
 		
 		const server = createServer( socket => {
 
-			socket.once('data', data => {
-
-				const request = data.toString()
-				
-				const request_line = request.split('\r\n\r\n')
-				
-				if (request_line.length < 2) {
-					return distorySocket(socket)
-				}
-				const htmlHeaders = request_line[0].split('\r\n')
-				const requestProtocol = htmlHeaders[0]
-				const requestPath = requestProtocol.split(' ')[1]
-
-				if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-					//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
-					const bodyLength = getLengthHander (htmlHeaders)
-
-					const readMore = () => {
-						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-						socket.once('data', _data => {
-							
-							request_line[1] += _data
-							if (request_line[1].length < bodyLength) {
-								//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
-								return readMore ()
-							}
-							
-							return getData (socket, request, requestProtocol, this)
-						})
-					}
-
-					if (request_line[1].length < bodyLength) {
-						return readMore ()
-					}
-
-					return getData (socket, request, requestProtocol, this)
-					
-				}
-
-				if (/^GET \/ HTTP\//.test(requestProtocol)) {
-					logger (inspect(htmlHeaders, false, 3, true))
-					return responseRootHomePage(socket)
-				}
-
-				if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
-					logger (inspect(htmlHeaders, false, 3, true))
-					return responseOPTIONS(socket)
-				}
-				const path = requestProtocol.split(' ')[1]
-
-				if (/\/solana\-rpc/i.test(path)) {
-					return forwardToSolana (socket, request_line[1], htmlHeaders)
-				}
-				return distorySocket(socket)
-			})
+			return socketData (socket, this)
 
 		})
 
@@ -337,7 +340,7 @@ class conet_si_server {
 		}
 		
 		const server = createServerSSL (options, socket => {
-			this.sockerdata (socket)
+			return socketData( socket, this)
 		})
 
 		server.listen(443, () => {
