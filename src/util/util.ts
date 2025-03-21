@@ -34,11 +34,12 @@ let gossipNodes: nodeInfo[] = []
 let getNodeInfoProssing = false
 
 const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0E94'
-const CoNETDePIN_Passport_mainnet_addr = '0x40d64D88A86D6efb721042225B812379dc97bc89'
+const CoNETDePIN_passport_distributor_mainnet_addr = '0x40d64D88A86D6efb721042225B812379dc97bc89'
+const  CoNETDePIN_Passport_mainnet_addr = '0x054498c353452A6F29FcA5E7A0c4D13b2D77fF08'
 
 const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
-const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
-
+const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, CoNETDePIN_PassportABI, CONETP_mainnet_rovider)
+const CoNETDePIN_passport_distributor_mainnet_readonly = new ethers.Contract(CoNETDePIN_passport_distributor_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
 const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
 const paymendUser: Map<string, boolean> = new Map()
 const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
@@ -74,7 +75,7 @@ export const checkPayment = async(fromAddr: string) => {
 	try {
 		const [cancun, mainnet] = await Promise.all([
 			CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr),
-			CoNETDePIN_PassportSC_mainnet_readonly.getCurrentPassport(fromAddr)
+			CoNETDePIN_passport_distributor_mainnet_readonly.getCurrentPassport(fromAddr)
 		])
 		//	check balance
 		let balanceCancun = 0
@@ -394,7 +395,7 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	
 }
 // const test = async () => {
-// 	const aa = await checkPayment('0xAD5875dED9621bf44042DF186fc88BAD6A57c09e')
+// 	const aa = await checkPayment('0x5fd71406886503b631d5b9c24888d84f0eab6521')
 // 	logger(Colors.magenta(`test aa = ${aa}`))
 // }
 // test()
