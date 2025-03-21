@@ -14,7 +14,7 @@ import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
 import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
 import { throws } from 'node:assert'
-
+import passport_distributor_ABI from './passport_distributor-ABI.json'
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
@@ -34,10 +34,10 @@ let gossipNodes: nodeInfo[] = []
 let getNodeInfoProssing = false
 
 const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0E94'
-const CoNETDePIN_Passport_mainnet_addr = '0x054498c353452A6F29FcA5E7A0c4D13b2D77fF08'
+const CoNETDePIN_Passport_mainnet_addr = '0x40d64D88A86D6efb721042225B812379dc97bc89'
 
 const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
-const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, CoNETDePIN_PassportABI, CONETP_mainnet_rovider)
+const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
 
 const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
 const paymendUser: Map<string, boolean> = new Map()
