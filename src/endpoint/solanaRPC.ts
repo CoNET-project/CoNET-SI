@@ -24,11 +24,12 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 const responseOPTIONS = (socket: Net.Socket) => {
 	let response = `HTTP/2 204 No Content\r\n`
+		
+		response += `date: ${new Date().toUTCString()}\r\n`
 		response += `Server: nginx/1.24.0 (Ubuntu)\r\n`
-		//	@ts-ignore
-		response += `Date: ${new Date().toGMTString()}\r\n`
-		response += `Connection: keep-alive\r\n`
 		response += `vary: Origin\r\n`
+		response += `vary: accept-encoding\r\n`
+		response += `Connection: keep-alive\r\n`
 		response += `Access-Control-Allow-Origin: *\r\n`
 		response += `Access-Control-Allow-Credentials: true\r\n`
 		response += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
@@ -41,9 +42,8 @@ const responseRootHomePage = (socket: Net.Socket| Tls.TLSSocket) => {
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
 	const ret = `HTTP/1.1 200 OK\r\n` +
+	`date: ${new Date().toUTCString()}\r\n` +
 	`Server: nginx/1.24.0 (Ubuntu)\r\n` +
-	//@ts-ignore
-	`Date: ${new Date().toGMTString()}\r\n` +
 	`Content-Type: text/html\r\n` +
 	`Content-Length: ${homepage.length}\r\n`+
 	`Connection: keep-alive\r\n` +
