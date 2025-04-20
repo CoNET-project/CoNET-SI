@@ -95,6 +95,8 @@ curl --include \
 	
 let headers = `HTTP/1.1 200\r\n`
 	headers += `vary: Origin\r\n`
+	headers += `date: ${new Date().toUTCString()}\r\n`
+	headers += `Server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `Access-Control-Allow-Origin: *\r\n`
 	headers += `Access-Control-Allow-Credentials: true\r\n`
 	headers += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
