@@ -28,6 +28,7 @@ const responseOPTIONS = (socket: Net.Socket) => {
 		//	@ts-ignore
 		response += `Date: ${new Date().toGMTString()}\r\n`
 		response += `Connection: keep-alive\r\n`
+		response += `vary: Origin\r\n`
 		response += `Access-Control-Allow-Origin: *\r\n`
 		response += `Access-Control-Allow-Credentials: true\r\n`
 		response += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
@@ -93,6 +94,7 @@ curl --include \
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 	
 let headers = `HTTP/1.1 200\r\n`
+	headers += `vary: Origin\r\n`
 	headers += `Access-Control-Allow-Origin: *\r\n`
 	headers += `Access-Control-Allow-Credentials: true\r\n`
 	headers += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`

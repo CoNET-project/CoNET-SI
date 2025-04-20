@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net'
 import {createConnection} from 'node:net'
-import {distorySocket, response200Html} from './htmlResponse'
+import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
 import {logger} from './logger'
 import Colors from 'colors/safe'
 import {inspect} from 'node:util'
@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes} from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, } from '../util/util'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -780,7 +780,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 			if (!payment) {
 				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-				return distorySocket(socket, '402 Payment Required')
+				return distorySocketPayment(socket)
 			}
 			
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
@@ -795,7 +795,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 			if (!payment) {
 				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-				return distorySocket(socket, '402 Payment Required')
+				return distorySocketPayment(socket)
 			}
 			const requestHeaders = command.requestData[1]
             const requestOrgnal = command.requestData[0]
