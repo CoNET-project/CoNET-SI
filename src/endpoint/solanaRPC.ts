@@ -95,6 +95,7 @@ curl --include \
 	
 let headers = `HTTP/1.1 200\r\n`
 	headers += `vary: Origin\r\n`
+	headers += `vary: accept-encoding\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `Server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `Access-Control-Allow-Origin: *\r\n`
@@ -187,7 +188,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
 			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow/i.test(key)) {
+			if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
 				responseHeader += `${key}: ${value}\r\n`
 			}
 		}
