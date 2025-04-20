@@ -187,7 +187,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
 			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow/i.test(key)) {
+			if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
 				responseHeader += `${key}: ${value}\r\n`
 			}
 		}
