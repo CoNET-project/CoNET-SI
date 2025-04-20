@@ -93,11 +93,11 @@ curl --include \
 
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 	
-let headers = `HTTP/1.1 200\r\n`
-	headers += `vary: Origin\r\n`
-	headers += `vary: accept-encoding\r\n`
+let headers = `HTTP/2 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `Server: nginx/1.24.0 (Ubuntu)\r\n`
+	headers += `vary: Origin\r\n`
+	headers += `vary: accept-encoding\r\n`
 	headers += `Access-Control-Allow-Origin: *\r\n`
 	headers += `Access-Control-Allow-Credentials: true\r\n`
 	headers += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
