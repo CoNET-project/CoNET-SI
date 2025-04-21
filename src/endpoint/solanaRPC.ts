@@ -102,7 +102,7 @@ const getResponseHeaders = ( _headers: string[]) => {
 	const orgionIndex = _headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
 	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : _headers[orgionIndex].split(/^Origin\: /i)[1]
 	
-	let headers = `HTTP/2 200\r\n`
+	let headers = `HTTP/1.1 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `content-type: application/json; charset=utf-8\r\n`
