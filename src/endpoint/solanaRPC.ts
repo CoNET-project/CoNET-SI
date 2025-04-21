@@ -26,7 +26,7 @@ const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))
 	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
 	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\: /i)[1]
-	logger(inspect(headers, false, 3, true))
+
 	let response = `HTTP/1.1 204 no content\r\n`
 		// response += `date: ${new Date().toUTCString()}\r\n`
 		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
@@ -38,7 +38,7 @@ const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 		response += `access-control-allow-credentials: true\r\n`
 		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 		response += `content-length: 0\r\n\r\n`
-		logger(inspect(response, false, 3, true))
+
 	socket.end(response)
 }
 
@@ -146,6 +146,7 @@ const getHeaderJSON = (requestHanders: string[]) => {
 	return ret
 	
 }
+
 var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 	return Object.keys(headers).reduce(function (head, key) {
 	  var value = headers[key]
@@ -270,11 +271,11 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		
 	})
 	
+	req.write(body)
+
 	if (!Upgrade) {
-		req.end(body)
+		req.end()
 	}
-	
-	
 	
 }
 
