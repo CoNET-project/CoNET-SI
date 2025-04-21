@@ -23,15 +23,16 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
+	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))
 	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
-	const orgion = orgionIndex < 0 ? '': headers[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
+	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
 	logger(inspect(headers, false, 3, true))
 	let response = `HTTP/2 204 no content\r\n`
 		// response += `date: ${new Date().toUTCString()}\r\n`
 		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
 		// response += `Connection: keep-alive\r\n`
-		response += `access-control-allow-origin: *\r\n`
-		response += `access-control-allow-headers: content-type\r\n`
+		response += `access-control-allow-origin: ${orgion}\r\n`
+		//response += `access-control-allow-headers: content-type\r\n`
 		// response += `vary: Access-Control-Request-Headers\r\n`
 		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
 		// response += `access-control-allow-credentials: true\r\n`
