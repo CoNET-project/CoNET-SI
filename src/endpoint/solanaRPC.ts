@@ -200,7 +200,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	const req = Https.request(option, res => {
 		
-		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders(requestHanders)
+		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : ''
 
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
@@ -229,7 +229,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		})
 
 		if (!Upgrade) {
-			socket.pipe(req).pipe(socket)
+			req.pipe(socket)
 		}
 		
 		
@@ -277,10 +277,17 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	if (body) {
 		logger(`req.write body size = ${body.length}`)
 		req.write(body)
-		if (!Upgrade) {
-			logger(`!Upgrade doing req.end()!`)
-			req.end()
+		
+	} else {
+		
+		let responseHeader = getResponseHeaders(requestHanders)
+		if (socket.writable) {
+			socket.once ('data', data => {
+				req.write(data)
+			})
+			socket.write(responseHeader)
 		}
+		
 	}
 	
 
