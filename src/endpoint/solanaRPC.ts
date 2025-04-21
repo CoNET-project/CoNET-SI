@@ -38,6 +38,7 @@ const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 		// response += `access-control-allow-credentials: true\r\n`
 		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 		response += `content-length: 0\r\n\r\n`
+		logger(inspect(response, false, 3, true))
 	socket.end(response)
 }
 
