@@ -97,18 +97,22 @@ curl --include \
 
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 
-const getResponseHeaders = () => {
+const getResponseHeaders = ( _headers: string[]) => {
+	const checkMac = _headers.findIndex(n => / AppleWebKit\//.test(n))
+	const orgionIndex = _headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
+	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : _headers[orgionIndex].split(/^Origin\: /i)[1]
+	
 	let headers = `HTTP/2 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `content-type: application/json; charset=utf-8\r\n`
 	headers += `vary: origin\r\n`
 	headers += `vary: accept-encoding\r\n`
-	headers += `access-control-allow-origin: *\r\n`
-	// headers += `access-control-allow-credentials: true\r\n`
+	headers += `access-control-allow-origin: ${orgion}\r\n`
+	headers += `access-control-allow-credentials: true\r\n`
 	headers += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
 	headers += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
-
+	logger(inspect(headers, false, 3, true))
 	return headers
 }
 
@@ -195,7 +199,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	const req = Https.request(option, res => {
 		
-		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders()
+		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders(requestHanders)
 
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
