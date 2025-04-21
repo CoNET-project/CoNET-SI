@@ -284,10 +284,14 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	} 
 		
 	let responseHeader = getResponseHeaders(requestHanders)
+
 	if (socket.writable) {
 		socket.once ('data', data => {
+			
 			req.write(data)
+			logger(`!body on body`, data.toString())
 			if (!Upgrade) {
+				logger(`req.end()`)
 				req.end()
 			}
 		})
