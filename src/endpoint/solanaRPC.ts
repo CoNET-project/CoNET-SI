@@ -229,8 +229,10 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		})
 
 		if (!Upgrade) {
-			res.pipe(socket)
+			socket.pipe(req).pipe(socket)
 		}
+		
+		
 		
 	})
 
@@ -270,13 +272,19 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	req.once('end', () => {
 		
 	})
-	logger(`req.write body size = ${body.length}`)
-	req.write(body)
 
-	if (!Upgrade) {
-		logger(`!Upgrade doing req.end()!`)
-		req.end()
+
+	if (body) {
+		logger(`req.write body size = ${body.length}`)
+		req.write(body)
+		if (!Upgrade) {
+			logger(`!Upgrade doing req.end()!`)
+			req.end()
+		}
 	}
+	
+
+	
 	
 }
 
