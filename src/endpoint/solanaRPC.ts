@@ -162,9 +162,9 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	const method = requestHanders[0].split(' ')[0]
 	const orgionIndex = requestHanders.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
 	const orgion = orgionIndex < 0 ? '': requestHanders[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
-	// if (/^OPTIONS/i.test(method) ) {
-	// 	return responseOPTIONS(socket, orgion)
-	// }
+	if (/^OPTIONS/i.test(method) ) {
+		return responseOPTIONS(socket, orgion)
+	}
 
 	
 	let Upgrade = false
@@ -204,9 +204,6 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		socket.write(responseHeader + '\r\n')
 		logger(responseHeader)
 		
-
-		
-
 		res.on('data', chunk => {
 			console.log(`on data chunk = ${chunk.toString()}`)
 		})
