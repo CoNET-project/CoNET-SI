@@ -194,7 +194,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		headers: rehandles
 	}
 
-	logger(Colors.magenta(`getHeaderJSON!`))
+	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
 	logger(inspect(option, false, 3, true))
 
 
@@ -277,20 +277,22 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	if (body) {
 		logger(`req.write body size = ${body.length}`)
 		req.write(body)
-		
-	} else {
-		
-		let responseHeader = getResponseHeaders(requestHanders)
-		if (socket.writable) {
-			socket.once ('data', data => {
-				req.write(data)
-			})
-			socket.write(responseHeader)
+		if (!Upgrade) {
+			req.end()
 		}
+		return 
+	} 
 		
+	let responseHeader = getResponseHeaders(requestHanders)
+	if (socket.writable) {
+		socket.once ('data', data => {
+			req.write(data)
+			if (!Upgrade) {
+				req.end()
+			}
+		})
+		socket.write(responseHeader)
 	}
-	
-
 	
 	
 }
