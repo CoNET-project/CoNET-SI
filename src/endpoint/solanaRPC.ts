@@ -31,8 +31,8 @@ const responseOPTIONS = (socket: Net.Socket) => {
 		response += `access-control-allow-headers: content-type\r\n`
 		// response += `vary: Access-Control-Request-Headers\r\n`
 		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
-		// response += `Access-Control-Allow-Credentials: true\r\n`
-		// response += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
+		response += `access-control-allow-credentials: true\r\n`
+		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 		response += `content-length: 0\r\n\r\n`
 	socket.end(response)
 }
@@ -94,14 +94,14 @@ curl --include \
 	
 let headers = `HTTP/2 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
-	headers += `Server: nginx/1.24.0 (Ubuntu)\r\n`
+	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `content-type: application/json; charset=utf-8\r\n`
-	headers += `vary: Origin\r\n`
+	headers += `vary: rrigin\r\n`
 	headers += `vary: accept-encoding\r\n`
-	headers += `Access-Control-Allow-Origin: *\r\n`
-	headers += `Access-Control-Allow-Credentials: true\r\n`
-	headers += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
-	headers += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
+	headers += `access-control-allow-origin: *\r\n`
+	headers += `access-control-allow-credentials: true\r\n`
+	headers += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
+	headers += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 
 const getHeaderJSON = (requestHanders: string[]) => {
 	let _ret = "{"
