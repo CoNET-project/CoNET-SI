@@ -23,17 +23,17 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 const responseOPTIONS = (socket: Net.Socket) => {
-	let response = `HTTP/2 204 No Content\r\n`
-		response += `date: ${new Date().toUTCString()}\r\n`
-		response += `Server: nginx/1.24.0 (Ubuntu)\r\n`
-		response += `Connection: keep-alive\r\n`
-		response += `Access-Control-Allow-Origin: *\r\n`
+	let response = `HTTP/2 204 no content\r\n`
+		// response += `date: ${new Date().toUTCString()}\r\n`
+		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
+		// response += `Connection: keep-alive\r\n`
+		response += `access-control-allow-origin: *\r\n`
 		response += `access-control-allow-headers: content-type\r\n`
-		response += `vary: Access-Control-Request-Headers\r\n`
-		response += `Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
+		// response += `vary: Access-Control-Request-Headers\r\n`
+		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
 		// response += `Access-Control-Allow-Credentials: true\r\n`
 		// response += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
-		response += `Content-Length: 0\r\n\r\n`
+		response += `content-length: 0\r\n\r\n`
 	socket.end(response)
 }
 
