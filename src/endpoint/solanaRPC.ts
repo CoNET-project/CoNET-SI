@@ -97,7 +97,7 @@ const getResponseHeaders = (origin: string) => {
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `content-type: application/json; charset=utf-8\r\n`
-	headers += `vary: rrigin\r\n`
+	headers += `vary: origin\r\n`
 	headers += `vary: accept-encoding\r\n`
 	headers += `access-control-allow-origin: *\r\n`
 	// headers += `access-control-allow-credentials: true\r\n`
