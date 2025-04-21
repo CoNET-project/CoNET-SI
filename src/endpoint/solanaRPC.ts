@@ -270,10 +270,11 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	req.once('end', () => {
 		
 	})
-	
+	logger(`req.write body size = ${body.length}`)
 	req.write(body)
 
 	if (!Upgrade) {
+		logger(`!Upgrade doing req.end()!`)
 		req.end()
 	}
 	
@@ -365,6 +366,8 @@ const startServer = (port: number, publicKey: string) => {
 		])
 	})
 }
+
+
 // const k = 'GET /solana-rpc HTTP/1.1\r\n' +
 //     'Host: 9977e9a45187dd80.conet.network\r\n' +
 //     'Connection: Upgrade\r\n' +
