@@ -160,8 +160,8 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
-	const orgionIndex = requestHanders.findIndex(n => /^Origin/i.test(n))
-	const orgion = orgionIndex < 0 ? '': requestHanders[orgionIndex].split(':')[1]
+	const orgionIndex = requestHanders.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
+	const orgion = orgionIndex < 0 ? '': requestHanders[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
 	// if (/^OPTIONS/i.test(method) ) {
 	// 	return responseOPTIONS(socket, orgion)
 	// }
@@ -333,8 +333,8 @@ const startServer = (port: number, publicKey: string) => {
 			}
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
-				const orgionIndex = htmlHeaders.findIndex(n => /^Origin/i.test(n))
-				const orgion = orgionIndex <0? '': htmlHeaders[orgionIndex].split(':')[1]
+				const orgionIndex = htmlHeaders.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
+				const orgion = orgionIndex < 0 ? '': htmlHeaders[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
 				return responseOPTIONS(socket, orgion)
 			}
 
