@@ -201,7 +201,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	const req = Https.request(option, res => {
 		
 		if (!Upgrade) {
-			req.pipe(socket)
+			res.pipe(socket)
 		}
 
 		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : ''
@@ -232,7 +232,6 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 			
 		})
 
-		
 		
 	})
 
