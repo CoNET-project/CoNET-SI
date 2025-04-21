@@ -25,7 +25,7 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))
 	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
-	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
+	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\: /i)[1]
 	logger(inspect(headers, false, 3, true))
 	let response = `HTTP/2 204 no content\r\n`
 		// response += `date: ${new Date().toUTCString()}\r\n`
@@ -35,7 +35,7 @@ const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 		//response += `access-control-allow-headers: content-type\r\n`
 		// response += `vary: Access-Control-Request-Headers\r\n`
 		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
-		// response += `access-control-allow-credentials: true\r\n`
+		response += `access-control-allow-credentials: true\r\n`
 		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
 		response += `content-length: 0\r\n\r\n`
 		logger(inspect(response, false, 3, true))
