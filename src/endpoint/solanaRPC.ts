@@ -22,7 +22,10 @@ const solanaRPCURL = `https://${solanaRPC_host}`
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-const responseOPTIONS = (socket: Net.Socket, origin: string) => {
+const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
+	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
+	const orgion = orgionIndex < 0 ? '': headers[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
+	logger(inspect(headers, false, 3, true))
 	let response = `HTTP/2 204 no content\r\n`
 		// response += `date: ${new Date().toUTCString()}\r\n`
 		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
@@ -92,7 +95,7 @@ curl --include \
 
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
 
-const getResponseHeaders = (origin: string) => {
+const getResponseHeaders = () => {
 	let headers = `HTTP/2 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
@@ -160,10 +163,10 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
-	const orgionIndex = requestHanders.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
-	const orgion = orgionIndex < 0 ? '': requestHanders[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
+	
 	if (/^OPTIONS/i.test(method) ) {
-		return responseOPTIONS(socket, orgion)
+		
+		return responseOPTIONS(socket, requestHanders)
 	}
 
 	
@@ -190,7 +193,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 	const req = Https.request(option, res => {
 		
-		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders(orgion)
+		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders()
 
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
@@ -330,9 +333,8 @@ const startServer = (port: number, publicKey: string) => {
 			}
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
-				const orgionIndex = htmlHeaders.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
-				const orgion = orgionIndex < 0 ? '': htmlHeaders[orgionIndex].split(/^Origin\:\s*https*\:\/\//i)[1]
-				return responseOPTIONS(socket, orgion)
+				
+				return responseOPTIONS(socket, htmlHeaders)
 			}
 
 			const path = requestProtocol.split(' ')[1]
