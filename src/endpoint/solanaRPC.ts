@@ -22,12 +22,12 @@ const solanaRPCURL = `https://${solanaRPC_host}`
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-const responseOPTIONS = (socket: Net.Socket) => {
+const responseOPTIONS = (socket: Net.Socket, origin: string) => {
 	let response = `HTTP/2 204 no content\r\n`
 		// response += `date: ${new Date().toUTCString()}\r\n`
 		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
 		// response += `Connection: keep-alive\r\n`
-		response += `access-control-allow-origin: *\r\n`
+		response += `access-control-allow-origin: ${origin||'*'}\r\n`
 		response += `access-control-allow-headers: content-type\r\n`
 		// response += `vary: Access-Control-Request-Headers\r\n`
 		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
@@ -91,17 +91,22 @@ curl --include \
  */
 
 	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
-	
-let headers = `HTTP/2 200\r\n`
+
+const getResponseHeaders = (origin: string) => {
+	let headers = `HTTP/2 200\r\n`
 	headers += `date: ${new Date().toUTCString()}\r\n`
 	headers += `server: nginx/1.24.0 (Ubuntu)\r\n`
 	headers += `content-type: application/json; charset=utf-8\r\n`
 	headers += `vary: rrigin\r\n`
 	headers += `vary: accept-encoding\r\n`
-	headers += `access-control-allow-origin: *\r\n`
+	headers += `access-control-allow-origin: ${origin||'*'}\r\n`
 	headers += `access-control-allow-credentials: true\r\n`
 	headers += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
 	headers += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
+
+	return headers
+}
+
 
 const getHeaderJSON = (requestHanders: string[]) => {
 	let _ret = "{"
@@ -155,13 +160,15 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
-	if (/^OPTIONS/i.test(method) ) {
-		return responseOPTIONS(socket)
-	}
+	const orgionIndex = requestHanders.findIndex(n => /^Origin/i.test(n))
+	const orgion = orgionIndex < 0 ? '': requestHanders[orgionIndex].split(':')[1]
+	// if (/^OPTIONS/i.test(method) ) {
+	// 	return responseOPTIONS(socket, orgion)
+	// }
 
-	const rehandles = getHeaderJSON(requestHanders.slice(1))
+	
 	let Upgrade = false
-
+	const rehandles = getHeaderJSON(requestHanders.slice(1))
 	if (/^Upgrade/i.test(method)) {
 		Upgrade = true
 		socket.setTimeout(0)
@@ -182,8 +189,8 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 
 
 	const req = Https.request(option, res => {
-		res.headers
-		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : headers
+		
+		let responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : getResponseHeaders(orgion)
 
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
@@ -326,9 +333,11 @@ const startServer = (port: number, publicKey: string) => {
 			}
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
-				logger (inspect(htmlHeaders, false, 3, true))
-				return responseOPTIONS(socket)
+				const orgionIndex = htmlHeaders.findIndex(n => /^Origin/i.test(n))
+				const orgion = orgionIndex <0? '': htmlHeaders[orgionIndex].split(':')[1]
+				return responseOPTIONS(socket, orgion)
 			}
+
 			const path = requestProtocol.split(' ')[1]
 			if (/\/solana\-rpc/i.test(path)) {
 				return forwardToSolana (socket, request_line[1], htmlHeaders)
