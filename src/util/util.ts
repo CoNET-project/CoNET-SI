@@ -19,7 +19,7 @@ import passport_distributor_ABI from './passport_distributor-ABI.json'
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
-export const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
+export const CONETCancun= new ethers.JsonRpcProvider(CoNET_CancunRPC)
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
@@ -37,12 +37,12 @@ const CoNETDePIN_Passport_cancun_addr = '0xb889F14b557C2dB610f283055A988952953E0
 const CoNETDePIN_passport_distributor_mainnet_addr = '0x40d64D88A86D6efb721042225B812379dc97bc89'
 const  CoNETDePIN_Passport_mainnet_addr = '0x054498c353452A6F29FcA5E7A0c4D13b2D77fF08'
 
-const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETProvider)
+const CoNETDePIN_PassportSC_readonly = new ethers.Contract(CoNETDePIN_Passport_cancun_addr, CoNETDePIN_PassportABI, CONETCancun)
 const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Passport_mainnet_addr, CoNETDePIN_PassportABI, CONETP_mainnet_rovider)
 const CoNETDePIN_passport_distributor_mainnet_readonly = new ethers.Contract(CoNETDePIN_passport_distributor_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
-const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETProvider)
+const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETCancun)
 const paymendUser: Map<string, boolean> = new Map()
-const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETProvider)
+const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETCancun)
 
 	//		_nftIDs, _expires, _expiresDays, _premium
 
@@ -85,7 +85,7 @@ export const checkPayment = async(fromAddr: string) => {
 			balanceCancun = parseInt(await CoNETDePIN_PassportSC_readonly.balanceOf(fromAddr, cancun[0]))
 		}
 		if (mainnet[0]) {
-			balancemainnet =parseInt( await CoNETDePIN_PassportSC_mainnet_readonly.balanceOf(fromAddr, mainnet[0]))
+			balancemainnet = parseInt( await CoNETDePIN_PassportSC_mainnet_readonly.balanceOf(fromAddr, mainnet[0]))
 		}
 
 		if (balanceCancun + balancemainnet > 0) {
@@ -375,15 +375,12 @@ export const getGuardianNodeWallet: (node: nodeInfo, _localWallet: ethers.Wallet
 })
 
 export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
-	currentEpoch = await CONETProvider.getBlockNumber()
 	localPublicKeyID = keyID
 	const ip = getServerIPV4Address ( false )
 	if (ip && ip.length) {
 		GlobalIpAddress = ip[0]
 	}
 	localWallet = nodePrivate
-	
-	
 }
 
 

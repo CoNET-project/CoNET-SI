@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes} from '../util/util'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -60,7 +60,8 @@ export const generateWalletAddress = async ( password: string ) => {
 	const acc = await accountw.encrypt (password)
 	return (acc)
 }
-const CONETProvider = new ethers.JsonRpcProvider(CoNET_CancunRPC)
+const CONETProvider_Cancun = new ethers.JsonRpcProvider(CoNET_CancunRPC)
+const CONETProvider_Mainnet = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 export const loadWalletAddress = async ( walletBase: string, password: string ) => {
 	//logger (inspect(walletBase, false, 3, true))
 	if (typeof walletBase === 'object') {
@@ -1410,7 +1411,7 @@ let listenValidatorEpoch = 0
 let nodeWallet = ''
 
 const epoch_mining_info_cancun_addr = '0x31680dc539cb1835d7C1270527bD5D209DfBC547'.toLocaleLowerCase()
-const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, CONETProvider)
+const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, CONETProvider_Cancun)
 
 const conet_Mainnet = new ethers.JsonRpcProvider (CoNET_mainnet_RPC)
 const nodeRestartEvent_addr = '0x261BE4f90b84298eb84322A6Dc64ffD4D0c46D34'
@@ -1509,7 +1510,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		return
 	}
 	serttData = await getSetup()
-	listenValidatorEpoch = CurrentEpoch = await CONETProvider.getBlockNumber()
+	listenValidatorEpoch = CurrentEpoch = await CONETProvider_Mainnet.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 	await getFaucet(nodePrivate)
 	await startUp(nodePrivate, domain)
@@ -1519,7 +1520,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	}
 	
 
-	CONETProvider.on('block', block => {
+	CONETProvider_Mainnet.on('block', block => {
 		searchEpochEvent(block)
 		if (block % 2) {
 			return
@@ -1533,8 +1534,6 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		// gossipStart(block)
 		stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
 	})
-
-	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 }
 
 interface IGossipStatus {
@@ -1729,3 +1728,35 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	await Promise.all(processPool)
 	stratlivenessV2Process = false
 }
+
+
+// export const startEPOCH_EventListeningForMining1 = async () => {
+
+
+// 	listenValidatorEpoch = CurrentEpoch = await CONETProvider_Mainnet.getBlockNumber()
+
+	
+// 	currentRate = {
+// 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
+// 	}
+	
+
+// 	CONETProvider_Mainnet.on('block', block => {
+// 		searchEpochEvent(block)
+// 		if (block % 2) {
+// 			return
+// 		}
+
+// 		logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} Success!`))
+		
+		
+// 		CurrentEpoch = block
+// 		moveData(block)
+// 		// gossipStart(block)
+		
+// 	})
+
+// 	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
+// }
+
+// startEPOCH_EventListeningForMining1()
