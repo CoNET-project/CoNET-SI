@@ -957,25 +957,22 @@ const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Pro
 
 const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
 
-    logger (Colors.blue (`${wallet} socks5Connect connect to [${prosyData.host}:${prosyData.port}]`))
-	const port = prosyData.port
-	let host = prosyData.host
-	if (!host) {
-		return distorySocket(resoestSocket)
-	}
-
+    
+	let host: string, port: number, ipStyle: boolean
 	try {
-		const ipStyle = IP.isPublic(host)
-		if (!ipStyle) {
-			return distorySocket(resoestSocket)
+		port = prosyData.port
+		host = prosyData.host || ''
+		ipStyle = IP.isV4Format(host)
+		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+		if ( port < 1 || port > 65535 || ! host) {
+			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
 		}
-	} catch (ex){
-		host = await getHostIpv4(host)
-	}
-
-	if ( port < 1 || port > 65535 || !host) {
+		
+	} catch (ex: any) {
+		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
 		return distorySocket(resoestSocket)
 	}
+
 
 	try {
 		const socket = createConnection ( port, host, () => {
