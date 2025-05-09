@@ -1099,7 +1099,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	try {
 		messObj = await readMessage ({armoredMessage: pgpData})
 	} catch (ex) {
-		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error ${socket.remoteAddress} !\n`))
+		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error ${socket.remoteAddress} !\n`), pgpData)
 		return distorySocket(socket)
 	}
 
