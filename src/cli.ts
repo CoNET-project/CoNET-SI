@@ -212,5 +212,9 @@ if ( Cluster.isPrimary ) {
 
 	getSetupInfo ()
 } else {
+	process.on('uncaughtException', (err, origin) => {
+		console.error(`Caught exception: ${err}\n` +
+						`Exception origin: ${origin}`);
+	});
 	new conet_si_server ()
 }
