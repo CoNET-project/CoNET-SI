@@ -78,7 +78,7 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 }
 
 const getData = (socket: Socket, request: string, requestProtocol: string, conet_si_server: conet_si_server) => {
-	logger (Colors.red(`goto getData ${socket.remoteAddress} \n`))
+	//logger (Colors.red(`goto getData ${socket.remoteAddress} \n`))
 	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
 		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
 		return distorySocket(socket)
@@ -102,8 +102,8 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 
 	
 
-	logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}  ${socket.remoteAddress}`))
-	console.log (`------${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
+	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}  ${socket.remoteAddress}`))
+	//console.log (`------${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
