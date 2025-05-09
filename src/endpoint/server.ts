@@ -78,7 +78,7 @@ const responseOPTIONS = (socket: Socket|TLSSocket) => {
 }
 
 const getData = (socket: Socket, request: string, requestProtocol: string, conet_si_server: conet_si_server) => {
-
+	logger (Colors.red(`goto getData ${socket.remoteAddress} \n`))
 	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
 		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
 		return distorySocket(socket)
@@ -124,12 +124,12 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 			const bodyLength = getLengthHander (htmlHeaders)
 
 			const readMore = () => {
-				//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+				logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
 				socket.once('data', _data => {
 					
 					request_line[1] += _data
 					if (request_line[1].length < bodyLength) {
-						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
+						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
 						return readMore ()
 					}
 					
