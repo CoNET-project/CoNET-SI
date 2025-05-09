@@ -95,14 +95,14 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	const htmlHeaders = request_line[0].split('\r\n')
 
 	if (!body.data || typeof body.data !== 'string') {
-		logger (Colors.magenta(`startServer HTML body is ont string error!`))
+		logger (Colors.magenta(`startServer HTML body is ont string error! ${socket.remoteAddress}`))
 		logger(request_line[1])
 		distorySocket(socket)
 	}
 
 	
 
-	logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}`))
+	logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}  ${socket.remoteAddress}`))
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
