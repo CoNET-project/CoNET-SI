@@ -142,7 +142,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 				return readMore ()
 			}
 
-			logger (Colors.red(`1 goto getData ${socket.remoteAddress} bodyLength = ${bodyLength} request_line[1] = ${request_line[1].length} \n`))
+			//logger (Colors.red(`1 goto getData ${socket.remoteAddress} bodyLength = ${bodyLength} request_line[1] = ${request_line[1].length} \n`))
 			return getData (socket, request, requestProtocol, server)
 			
 		}
