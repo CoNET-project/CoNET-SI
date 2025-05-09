@@ -103,7 +103,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	
 
 	logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}  ${socket.remoteAddress}`))
-	logger (`${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
+	console.log (`------${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
