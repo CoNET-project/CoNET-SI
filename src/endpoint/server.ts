@@ -88,13 +88,12 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
+		
 		return distorySocket(socket)
 	}
 
 	const htmlHeaders = request_line[0].split('\r\n')
-	//logger (Colors.magenta(`startServer getData request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}]`))
 
-	
 	if (!body.data || typeof body.data !== 'string') {
 		logger (Colors.magenta(`startServer HTML body is ont string error!`))
 		logger(request_line[1])
@@ -103,7 +102,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 
 	
 
-	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket nodePool = [${ this.nodePool }]`))
+	logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}`))
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
@@ -121,7 +120,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 		const requestProtocol = htmlHeaders[0]
 
 		if (/^POST \/post HTTP\/1.1/.test(requestProtocol)) {
-			//logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
+			logger (Colors.blue(`/post access! from ${socket.remoteAddress}`))
 			const bodyLength = getLengthHander (htmlHeaders)
 
 			const readMore = () => {
