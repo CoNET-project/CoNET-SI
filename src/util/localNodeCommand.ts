@@ -1099,14 +1099,14 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	try {
 		messObj = await readMessage ({armoredMessage: pgpData})
 	} catch (ex) {
-		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error !\n`))
+		logger (Colors.red(`postOpenpgpRoute body has not PGP message Error ${socket.remoteAddress} !\n`))
 		return distorySocket(socket)
 	}
 
 	const encrypKeyID: typeOpenPGPKeyID[] = messObj.getEncryptionKeyIDs()
 
 	if (!encrypKeyID?.length) {
-		logger (Colors.red(`postOpenpgpRoute readMessage has no keys ERROR end connecting!\n`))
+		logger (Colors.red(`postOpenpgpRoute readMessage has no keys ERROR end connecting! ${socket.remoteAddress} \n`))
 		return distorySocket(socket)
 	}
 	
@@ -1114,7 +1114,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 
 	
 	if (customerKeyID !== pgpPublicKeyID) {
-		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node!`))
+		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddress}`))
 		return forwardEncryptedSocket(socket, pgpData, customerKeyID)
 	}
 
@@ -1126,12 +1126,12 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		
 		content.pgpSign
 	} catch (ex) {
-		logger (Colors.red(` decryptMessage EX ERROR, distorySocket!`))
+		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddress}`))
 		return distorySocket(socket)
 	}
 
 	if (!content.message ||!content.signMessage) {
-		logger (Colors.red(`Command format Error`))
+		logger (Colors.red(`Command format Error ${socket.remoteAddress}`))
 		logger(inspect(content, false,3, true))
 		return distorySocket(socket)
 	}
@@ -1141,7 +1141,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	const command = checkSign (content.message, content.signMessage)
 
 	if (!command) {
-		logger(Colors.red(`checkSignObj Error!`))
+		logger(Colors.red(`checkSignObj Error! ${socket.remoteAddress}`))
 		return distorySocket(socket)
 	}
 	
