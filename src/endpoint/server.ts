@@ -88,7 +88,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
-		logger (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length}\n `, inspect(request, false, 3, true))
+		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length}\n `, inspect(request, false, 3, true))
 		return distorySocket(socket)
 	}
 
