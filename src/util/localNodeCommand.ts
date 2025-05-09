@@ -969,6 +969,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 		}
 		
 	} catch (ex: any) {
+		logger(inspect(prosyData, false, 3, true))
 		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
 		return distorySocket(resoestSocket)
 	}
