@@ -123,7 +123,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 		if (/^POST \/post HTTP/.test(requestProtocol)) {
 			
 			const bodyLength = getLengthHander (htmlHeaders)
-			logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength = ${bodyLength}`))
+			//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength = ${bodyLength}`))
 			const readMore = () => {
 				logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
 				socket.once('data', _data => {
