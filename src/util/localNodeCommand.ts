@@ -983,7 +983,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 			})
 			
 			const data = Buffer.from(prosyData.buffer, 'base64')
-			if (!data) {
+			if (data) {
 				socket.write (data)
 			}
 			
