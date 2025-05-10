@@ -208,8 +208,6 @@ if ( Cluster.isPrimary ) {
 		
 		new conet_si_server ()
 	}
-
-
 	getSetupInfo ()
 } else {
 	process.on('uncaughtException', (err, origin) => {

@@ -978,12 +978,15 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 	try {
 		const socket = createConnection ( port, host, () => {
 
-			socket.pipe(resoestSocket).pipe(socket).on('error', err => {
+			resoestSocket.pipe(socket).pipe(resoestSocket).on('error', err => {
 				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
 			})
-	
+			
 			const data = Buffer.from(prosyData.buffer, 'base64')
-			socket.write (data)
+			if (!data) {
+				socket.write (data)
+			}
+			
 			resoestSocket.resume()
 		})
 	
