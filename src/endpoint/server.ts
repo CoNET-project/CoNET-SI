@@ -24,6 +24,11 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
     console.log(Colors.grey( hexdump( buffer.slice( 0, length ))))
 }
 
+process.on('uncaughtException', (err, origin) => {
+	console.error(`Caught exception: ${err}\n` +
+					`Exception origin: ${origin}`);
+});
+
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
 	if (index < 0) {
