@@ -1035,6 +1035,7 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 	const _remotrIP = resoestSocket?.remoteAddress ? resoestSocket.remoteAddress : 'no remote IP'
 	const _remotrIP_1 = _remotrIP.split(':')
 	let nodeIpaddress = _remotrIP_1[_remotrIP_1.length-1]
+	
 	const infoData: ITypeTransferCount = {
 		hostInfo: host,
 		startTime: new Date().getTime(),
@@ -1048,9 +1049,8 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 	try {
 		logger(`socks5Connectv2 ====> ${host}:${port} `)
 		const socket = createConnection ( port, host, () => {
-
-			resoestSocket.pipe(upload).pipe(socket).pipe(resoestSocket)
-			
+			resoestSocket.pipe(upload).pipe(socket)
+			socket.pipe(download).pipe(resoestSocket)
 		})
 	
 		socket.once ( 'end', () => {
@@ -1228,14 +1228,17 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 		sourceSocket.once ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			conn.end().destroy()
+			// conn.end().destroy()
+		})
+		conn.write (rawHttpRequest)
+
+		conn.pipe (sourceSocket).on('error', err => {
+			logger(`socketForward conn.pipe (sourceSocket) on error`, err)
 		})
 
-		conn.pipe (sourceSocket).pipe(conn).on('error', err => {
-			logger(`postOpenpgpRouteSocket createConnection conn.pipe on error`, err)
+		sourceSocket.pipe(conn).on('error', err => {
+			logger(`socketForward sourceSocket.pipe(conn) on error`, err)
 		})
-		
-		conn.write (rawHttpRequest)
 
 	})
 
