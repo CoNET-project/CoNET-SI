@@ -114,42 +114,27 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
-const socketData = (socket: Socket, server: conet_si_server) => {
+const socketData = (socket: Socket, server: conet_si_server, incomeData = '') => {
 	socket.once('data', data => {
 
-		const request = data.toString()
+		const request = incomeData + data.toString()
 		
 		const request_line = request.split('\r\n\r\n')
 		
 		if (request_line.length < 2) {
-			return distorySocket(socket)
+			return socketData(socket, server, request)
 		}
+
 		const htmlHeaders = request_line[0].split('\r\n')
 		const requestProtocol = htmlHeaders[0]
+		const bodyLength = getLengthHander (htmlHeaders)
+		
+		if (request_line[1].length < bodyLength) {
+			return socketData (socket, server, request)
+		}
 
 		if (/^POST \/post HTTP/.test(requestProtocol)) {
 			
-			const bodyLength = getLengthHander (htmlHeaders)
-			//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength = ${bodyLength}`))
-			const readMore = () => {
-				//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
-				socket.once('data', _data => {
-					
-					request_line[1] += _data
-					if (request_line[1].length < bodyLength) {
-						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
-						return readMore ()
-					}
-					
-					return getData (socket, request, requestProtocol, server)
-				})
-			}
-
-			if (request_line[1].length < bodyLength) {
-				return readMore ()
-			}
-
-			//logger (Colors.red(`1 goto getData ${socket.remoteAddress} bodyLength = ${bodyLength} request_line[1] = ${request_line[1].length} \n`))
 			return getData (socket, request, requestProtocol, server)
 			
 		}
