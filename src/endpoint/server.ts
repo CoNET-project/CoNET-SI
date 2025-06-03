@@ -90,14 +90,16 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	}
 	let body
 	const request_line = request.split('\r\n\r\n')
+	const htmlHeaders = request_line[0].split('\r\n')
+	const bodyLength = getLengthHander (htmlHeaders)
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
-		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length} `, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
+		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length} bodyLength = ${bodyLength}`, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
 		return distorySocket(socket)
 	}
 
-	const htmlHeaders = request_line[0].split('\r\n')
+
 
 	if (!body.data || typeof body.data !== 'string') {
 		logger (Colors.magenta(`startServer HTML body is ont string error! ${socket.remoteAddress}`))
