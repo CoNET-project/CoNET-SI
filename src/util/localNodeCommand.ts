@@ -963,7 +963,11 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 	try {
 		const socket = createConnection ( port, host, () => {
 
-			socket.pipe(resoestSocket).pipe(socket).on('error', err => {
+			socket.pipe(resoestSocket).on('error', err => {
+				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
+			})
+
+			resoestSocket.pipe(socket).on('error', err => {
 				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
 			})
 			
@@ -1035,7 +1039,7 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 	const _remotrIP = resoestSocket?.remoteAddress ? resoestSocket.remoteAddress : 'no remote IP'
 	const _remotrIP_1 = _remotrIP.split(':')
 	let nodeIpaddress = _remotrIP_1[_remotrIP_1.length-1]
-	
+
 	const infoData: ITypeTransferCount = {
 		hostInfo: host,
 		startTime: new Date().getTime(),
