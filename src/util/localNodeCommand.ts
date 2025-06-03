@@ -1,7 +1,7 @@
 import type { Socket } from 'node:net'
 import {createConnection} from 'node:net'
 import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
-import {logger} from './logger'
+import {logger, hexDebug} from './logger'
 import Colors from 'colors/safe'
 import {inspect} from 'node:util'
 import { generateKey, readKey, readPrivateKey, decryptKey, createCleartextMessage, sign as pgpSign, readMessage, decrypt, encrypt, createMessage, enums } from "openpgp"
@@ -786,6 +786,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			const prosyData = command.requestData[0]
 			return socks5Connectv2(prosyData, socket, command.walletAddress)
 		}
+
 		case 'SaaS_Sock5': {
 			const payment = await checkPayment(command.walletAddress)
 
@@ -996,6 +997,23 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 }
 
+class transferCount extends Transform {
+	public data  = ''
+	constructor(private upload: boolean, private info: ITypeTransferCount) {
+		super()
+	}
+
+	_transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
+		if (this.upload) {
+			this.info.upload += chunk.length
+		} else {
+			this.data += chunk.toString()
+			this.info.download += chunk.length
+		}
+		hexDebug(chunk)
+		callback(null, chunk)
+	}
+}
 
 const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
 	let host: string, port: number, ipStyle: boolean
@@ -1013,11 +1031,21 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
 		return distorySocket(resoestSocket)
 	}
-
+	const infoData: ITypeTransferCount = {
+		hostInfo: host,
+		startTime: new Date().getTime(),
+		download: 0,
+		upload: 0,
+		nodeIpaddress: resoestSocket?.remoteAddress ? resoestSocket.remoteAddress?.split(':')[1] : 'no remote IP',
+		endTime: 0
+	}
+	const upload = new transferCount (true, infoData)
+	const download = new transferCount (false, infoData)
 	try {
+		logger(`socks5Connectv2 ====> ${host}:${port} `)
 		const socket = createConnection ( port, host, () => {
 
-			resoestSocket.pipe(socket).pipe(resoestSocket)
+			resoestSocket.pipe(upload).pipe(socket).pipe(resoestSocket)
 			
 		})
 	

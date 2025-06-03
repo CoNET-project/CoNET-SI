@@ -196,3 +196,13 @@ interface minerObj extends SICommandObj{
 }
 
 
+
+type ITypeTransferCount = {
+	hostInfo: string
+	upload: number
+	download: number
+	startTime: number
+	endTime: number
+	nodeIpaddress: string
+	ssl?: boolean
+}
