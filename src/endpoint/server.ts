@@ -93,7 +93,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
-		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length} `, inspect({request, addr: socket.remoteAddress}, false, 3, true))
+		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request length = ${request.length} `, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
 		return distorySocket(socket)
 	}
 
@@ -130,12 +130,12 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 			const bodyLength = getLengthHander (htmlHeaders)
 			//logger (Colors.blue(`/post access! from ${socket.remoteAddress} bodyLength = ${bodyLength}`))
 			const readMore = () => {
-				logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
+				//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
 				socket.once('data', _data => {
 					
 					request_line[1] += _data
 					if (request_line[1].length < bodyLength) {
-						logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
+						//logger (Colors.magenta(`startServer readMore request_line.length [${request_line[1].length}] bodyLength = [${bodyLength}] ${socket.remoteAddress}`))
 						return readMore ()
 					}
 					
