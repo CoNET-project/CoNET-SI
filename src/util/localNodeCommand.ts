@@ -1031,12 +1031,16 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
 		return distorySocket(resoestSocket)
 	}
+
+	const _remotrIP = resoestSocket?.remoteAddress ? resoestSocket.remoteAddress : 'no remote IP'
+	const _remotrIP_1 = _remotrIP.split(':')
+	let nodeIpaddress = _remotrIP_1[_remotrIP_1.length-1]
 	const infoData: ITypeTransferCount = {
 		hostInfo: host,
 		startTime: new Date().getTime(),
 		download: 0,
 		upload: 0,
-		nodeIpaddress: resoestSocket?.remoteAddress ? resoestSocket.remoteAddress?.split(':')[1] : 'no remote IP',
+		nodeIpaddress,
 		endTime: 0
 	}
 	const upload = new transferCount (true, infoData)
