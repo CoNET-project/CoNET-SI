@@ -775,7 +775,17 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
+		case 'SilentPass': {
+			const payment = await checkPayment(command.walletAddress)
 
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocketPayment(socket)
+			}
+			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SilentPass!`))
+			const prosyData = command.requestData[0]
+			return socks5Connectv2(prosyData, socket, command.walletAddress)
+		}
 		case 'SaaS_Sock5': {
 			const payment = await checkPayment(command.walletAddress)
 
@@ -784,37 +794,11 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
+			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 			const prosyData = command.requestData[0]
 			return socks5Connect(prosyData, socket, command.walletAddress)
 		}
-
-        case 'SaaS_Proxy': {
-            
-			const payment = checkPayment(command.walletAddress)
-
-			if (!payment) {
-				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
-				return distorySocketPayment(socket)
-			}
-			const requestHeaders = command.requestData[1]
-            const requestOrgnal = command.requestData[0]
-
-            // logger (Colors.blue(`SaaS_Proxy get Request\n`))
-            // logger (Colors.blue(`SaaS_Proxy requestHeaders\n`), inspect(requestHeaders, false, 3, true))
-            // logger (`SaaS_Proxy clientReq headers\n`, headers)
-			// logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS!`))
-            const password = command.Securitykey
-            // const _encrypt = new encrypteStream (keyJSON, command.iv, MB)
-            //#endregion 
-            if (!password) {
-                logger (Colors.red(`SaaS_Proxy have no password error! [${inspect(command, false, 3, true)}]`))
-                return distorySocket(socket)
-            }
-
-            return connectWithHttp(requestOrgnal, socket, password, requestHeaders)
-        }
 
 		case 'mining': {		
 			return addIpaddressToLivenessListeningPool(socket.remoteAddress||'', command.walletAddress, wallet, socket)
@@ -995,13 +979,13 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 			resoestSocket.end().destroy()
 		})
 	
-		socket.once ( 'error', err => {
+		socket.on ( 'error', err => {
 			resoestSocket.end().destroy()
 			logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
 	
 		})
 	
-		resoestSocket.once('error', err => {
+		resoestSocket.on('error', err => {
 			resoestSocket.end().destroy()
 			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
 		})
@@ -1009,6 +993,54 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 		logger(`createConnection On catch ${wallet}`, ex)
 		resoestSocket.end().destroy()
 	}
+
+}
+
+
+const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
+	let host: string, port: number, ipStyle: boolean
+	try {
+		port = prosyData.port
+		host = prosyData.host || ''
+		ipStyle = IP.isV4Format(host)
+		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+		if ( port < 1 || port > 65535 || ! host) {
+			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
+		}
+		
+	} catch (ex: any) {
+		logger(inspect(prosyData, false, 3, true))
+		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
+		return distorySocket(resoestSocket)
+	}
+
+	try {
+		const socket = createConnection ( port, host, () => {
+
+			resoestSocket.pipe(socket).pipe(resoestSocket)
+			
+		})
+	
+		socket.once ( 'end', () => {
+			// logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
+			resoestSocket.end().destroy()
+		})
+	
+		socket.on ( 'error', err => {
+			resoestSocket.end().destroy()
+			logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
+	
+		})
+	
+		resoestSocket.on('error', err => {
+			resoestSocket.end().destroy()
+			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
+		})
+	} catch (ex) {
+		logger(`createConnection On catch ${wallet}`, ex)
+		resoestSocket.end().destroy()
+	}
+
 
 }
 
