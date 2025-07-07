@@ -15,9 +15,20 @@ import Http from 'node:http'
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://127.0.0.1:4000/solana-rpc
 //		curl -v -i -X OPTIONS https://api.mainnet-beta.solana.com
 
-
+const iOSUrl = 'vpn9.conet.network'
+const androidUrl = 'vpn4.silentpass.io'
 const solanaRPC_host = 'api.mainnet-beta.solana.com'
-const appHost = 'vpn4.silentpass.io'
+const appHost = (host: string) => {
+	switch (host.toLowerCase()) {
+		default:
+		case androidUrl: {
+			return androidUrl
+		}
+		case iOSUrl: {
+			return iOSUrl
+		}
+	}
+}
 const solanaRPCURL = `https://${solanaRPC_host}`
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
@@ -304,10 +315,22 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	
 }
 
+const getHeader = (requestHanders: string[], key: string) => {
+	const keyLow = key.toLowerCase()
+	let ret = ''
+	requestHanders.forEach(n => {
+		const keys = n.split(': ')
+		if (keys[0].toLowerCase() == keyLow) {
+			ret = keys[1]
+		}
+	})
+	return ret
+}
+
 export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
-	const path = requestHanders[0].split(' ')[1]
-	
+	const path = requestHanders[0].split(' ')[1].split(/\/silentpass\-rpc/i)[1]||'/'
+	const origin = appHost(getHeader(requestHanders, 'Origin'))
 	logger(`forwardToSilentpass ${requestHanders[0]}`)
 	logger(inspect(requestHanders, false, 3, true))
 
@@ -327,7 +350,7 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 	}
 	
 	const option: Https.RequestOptions = {
-		host: appHost,
+		host: origin,
 		port: 443,
 		path,
 		method,
