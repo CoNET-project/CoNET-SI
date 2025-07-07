@@ -496,12 +496,12 @@ const startServer = (port: number, publicKey: string) => {
 			}
 
 			if (/^GET \/ HTTP\//.test(requestProtocol)) {
-				logger (inspect(htmlHeaders, false, 3, true))
+				logger ('^GET',inspect(htmlHeaders, false, 3, true))
 				return responseRootHomePage(socket)
 			}
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
-				
+				logger ('^OPTIONS',inspect(htmlHeaders, false, 3, true))
 				return responseOPTIONS(socket, htmlHeaders)
 			}
 
@@ -513,6 +513,7 @@ const startServer = (port: number, publicKey: string) => {
 			if (/\/silentpass\-rpc/i.test(path)) {
 				return forwardToSilentpass (socket, request_line[1], htmlHeaders)
 			}
+			logger ('unknow request!',inspect(htmlHeaders, false, 3, true))
 			return distorySocket(socket)
 		})
 
