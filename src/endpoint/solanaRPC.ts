@@ -235,6 +235,7 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 		
 		res.on('data', chunk => {
 			console.log(`on data chunk = ${chunk.toString()}`)
+			chunk.pipe(socket)
 		})
 		
 		res.once ('end', () => {
@@ -382,7 +383,7 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
 		
 		res.on('data', chunk => {
-			console.log(`on data chunk = ${chunk.toString()}`)
+			chunk.pipe(socket)
 		})
 		
 		res.once ('end', () => {
