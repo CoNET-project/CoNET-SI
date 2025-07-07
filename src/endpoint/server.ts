@@ -10,7 +10,7 @@ import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
-import {forwardToSolana } from './solanaRPC'
+import {forwardToSolana, forwardToSilentpass } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -114,6 +114,7 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
 
+
 const socketData = (socket: Socket, server: conet_si_server, incomeData = '') => {
 	socket.once('data', data => {
 
@@ -153,6 +154,11 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 		if (/\/solana\-rpc/i.test(path)) {
 			return forwardToSolana (socket, request_line[1], htmlHeaders)
 		}
+
+		if (/\/silentpass\-rpc/i.test(path)) {
+			return forwardToSilentpass (socket, request_line[1], htmlHeaders)
+		}
+
 		return distorySocket(socket)
 	})
 }
