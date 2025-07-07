@@ -17,6 +17,7 @@ import Http from 'node:http'
 
 
 const solanaRPC_host = 'api.mainnet-beta.solana.com'
+const appHost = 'vpn4.silentpass.io'
 const solanaRPCURL = `https://${solanaRPC_host}`
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
@@ -171,6 +172,9 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 	const method = requestHanders[0].split(' ')[0]
 	
+	logger(`forwardToSolana`)
+	logger(inspect(requestHanders, false, 3, true))
+
 	if (/^OPTIONS/i.test(method) ) {
 		
 		return responseOPTIONS(socket, requestHanders)
