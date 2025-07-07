@@ -60,6 +60,10 @@ if ( Cluster.isPrimary ) {
 		process.exit (0)
 	}
 
+	const processRestart = () => {
+		
+	}
+
 	const printInfo = () => {
 		logger (
 			`CoNET-SI CLI ${ setup.version } is a command line tool that gives CoNET-SI participant who provides network and storage to earn stablecoin\n` +
@@ -96,7 +100,7 @@ if ( Cluster.isPrimary ) {
 
 	debug ? logger (`Cluster.isPrimary node have ${ numCPUs } cpus\n`): null
 
-	numCPUs = 1							//			not support multi-cpus
+	// numCPUs = 1							//			not support multi-cpus
 
 	// for (let i = 0; i < numCPUs; i++) {
 	// 	Cluster.fork()
@@ -124,7 +128,7 @@ if ( Cluster.isPrimary ) {
 			return (fork)
 		}
 		
-		for (let i = 0; i < numCPUs; i ++) {
+		for (let i = 0; i < numCPUs/2; i ++) {
 			const woeker = _forkWorker ()
 			workerPool.push (woeker)
 		}
@@ -208,7 +212,7 @@ if ( Cluster.isPrimary ) {
 		
 		new conet_si_server ()
 	}
-	
+
 	getSetupInfo ()
 } else {
 	process.on('uncaughtException', (err, origin) => {

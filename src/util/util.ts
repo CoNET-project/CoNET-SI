@@ -221,59 +221,6 @@ let lastrate: number
 let localPublicKeyID = ''
 let localWallet: ethers.Wallet
 
-// const detailTransfer = async (tx: string, provider: ethers.JsonRpcProvider) => {
-	
-// 	const transObj = await provider.getTransactionReceipt(tx)
-
-// 	const toAddr = transObj?.to?.toLowerCase()
-	
-// 	if ( GuardianNodesInfoV6 === toAddr) {
-// 		return await initGuardianNodes()
-// 	}
-
-// 	if (!toAddr || toAddr !== newCNTP_v8 || transObj?.logs?.length !== 1 ) {
-// 		return //logger(Colors.gray(`Skip tx ${tx}`))
-// 	}
-
-// 	let uu: ethers.LogDescription|null
-// 	try {
-// 		uu = iface.parseLog(transObj.logs[0])
-// 	} catch (ex) {
-// 		return logger(Colors.red(`iface.parseLog [${tx}] Error!`))
-// 	}
-// 	const args = uu?.args
-	
-// 	if (uu?.name !== 'Transfer' || args?.length !== 3 || args[1] !== '0x0000000000000000000000000000000000000000') {
-// 		return //logger(Colors.grey(`detailTransfer skip [${tx}]`))
-// 	}
-// 	const wallet = args[0].toLowerCase()
-// 	//	admin brun
-// 	if (wallet === '0x418833b70f882c833ef0f0fcee3fb9d89c79d47c') {
-// 		return //logger(Colors.grey(`detailTransfer skip [${wallet}]`))
-// 	}
-
-// 	const startEpoch = transObj.blockNumber
-// 	const value = parseFloat(ethers.formatEther(args[2]))
-	
-	
-
-// 	const keepEpoch = Math.round(value/lastrate)
-// 	const endEpoch = startEpoch + keepEpoch
-// 	if (endEpoch < currentEpoch) {
-// 		return logger(Colors.blue(`Brun cCNTP [${wallet}] , value [${value}] rate type = ${typeof lastrate} [${lastrate}] start [${startEpoch}] end = [${Colors.magenta(endEpoch.toString())}] current epoch = [${Colors.red(currentEpoch.toString())}]`))
-// 	}
-// 	const pass: NodList = {
-// 		wallet: wallet,
-// 		isGuardianNode: false,
-// 		Expired: endEpoch,
-// 		nodeID: 0,
-// 		nodeInfo: null,
-// 		value
-// 	}
-// 	useNodeReceiptList.set (wallet, pass)
-// 	logger(Colors.magenta(`add Silent Pass [${pass.wallet}] end Epoch = [${pass.Expired}] `))
-	
-// }
 
 
 export const getRoute = async (keyID: string) => {

@@ -28,7 +28,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes} from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, } from '../util/util'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -851,7 +851,12 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	const nodeInfo = routerInfo.get (validatorData.nodeDomain)
 
 	if (!nodeInfo ) {
-		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error! routerInfo size = ${routerInfo.size}`))
+		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error! routerInfo size = ${routerInfo.size} `))
+		if (routerInfo.size <400) {
+			logger(Colors.red(`routerInfo size <100 restart routerInfo`)) 
+			getAllNodes ()
+			
+		}
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
