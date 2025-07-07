@@ -170,15 +170,151 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 }
 
 export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
-	const method = requestHanders[0].split(' ')[0]
-	
-	logger(`forwardToSolana`)
+	const method = requestHanders[0].split(' ')
+	const path = method[1]
+	logger(`forwardToSolana path = ${path}`)
 	logger(inspect(requestHanders, false, 3, true))
 
-	if (/^OPTIONS/i.test(method) ) {
+	if (/^OPTIONS/i.test(method[0]) ) {
 		
 		return responseOPTIONS(socket, requestHanders)
 	}
+
+	
+	let Upgrade = false
+	const rehandles = getHeaderJSON(requestHanders.slice(1))
+	if (/^Upgrade/i.test(method[0])) {
+		Upgrade = true
+		socket.setTimeout(0)
+		socket.setNoDelay(true)
+		socket.setKeepAlive(true, 0)
+	}
+	
+	const option: Https.RequestOptions = {
+		host: solanaRPC_host,
+		port: 443,
+		path: '/',
+		method: method[0],
+		headers: rehandles
+	}
+
+	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
+	logger(inspect(option, false, 3, true))
+
+	let responseHeader = ''
+
+	const req = Https.request(option, res => {
+		
+		if (!Upgrade) {
+			res.pipe(socket)
+		}
+
+		let _responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : !responseHeader ? getResponseHeaders(requestHanders) : ''
+
+		for (let i = 0; i < res.rawHeaders.length; i += 2) {
+			const key = res.rawHeaders[i]
+			const value = res.rawHeaders[i+1]
+			if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
+				_responseHeader += `${key}: ${value}\r\n`
+			}
+		}
+
+		socket.write(_responseHeader + '\r\n')
+		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
+		
+		res.on('data', chunk => {
+			console.log(`on data chunk = ${chunk.toString()}`)
+		})
+		
+		res.once ('end', () => {
+			console.log(`on end chunk = close`)
+			
+		})
+
+		res.once('error', () => {
+			console.log(`on error chunk = close`)
+			
+		})
+
+		
+	})
+
+	req.on('error', err => {
+
+	})
+
+	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+		logger(`req.on('upgrade')`)
+		logger(inspect(proxyRes.headers, false, 3, true))
+		proxySocket.on('error', err => {
+			logger(Colors.red(`proxySocket.on('error')`), err.message)
+		})
+
+		proxySocket.on('end', function () {
+			logger(Colors.red(`proxySocket.on('end')`))
+		})
+
+		proxySocket.setTimeout(0)
+		proxySocket.setNoDelay(true)
+		proxySocket.setKeepAlive(true, 0)
+
+		if (proxyHead && proxyHead.length) {
+			proxySocket.unshift(proxyHead)
+		}
+		logger(inspect(proxyRes.headers, false, 3, true))
+		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
+
+		logger(inspect(socketHandle, false, 3, true))
+
+		socket.write(socketHandle)
+		
+		proxySocket.pipe(socket).pipe(proxySocket)
+
+	})
+
+	req.once('end', () => {
+		
+	})
+
+
+	if (body) {
+		logger(`req.write body size = ${body.length}`)
+		req.write(body)
+		if (!Upgrade) {
+			req.end()
+		}
+		return 
+	} 
+		
+	responseHeader = getResponseHeaders(requestHanders)
+
+	if (socket.writable) {
+		socket.once ('data', data => {
+			
+			req.write(data)
+			logger(`!body on body`, data.toString())
+			if (!Upgrade) {
+				logger(`req.end()`)
+				req.end()
+			}
+		})
+		socket.write(responseHeader)
+	}
+	
+	
+}
+
+export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHanders: string[]) => {
+	const method = requestHanders[0].split(' ')[0]
+	const path = requestHanders[0].split(' ')[1]
+	
+	logger(`forwardToSilentpass ${requestHanders[0]}`)
+	logger(inspect(requestHanders, false, 3, true))
+
+	// if (/^OPTIONS/i.test(method) ) {
+		
+	// 	return responseOPTIONS(socket, requestHanders)
+	// }
 
 	
 	let Upgrade = false
@@ -191,9 +327,9 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 	}
 	
 	const option: Https.RequestOptions = {
-		host: solanaRPC_host,
+		host: appHost,
 		port: 443,
-		path: '/',
+		path,
 		method,
 		headers: rehandles
 	}
@@ -372,6 +508,10 @@ const startServer = (port: number, publicKey: string) => {
 			const path = requestProtocol.split(' ')[1]
 			if (/\/solana\-rpc/i.test(path)) {
 				return forwardToSolana (socket, request_line[1], htmlHeaders)
+			}
+
+			if (/\/silentpass\-rpc/i.test(path)) {
+				return forwardToSilentpass (socket, request_line[1], htmlHeaders)
 			}
 			return distorySocket(socket)
 		})
