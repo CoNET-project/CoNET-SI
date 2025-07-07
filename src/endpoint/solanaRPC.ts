@@ -296,8 +296,8 @@ export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders
 			req.end()
 		}
 		return 
-	} 
-		
+	}
+
 	responseHeader = getResponseHeaders(requestHanders)
 
 	if (socket.writable) {
@@ -443,9 +443,13 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 		if (!Upgrade) {
 			req.end()
 		}
-		return 
-	} 
-		
+		return
+	}
+
+	if (/GET/.test(method)) {
+		return req.end('\r\n')
+	}
+
 	responseHeader = getResponseHeaders(requestHanders)
 
 	if (socket.writable) {
