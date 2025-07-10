@@ -379,7 +379,7 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
 			const key = res.rawHeaders[i]
 			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
+			if (!/^Access|^date|^allow/i.test(key)) {
 				_responseHeader += `${key}: ${value}\r\n`
 			}
 		}
