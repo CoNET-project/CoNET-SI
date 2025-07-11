@@ -822,9 +822,14 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 }
 
+
 const validatorMinerPool: Map<string, boolean> = new Map()
 const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 
+
+
+
+let time = 0
 const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
@@ -853,7 +858,8 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	if (!nodeInfo ) {
 		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error! routerInfo size = ${routerInfo.size} `))
 		if (routerInfo.size <400) {
-			logger(Colors.red(`routerInfo size <100 restart routerInfo`)) 
+			logger(Colors.red(`routerInfo size <100 restart routerInfo`))
+			
 			getAllNodes ()
 			
 		}

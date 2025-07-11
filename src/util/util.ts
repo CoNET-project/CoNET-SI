@@ -114,6 +114,8 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 
 let getAllNodesProcess = false
 let Guardian_Nodes: nodeInfo[] = []
+
+
 export const getAllNodes = () => new Promise(async resolve=> {
 	
 	if (getAllNodesProcess) {
