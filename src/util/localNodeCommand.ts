@@ -28,7 +28,8 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes,  } from '../util/util'
+
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -234,6 +235,8 @@ export const waitKeyInput: (query: string, password: boolean ) => Promise<string
 	})
 }
 
+
+
 export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string ) => {
 	
 
@@ -280,6 +283,7 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 		logger (Colors.blue(`startPackageSelfVersionCheckAndUpgrade ${packageName} already has updated!`))
 		return (false)
 	}
+
 	logger (`startPackageSelfVersionCheckAndUpgrade doing upgrade now!`)
 	const cmd2 = await execCommand  (`sudo npm cache clean --force && sudo npm i ${packageName} -g`)
 	if ( cmd2 === null ) {
@@ -289,6 +293,11 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 	logger (Colors.blue(`startPackageSelfVersionCheckAndUpgrade ${packageName} have new version and upgrade success!`))
 	return (true)
 }
+
+export const Restart = () => {
+	exec ( `sudo reboot` )
+}
+
 
 const getDLPublicKey = async () => {
 	const option: RequestOptions = {
@@ -829,7 +838,7 @@ const validatorUserPool: Map<string,  NodeJS.Timeout> = new Map()
 
 
 
-let time = 0
+let routerInfo_Less100 = 0
 const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 	const validatorData: nodeResponse = command.requestData
@@ -861,12 +870,21 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 			logger(Colors.red(`routerInfo size <100 restart routerInfo`))
 			
 			getAllNodes ()
+			const now = new Date().getTime()
+			if (routerInfo_Less100 > 0) {
+				if (routerInfo_Less100 - now > 1000 * 60 * 5) {
+					Restart()
+				}
+
+			} else {
+				routerInfo_Less100 = now
+			}
 			
 		}
 		//logger(inspect(routerInfo.keys(), false, 3, true))
 		return distorySocket(socket)
 	}
-
+	routerInfo_Less100 = 0
 	if(!nodeInfo.wallet){
 		const info = await getGuardianNodeWallet(nodeInfo, localNodeKey)
 		if (!info.nodeWallet) {

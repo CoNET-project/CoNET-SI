@@ -87,7 +87,7 @@ if (Cluster.isPrimary) {
 
 	const start = async () => {
 
-		const initData:ICoNET_NodeSetup|null  = await getSetup ()
+		const initData: ICoNET_NodeSetup|null  = await getSetup ()
 		if ( !initData?.keychain || initData?.passwd === undefined) {
 			throw new Error (`Error: CONET Layer Minus Node have no setup data!\nPlease restart CoNET-SI with command: node dist/cli start!`)
 		}
