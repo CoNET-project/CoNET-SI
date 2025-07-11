@@ -4,7 +4,7 @@ import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
 import {Socket, createServer} from 'node:net'
 import {logger} from '../util/logger'
-import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining} from '../util/localNodeCommand'
+import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -26,8 +26,9 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
 
 process.on('uncaughtException', (err, origin) => {
 	console.error(`Caught exception: ${err}\n` +
-					`Exception origin: ${origin}`);
-});
+					`Exception origin: ${origin}`)
+	Restart()
+})
 
 const getLengthHander = (headers: string[]) => {
 	const index = headers.findIndex( n => /^Content-Length\:/i.test(n))
