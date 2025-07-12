@@ -250,6 +250,10 @@ export const forwardToSolanaRpc = (
 
 	let responseHeader = ''
 
+
+
+
+
 	const req = Https.request(option, res => {
 		
 		if (!Upgrade) {
@@ -269,13 +273,22 @@ export const forwardToSolanaRpc = (
 		socket.write(_responseHeader + '\r\n')
 		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
 		
+
+
 		res.on('data', chunk => {
 			console.log(`on data chunk = ${chunk.toString()}`)
-			chunk.pipe(socket)
+			if (socket.writable) {
+				socket.write(chunk)
+			}
+
+			
 		})
 		
 		res.once ('end', () => {
 			console.log(`on end chunk = close`)
+			if (socket.writable) {
+				socket.end()
+			}
 			
 		})
 
@@ -421,16 +434,21 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
 		
 		res.on('data', chunk => {
-			chunk.pipe(socket)
+			if (socket.writable) {
+				socket.write(chunk)
+			}
+
 		})
 		
 		res.once ('end', () => {
-			console.log(`on end chunk = close`)
-			
+			logger(`on end chunk = close`)
+			if (socket.writable) {
+				socket.end()
+			}
 		})
 
 		res.once('error', () => {
-			console.log(`on error chunk = close`)
+			logger(`on error chunk = close`)
 			
 		})
 
