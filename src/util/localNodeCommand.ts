@@ -1541,6 +1541,7 @@ const checkCurrentRate = async (block: number) => {
 		currentRate = {
 			totalMiners,  minerRate, totalUsrs, epoch
 		}
+		logger(inspect(currentRate))
 	}
 	
 }
@@ -1859,5 +1860,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 // 	logger(Colors.magenta(`startEPOCH_EventListeningForMining on Block ${listenValidatorEpoch} Success!`))
 // }
+
+// checkCurrentRate(2174642)
 
 // startEPOCH_EventListeningForMining1()
