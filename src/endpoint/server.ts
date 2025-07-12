@@ -122,6 +122,22 @@ const getData = (socket: Socket, request: string, requestProtocol: string, conet
 
 
 const socketData = (socket: Socket, server: conet_si_server, incomeData = '') => {
+	// ==========================================================
+	// ===== 這是關鍵：為 socket 實例添加 'error' 事件監聽器 =====
+	// ==========================================================
+	socket.on('error', (err: any) => {
+		// 專門處理 ECONNRESET 錯誤
+		if (err.code === 'ECONNRESET') {
+			// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
+			console.warn(`[${socket.remoteAddress}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
+		} else {
+			// 其他類型的錯誤
+			console.error(`[${socket.remoteAddress}] 發生未預期的 socket 錯誤:`, err)
+		}
+		
+		// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
+	})
+	
 	socket.once('data', data => {
 
 		const request = incomeData + data.toString()
@@ -167,6 +183,7 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 
 		return distorySocket(socket)
 	})
+	
 }
 
 class conet_si_server {
@@ -317,21 +334,7 @@ class conet_si_server {
 	private startServer = () => {
 		
 		const server = createServer( socket => {
-			// ==========================================================
-			// ===== 這是關鍵：為 socket 實例添加 'error' 事件監聽器 =====
-			// ==========================================================
-			socket.on('error', (err: any) => {
-				// 專門處理 ECONNRESET 錯誤
-				if (err.code === 'ECONNRESET') {
-					// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
-					console.warn(`[${socket.remoteAddress}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
-				} else {
-					// 其他類型的錯誤
-					console.error(`[${socket.remoteAddress}] 發生未預期的 socket 錯誤:`, err)
-				}
-				
-				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
-			})
+			
 			return socketData (socket, this)
 
 		})
