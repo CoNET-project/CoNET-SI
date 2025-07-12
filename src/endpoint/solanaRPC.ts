@@ -40,22 +40,24 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 // 輔助函數：處理 OPTIONS 預檢請求
-const responseOPTIONS = (socket: Net.Socket, requestHanders: string[]) => {
-    const originHeader = requestHanders.find(h => h.toLowerCase().startsWith('origin:'))
-    const origin = originHeader ? originHeader.split(/: */, 2)[1] : '*'
+const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
+	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))
+	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
+	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\: /i)[1]
 
-    const response = [
-        'HTTP/1.1 204 No Content',
-        `Access-Control-Allow-Origin: ${origin}`,
-        'Access-Control-Allow-Credentials: true',
-        'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
-        'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
-        'Content-Length: 0',
-        'Connection: keep-alive',
-        '\r\n'
-    ].join('\r\n')
+	let response = `HTTP/1.1 204 no content\r\n`
+		// response += `date: ${new Date().toUTCString()}\r\n`
+		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
+		// response += `Connection: keep-alive\r\n`
+		response += `access-control-allow-origin: ${orgion}\r\n`
+		//response += `access-control-allow-headers: content-type\r\n`
+		// response += `vary: Access-Control-Request-Headers\r\n`
+		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
+		response += `access-control-allow-credentials: true\r\n`
+		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
+		response += `content-length: 0\r\n\r\n`
 
-    socket.end(response)
+	socket.end(response)
 }
 
 const responseRootHomePage = (socket: Net.Socket| Tls.TLSSocket) => {
@@ -371,10 +373,10 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 	logger(`forwardToSilentpass ${requestHanders[0]}`)
 	logger(inspect(requestHanders, false, 3, true))
 
-	// if (/^OPTIONS/i.test(method) ) {
+	if (/^OPTIONS/i.test(method) ) {
 		
-	// 	return responseOPTIONS(socket, requestHanders)
-	// }
+		return responseOPTIONS(socket, requestHanders)
+	}
 
 	
 	let Upgrade = false
