@@ -1510,11 +1510,11 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 let nodeWallet = ''
-
-const epoch_mining_info_cancun_addr = '0x31680dc539cb1835d7C1270527bD5D209DfBC547'.toLocaleLowerCase()
-const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, CONETProvider_Cancun)
-
 const conet_Mainnet = new ethers.JsonRpcProvider (CoNET_mainnet_RPC)
+const epoch_mining_info_cancun_addr = '0xbC713Fef0c7Bb178151cE45eFF1FD17d020a9ecD'.toLocaleLowerCase()
+const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, conet_Mainnet)
+
+
 const nodeRestartEvent_addr = '0x261BE4f90b84298eb84322A6Dc64ffD4D0c46D34'
 const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, conet_Mainnet)
 
@@ -1598,7 +1598,7 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 	searchEpochEventRestartTimeout = setTimeout(() => {
 		logger(`searchEpochEvent TimeOut restart now`)
 		exec("sudo systemctl restart conet.service")
-	}, 1000 * 10)
+	}, 1000 * 60)
 
 	resolve (true)
 })
