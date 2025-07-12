@@ -39,24 +39,23 @@ const solanaRPCURL = `https://${solanaRPC_host}`
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
-	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))
-	const orgionIndex = headers.findIndex(n => /^Origin\:\s*https*\:\/\//i.test(n))
-	const orgion = checkMac < 0 ? '*': orgionIndex < 0 ? '*' : headers[orgionIndex].split(/^Origin\: /i)[1]
+// 輔助函數：處理 OPTIONS 預檢請求
+const responseOPTIONS = (socket: Net.Socket, requestHanders: string[]) => {
+    const originHeader = requestHanders.find(h => h.toLowerCase().startsWith('origin:'))
+    const origin = originHeader ? originHeader.split(/: */, 2)[1] : '*'
 
-	let response = `HTTP/1.1 204 no content\r\n`
-		// response += `date: ${new Date().toUTCString()}\r\n`
-		// response += `server: nginx/1.24.0 (Ubuntu)\r\n`
-		// response += `Connection: keep-alive\r\n`
-		response += `access-control-allow-origin: ${orgion}\r\n`
-		//response += `access-control-allow-headers: content-type\r\n`
-		// response += `vary: Access-Control-Request-Headers\r\n`
-		response += `access-control-allow-methods: GET,HEAD,PUT,PATCH,POST,DELETE\r\n`
-		response += `access-control-allow-credentials: true\r\n`
-		response += `access-control-allow-headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
-		response += `content-length: 0\r\n\r\n`
+    const response = [
+        'HTTP/1.1 204 No Content',
+        `Access-Control-Allow-Origin: ${origin}`,
+        'Access-Control-Allow-Credentials: true',
+        'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
+        'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
+        'Content-Length: 0',
+        'Connection: keep-alive',
+        '\r\n'
+    ].join('\r\n')
 
-	socket.end(response)
+    socket.end(response)
 }
 
 const responseRootHomePage = (socket: Net.Socket| Tls.TLSSocket) => {
@@ -185,141 +184,191 @@ var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
 	.join('\r\n') + '\r\n\r\n'
 }
 
-export const forwardToSolana = (socket: Net.Socket, body: string, requestHanders: string[]) => {
-	const method = requestHanders[0].split(' ')
-	const path = method[1]
-	logger(`forwardToSolana path = ${path}`)
-	logger(inspect(requestHanders, false, 3, true))
 
-	if (/^OPTIONS/i.test(method[0]) ) {
-		
-		return responseOPTIONS(socket, requestHanders)
-	}
-
-	
-	let Upgrade = false
-	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	if (/^Upgrade/i.test(method[0])) {
-		Upgrade = true
-		socket.setTimeout(0)
-		socket.setNoDelay(true)
-		socket.setKeepAlive(true, 0)
-	}
-	
-	const option: Https.RequestOptions = {
-		host: solanaRPC_host,
-		port: 443,
-		path: '/',
-		method: method[0],
-		headers: rehandles
-	}
-
-	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
-	logger(inspect(option, false, 3, true))
-
-	let responseHeader = ''
-
-	const req = Https.request(option, res => {
-		
-		if (!Upgrade) {
-			res.pipe(socket)
-		}
-
-		let _responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : !responseHeader ? getResponseHeaders(requestHanders) : ''
-
-		for (let i = 0; i < res.rawHeaders.length; i += 2) {
-			const key = res.rawHeaders[i]
-			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
-				_responseHeader += `${key}: ${value}\r\n`
-			}
-		}
-
-		socket.write(_responseHeader + '\r\n')
-		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
-		
-		res.on('data', chunk => {
-			console.log(`on data chunk = ${chunk.toString()}`)
-			chunk.pipe(socket)
-		})
-		
-		res.once ('end', () => {
-			console.log(`on end chunk = close`)
-			
-		})
-
-		res.once('error', () => {
-			console.log(`on error chunk = close`)
-			
-		})
-
-		
-	})
-
-	req.on('error', err => {
-
-	})
-
-	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-		logger(`req.on('upgrade')`)
-		logger(inspect(proxyRes.headers, false, 3, true))
-		proxySocket.on('error', err => {
-			logger(Colors.red(`proxySocket.on('error')`), err.message)
-		})
-
-		proxySocket.on('end', function () {
-			logger(Colors.red(`proxySocket.on('end')`))
-		})
-
-		proxySocket.setTimeout(0)
-		proxySocket.setNoDelay(true)
-		proxySocket.setKeepAlive(true, 0)
-
-		if (proxyHead && proxyHead.length) {
-			proxySocket.unshift(proxyHead)
-		}
-		logger(inspect(proxyRes.headers, false, 3, true))
-		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
-
-		logger(inspect(socketHandle, false, 3, true))
-
-		socket.write(socketHandle)
-		
-		proxySocket.pipe(socket).pipe(proxySocket)
-
-	})
-
-	req.once('end', () => {
-		
-	})
-
-
-	if (body) {
-		logger(`req.write body size = ${body.length}`)
-		req.write(body)
-		if (!Upgrade) {
-			req.end()
-		}
-		return 
-	}
-
-	responseHeader = getResponseHeaders(requestHanders)
-
-	if (socket.writable) {
-		socket.once ('data', data => {
-			
-			req.write(data)
-			logger(`!body on body`, data.toString())
-			if (!Upgrade) {
-				logger(`req.end()`)
-				req.end()
-			}
-		})
-		socket.write(responseHeader)
-	}
-	
-	
+// 輔助函數：將 header 陣列轉換為 Node.js 需要的物件格式
+function parseHeaders(requestHeaders: string[]): Record<string, string> {
+    const headers: Record<string, string> = {}
+    for (let i = 1; i < requestHeaders.length; i++) {
+        const line = requestHeaders[i];
+        const separatorIndex = line.indexOf(':')
+        if (separatorIndex > 0) {
+            const key = line.substring(0, separatorIndex).trim()
+            const value = line.substring(separatorIndex + 1).trim()
+            headers[key.toLowerCase()] = value
+        }
+    }
+    return headers
 }
+
+/**
+ * 將客戶端請求代理轉發到指定的 Solana RPC 主機。
+ * 完整處理標準 HTTPS 請求（含 CORS 修改）和 WebSocket (WSS) 升級請求。
+ *
+ * @param socket 客戶端的 net.Socket 連接。
+ * @param body 初始請求中可能包含的 body 數據。
+ * @param requestHanders 原始的 HTTP 請求頭陣列。
+ * @param solanaRpcHost 要轉發到的 Solana RPC 主機名。
+ */
+export const forwardToSolanaRpc = (
+    socket: Net.Socket,
+    body: string,
+    requestHanders: string[],
+    solanaRpcHost = solanaRPC_host
+) => {
+    const [method, path] = requestHanders[0].split(' ')
+    const headers = parseHeaders(requestHanders)
+
+    if (method === 'OPTIONS') {
+        console.log('[Proxy] Handling pre-flight OPTIONS request.')
+        return responseOPTIONS(socket, requestHanders)
+    }
+    
+    const clientOrigin = headers['origin'] || '*'
+    const isUpgradeRequest = headers['upgrade']?.toLowerCase() === 'websocket'
+
+    const options: Https.RequestOptions = {
+        hostname: solanaRpcHost,
+        port: 443,
+        path,
+        method,
+        headers: {
+            ...headers,
+            'host': solanaRpcHost,
+        },
+    }
+
+    const proxyReq = Https.request(options)
+
+    proxyReq.on('error', (err) => {
+        console.error(`[Proxy] Error connecting to ${solanaRpcHost}:`, err)
+        if (!socket.destroyed) {
+            socket.write(`HTTP/1.1 502 Bad Gateway\r\n\r\n`)
+            socket.end()
+        }
+    })
+
+    // ========================================================================
+    // --- 開始填充 if/else 區塊 ---
+    // ========================================================================
+
+    if (isUpgradeRequest) {
+        // --- 處理 WebSocket 升級請求 ---
+        console.log(`[Proxy] Handling WebSocket Upgrade request for ${path}`)
+
+        // 監聽來自 Solana RPC 的 'upgrade' 成功事件
+        proxyReq.on('upgrade', (proxyRes, targetSocket, head) => {
+            console.log(`[Proxy] Successfully upgraded to WebSocket with ${solanaRpcHost}`)
+            
+            // 檢查客戶端 socket 是否仍然存活，防止在已關閉的 socket 上寫入
+            if (socket.destroyed) {
+                targetSocket.destroy()
+                return
+            }
+
+            // 手動回覆客戶端 101 Switching Protocols 響應，完成握手
+            const responseHeaders = [
+                'HTTP/1.1 101 Switching Protocols',
+                // 從 Solana RPC 的響應中獲取所有升級所需的標頭
+                ...Object.entries(proxyRes.headers).map(([key, value]) => `${key}: ${value}`)
+            ]
+            
+            socket.write(responseHeaders.join('\r\n') + '\r\n\r\n');
+
+            // 建立雙向數據隧道：客戶端 <==> Solana RPC
+            // 這是 WebSocket 代理的核心，數據將在兩個 socket 之間自由流動
+            socket.pipe(targetSocket).pipe(socket)
+
+            // 如果從目標伺服器收到了升級後的初始數據，立即轉發給客戶端
+            if (head && head.length > 0) {
+                targetSocket.write(head)
+            }
+
+            // 監聽錯誤並清理資源。任何一方斷開，另一方也應立即斷開。
+            const cleanup = (source: string) => (err?: Error) => {
+                if (err) console.error(`[Proxy] WebSocket error on ${source} side:`, err.message);
+                if (!socket.destroyed) socket.destroy()
+                if (!targetSocket.destroyed) targetSocket.destroy()
+            }
+
+            socket.on('error', cleanup('client'))
+            socket.on('close', cleanup('client'))
+            targetSocket.on('error', cleanup('target'))
+            targetSocket.on('close', cleanup('target'))
+        })
+
+        // 對於升級請求，我們不需要發送 body，只需結束請求以觸發 'upgrade' 事件
+        proxyReq.end()
+
+    } else {
+        // --- 處理標準 HTTP/HTTPS 請求 ---
+        console.log(`[Proxy] Handling standard HTTP request for ${path}`)
+
+        // 監聽來自 Solana RPC 的響應
+        proxyReq.on('response', (proxyRes) => {
+            console.log(`[Proxy] Intercepting response from Solana: ${proxyRes.statusCode}`)
+
+            if (socket.destroyed) {
+                return
+            }
+            
+            // 1. 寫入狀態行
+            socket.write(`HTTP/${proxyRes.httpVersion} ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n`)
+
+            // 2. 過濾並注入 CORS 標頭
+            // 需要過濾掉的原始標頭，以避免衝突
+            const keysToFilter = [
+                'access-control-allow-origin',
+                'access-control-allow-methods',
+                'access-control-allow-headers',
+                'access-control-allow-credentials',
+                'connection', // 由 Node.js 和代理邏輯管理
+                'transfer-encoding' // 體數據將被直接 pipe，這個頭可能不適用
+            ]
+
+            for (let i = 0; i < proxyRes.rawHeaders.length; i += 2) {
+                const key = proxyRes.rawHeaders[i].toLowerCase()
+                const value = proxyRes.rawHeaders[i + 1]
+                if (!keysToFilter.includes(key)) {
+                    socket.write(`${proxyRes.rawHeaders[i]}: ${value}\r\n`)
+                }
+            }
+
+            // 注入我們自定義的、寬鬆的 CORS 標頭
+            socket.write(`Access-Control-Allow-Origin: ${clientOrigin}\r\n`)
+            socket.write(`Access-Control-Allow-Credentials: true\r\n`)
+            
+            // 3. 標頭結束
+            socket.write('\r\n')
+
+            // 4. 將響應主體（body）通過管道高效地傳輸給客戶端
+            proxyRes.pipe(socket)
+
+            proxyRes.on('error', (err) => {
+                console.error('[Proxy] Error on response stream from target:', err)
+                socket.destroy()
+            })
+        })
+
+        // 將客戶端的請求體轉發到 Solana RPC
+        // 這一步確保了像 POST 這樣有較大請求體的請求能被完整轉發
+        if (body && body.length > 0) {
+            proxyReq.write(body)
+        }
+        
+        // 將客戶端後續的數據流也 pipe 到代理請求中。
+        // 對於 GET 請求，這一步不會執行任何操作。
+        // 對於 POST 請求，它會轉發所有剩餘的請求體數據。
+        // 當客戶端 socket 結束時，它會自動觸發 proxyReq.end()。
+        socket.pipe(proxyReq)
+
+        socket.on('error', (err) => {
+            console.error('[Proxy] Error on client request stream:', err)
+            proxyReq.destroy()
+        })
+    }
+}
+
+
 
 const getHeader = (requestHanders: string[], key: string) => {
 	const keyLow = key.toLowerCase()
@@ -334,142 +383,15 @@ const getHeader = (requestHanders: string[], key: string) => {
 }
 
 export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHanders: string[]) => {
+
+
 	const method = requestHanders[0].split(' ')[0]
 	const path = requestHanders[0].split(' ')[1].split(/\/silentpass\-rpc/i)[1]||'/'
 	const origin = appHost(getHeader(requestHanders, 'Origin'))
-	logger(`forwardToSilentpass ${requestHanders[0]}`)
+	
+	logger(`forwardToSilentpass ${requestHanders[0]} ${origin}`)
 	logger(inspect(requestHanders, false, 3, true))
-
-	// if (/^OPTIONS/i.test(method) ) {
-		
-	// 	return responseOPTIONS(socket, requestHanders)
-	// }
-
-	
-	let Upgrade = false
-	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	if (/^Upgrade/i.test(method)) {
-		Upgrade = true
-		socket.setTimeout(0)
-		socket.setNoDelay(true)
-		socket.setKeepAlive(true, 0)
-	}
-	
-	const option: Https.RequestOptions = {
-		host: origin,
-		port: 443,
-		path,
-		method,
-		headers: rehandles
-	}
-
-	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
-	logger(inspect(option, false, 3, true))
-
-	let responseHeader = ''
-
-	const req = Https.request(option, res => {
-		
-		if (!Upgrade) {
-			res.pipe(socket)
-		}
-
-		let _responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : !responseHeader ? getResponseHeaders(requestHanders) : ''
-
-		for (let i = 0; i < res.rawHeaders.length; i += 2) {
-			const key = res.rawHeaders[i]
-			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow/i.test(key)) {
-				_responseHeader += `${key}: ${value}\r\n`
-			}
-		}
-
-		socket.write(_responseHeader + '\r\n')
-		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
-		
-		res.on('data', chunk => {
-			chunk.pipe(socket)
-		})
-		
-		res.once ('end', () => {
-			console.log(`on end chunk = close`)
-			
-		})
-
-		res.once('error', () => {
-			console.log(`on error chunk = close`)
-			
-		})
-
-		
-	})
-
-	req.on('error', err => {
-
-	})
-
-	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-		logger(`req.on('upgrade')`)
-		logger(inspect(proxyRes.headers, false, 3, true))
-		proxySocket.on('error', err => {
-			logger(Colors.red(`proxySocket.on('error')`), err.message)
-		})
-
-		proxySocket.on('end', function () {
-			logger(Colors.red(`proxySocket.on('end')`))
-		})
-
-		proxySocket.setTimeout(0)
-		proxySocket.setNoDelay(true)
-		proxySocket.setKeepAlive(true, 0)
-
-		if (proxyHead && proxyHead.length) {
-			proxySocket.unshift(proxyHead)
-		}
-		logger(inspect(proxyRes.headers, false, 3, true))
-		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
-
-		logger(inspect(socketHandle, false, 3, true))
-
-		socket.write(socketHandle)
-		
-		proxySocket.pipe(socket).pipe(proxySocket)
-
-	})
-
-	req.once('end', () => {
-		
-	})
-
-
-	if (body) {
-		logger(`req.write body size = ${body.length}`)
-		req.write(body)
-		if (!Upgrade) {
-			req.end()
-		}
-		return
-	}
-
-	if (/GET/.test(method)) {
-		return req.end('\r\n')
-	}
-
-	responseHeader = getResponseHeaders(requestHanders)
-
-	if (socket.writable) {
-		socket.once ('data', data => {
-			
-			req.write(data)
-			logger(`!body on body`, data.toString())
-			if (!Upgrade) {
-				logger(`req.end()`)
-				req.end()
-			}
-		})
-		socket.write(responseHeader)
-	}
-	
+	forwardToSolanaRpc(socket, body, requestHanders, origin)
 	
 }
 
@@ -540,7 +462,7 @@ const startServer = (port: number, publicKey: string) => {
 
 			const path = requestProtocol.split(' ')[1]
 			if (/\/solana\-rpc/i.test(path)) {
-				return forwardToSolana (socket, request_line[1], htmlHeaders)
+				return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
 			}
 
 			if (/\/silentpass\-rpc/i.test(path)) {
@@ -582,4 +504,5 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-// startServer(4000, 'pppp')
+startServer(4000, 'pppp')
+

@@ -10,7 +10,7 @@ import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
-import {forwardToSolana, forwardToSilentpass } from './solanaRPC'
+import {forwardToSolanaRpc, forwardToSilentpass } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -69,17 +69,22 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-const responseOPTIONS = (socket: Socket|TLSSocket) => {
-	let response = `HTTP/1.1 204 No Content\r\n`
-		response += `Server: nginx/1.24.0 (Ubuntu)\r\n`
-		//	@ts-ignore
-		response += `Date: ${new Date().toGMTString()}\r\n`
-		response += `Connection: keep-alive\r\n`
-		response += `Access-Control-Allow-Origin: *\r\n`
-		response += `Access-Control-Allow-Credentials: true\r\n`
-		response += `Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n`
-		response += `Access-Control-Allow-Headers: solana-client,DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type\r\n`
-		response += `Content-Length\r\n\r\n`
+// 輔助函數：處理 OPTIONS 預檢請求
+const responseOPTIONS = (socket: Socket, requestHanders: string[]) => {
+	const originHeader = requestHanders.find(h => h.toLowerCase().startsWith('origin:'))
+	const origin = originHeader ? originHeader.split(/: */, 2)[1] : '*'
+
+	const response = [
+		'HTTP/1.1 204 No Content',
+		`Access-Control-Allow-Origin: ${origin}`,
+		'Access-Control-Allow-Credentials: true',
+		'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
+		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
+		'Content-Length: 0',
+		'Connection: keep-alive',
+		'\r\n'
+	].join('\r\n')
+
 	socket.end(response)
 }
 
@@ -148,12 +153,12 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 
 		if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
 			logger (inspect(htmlHeaders, false, 3, true))
-			return responseOPTIONS(socket)
+			return responseOPTIONS(socket, htmlHeaders)
 		}
 		const path = requestProtocol.split(' ')[1]
 
 		if (/\/solana\-rpc/i.test(path)) {
-			return forwardToSolana (socket, request_line[1], htmlHeaders)
+			return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
 		}
 
 		if (/\/silentpass\-rpc/i.test(path)) {
@@ -291,7 +296,7 @@ class conet_si_server {
 
 			if (/^OPTIONS \/ HTTP\//.test(requestProtocol)) {
 				logger (inspect(htmlHeaders, false, 3, true))
-				return responseOPTIONS(socket)
+				return responseOPTIONS(socket, htmlHeaders)
 			}
 			// const path = requestProtocol.split(' ')[1]
 			// if (/\/solana\-rpc/i.test(path)) {
