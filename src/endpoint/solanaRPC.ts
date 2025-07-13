@@ -222,10 +222,10 @@ export const forwardToSolanaRpc = (
 	logger(`forwardToSolana path = ${path}`)
 	logger(inspect(requestHanders, false, 3, true))
 
-	if (/^OPTIONS/i.test(method[0]) ) {
+	// if (/^OPTIONS/i.test(method[0]) ) {
 		
-		return responseOPTIONS(socket, requestHanders)
-	}
+	// 	return responseOPTIONS(socket, requestHanders)
+	// }
 
 	
 	let Upgrade = false
@@ -386,10 +386,10 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 	logger(`forwardToSilentpass ${requestHanders[0]}`)
 	logger(inspect(requestHanders, false, 3, true))
 
-	if (/^OPTIONS/i.test(method) ) {
+	// if (/^OPTIONS/i.test(method) ) {
 		
-		return responseOPTIONS(socket, requestHanders)
-	}
+	// 	return responseOPTIONS(socket, requestHanders)
+	// }
 
 	
 	let Upgrade = false

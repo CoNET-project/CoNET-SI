@@ -76,8 +76,7 @@ const responseOPTIONS = (socket: Socket, requestHanders: string[]) => {
 
 	const response = [
 		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: ${origin}`,
-		'Access-Control-Allow-Credentials: true',
+		`Access-Control-Allow-Origin: *`,
 		'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
 		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
 		'Content-Length: 0',
@@ -171,6 +170,7 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 			logger (inspect(htmlHeaders, false, 3, true))
 			return responseOPTIONS(socket, htmlHeaders)
 		}
+
 		const path = requestProtocol.split(' ')[1]
 
 		if (/\/solana\-rpc/i.test(path)) {
