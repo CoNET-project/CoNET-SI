@@ -22,15 +22,12 @@ const ios_test ='ios-test.silentpass.io'
 const appHost = (host: string) => {
 	switch (host.toLowerCase()) {
 		
-		case androidUrl: {
+		case 'SP-iOS': {
 			return androidUrl
 		}
 		default:
 		case ios_test: {
 			return ios_test
-		}
-		case iOSUrl: {
-			return iOSUrl
 		}
 	}
 }
@@ -378,7 +375,7 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 
 	const method = requestHanders[0].split(' ')[0]
 	const path = requestHanders[0].split(' ')[1].split(/\/silentpass\-rpc/i)[1]||'/'
-	const origin = appHost(getHeader(requestHanders, 'Origin'))
+	const origin = appHost(getHeader(requestHanders, 'Referer'))
 	logger(`forwardToSilentpass ${requestHanders[0]}`)
 	logger(inspect(requestHanders, false, 3, true))
 
