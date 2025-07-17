@@ -22,7 +22,7 @@ const ios_test ='ios-test.silentpass.io'
 const appHost = (host: string) => {
 	switch (host.toLowerCase()) {
 		
-		case 'SP-iOS': {
+		case 'sp-ios': {
 			return iOSVPN
 		}
 		default:
