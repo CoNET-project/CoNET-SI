@@ -16,14 +16,14 @@ import Http from 'node:http'
 //		curl -v -i -X OPTIONS https://api.mainnet-beta.solana.com
 
 const iOSUrl = 'vpn9.conet.network'
-const androidUrl = 'vpn4.silentpass.io'
+const iOSVPN = 'ios-vpn.silentpass.io'
 const solanaRPC_host = 'api.mainnet-beta.solana.com'
 const ios_test ='ios-test.silentpass.io'
 const appHost = (host: string) => {
 	switch (host.toLowerCase()) {
 		
 		case 'SP-iOS': {
-			return androidUrl
+			return iOSVPN
 		}
 		default:
 		case ios_test: {
