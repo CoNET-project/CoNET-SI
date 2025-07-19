@@ -15,6 +15,8 @@ import { getServerIPV4Address } from './localNodeCommand'
 import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
 import { throws } from 'node:assert'
 import passport_distributor_ABI from './passport_distributor-ABI.json'
+import duplicateFactoryABI from './duplicateFactoryABI.json'
+
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
@@ -63,7 +65,8 @@ const _checkNFT = (nft: any[], fromAddr: string) => {
 	paymendUser.set(fromAddr, true)
 	return true
 }
-
+const duplicateFactory_addr = '0xAa32961a4756E7E45bEFC5c2740cc836A53fe661'
+const duplicateFactory_readOnly = new ethers.Contract(duplicateFactory_addr, duplicateFactoryABI, CONETP_mainnet_rovider)
 export const checkPayment = async(fromAddr: string) => {
 
 	const pay = paymendUser.get(fromAddr)
@@ -74,7 +77,7 @@ export const checkPayment = async(fromAddr: string) => {
 
 	try {
 		const [cancun, mainnet] = await Promise.all([
-			CoNETDePIN_PassportSC_readonly.getCurrentPassport(fromAddr),
+			duplicateFactory_readOnly.getCurrentPassport(fromAddr),
 			CoNETDePIN_passport_distributor_mainnet_readonly.getCurrentPassport(fromAddr)
 		])
 		//	check balance
@@ -340,8 +343,8 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
-// const test = async () => {
-// 	const aa = await checkPayment('0x5fd71406886503b631d5b9c24888d84f0eab6521')
-// 	logger(Colors.magenta(`test aa = ${aa}`))
-// }
-// test()
+const test = async () => {
+	const aa = await checkPayment('0x737fCfCEcE98cF6fD980209fbfA32d051DA6170A')
+	logger(Colors.magenta(`test aa = ${aa}`))
+}
+test()
