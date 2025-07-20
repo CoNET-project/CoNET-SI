@@ -17,11 +17,14 @@ import Http from 'node:http'
 
 const iOSUrl = 'vpn9.conet.network'
 const iOSVPN = 'ios-vpn.silentpass.io'
+const testVPN = 'vpn-beta.conet.network'
 const solanaRPC_host = 'api.mainnet-beta.solana.com'
 const ios_test ='ios-test.silentpass.io'
 const appHost = (host: string) => {
 	switch (host.toLowerCase()) {
-		
+		case 'sp-test': {
+			return testVPN
+		}
 		case 'sp-ios': {
 			return iOSVPN
 		}
