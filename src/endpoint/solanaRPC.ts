@@ -277,13 +277,13 @@ const req = Https.request(option, res => {
 			if (socket.writable) {
 				socket.write(chunk)
 			}
-
 		})
 		
 		res.once ('end', () => {
 			logger(`on end chunk = close`)
 			if (socket.writable) {
 				socket.end()
+				socket.destroy()
 			}
 		})
 
