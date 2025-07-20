@@ -65,7 +65,7 @@ const _checkNFT = (nft: any[], fromAddr: string) => {
 	paymendUser.set(fromAddr, true)
 	return true
 }
-const duplicateFactory_addr = '0xAa32961a4756E7E45bEFC5c2740cc836A53fe661'
+const duplicateFactory_addr = '0x0282589DC14c0303a4Be55a7204A9855df83AaaB'
 const duplicateFactory_readOnly = new ethers.Contract(duplicateFactory_addr, duplicateFactoryABI, CONETP_mainnet_rovider)
 export const checkPayment = async(fromAddr: string) => {
 
