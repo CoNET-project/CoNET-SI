@@ -255,7 +255,7 @@ export const forwardToSolanaRpc = (
 
 
 const req = Https.request(option, res => {
-		
+		logger(`forwardToSolanaRpc got response!`)
 		if (!Upgrade) {
 			res.pipe(socket)
 		}
@@ -269,7 +269,7 @@ const req = Https.request(option, res => {
 				_responseHeader += `${key}: ${value}\r\n`
 			}
 		}
-
+		
 		socket.write(_responseHeader + '\r\n')
 		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
 		
