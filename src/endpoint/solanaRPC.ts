@@ -218,21 +218,23 @@ export const forwardToSolanaRpc = (
 ) => {
     // 解析请求行和请求头
     const requestLine = requestHanders[0].split(' ')
-    const method = requestLine[0];
-    const path = requestLine[1]; // 路径，例如 /solana-rpc
+    const method = requestLine[0]
+
     const headers = getHeaderJSON(requestHanders.slice(1))
 
     // 检查是否是 WebSocket 升级请求
 	//@ts-ignore
-    const isWebSocketUpgrade = headers['upgrade']?.toLowerCase() === 'websocket'
+
+	const isWebSocketUpgradeindex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
+    
 	logger(inspect(requestHanders, false, 3, true))
 	console.log('\n\n\n')
 
-    if (isWebSocketUpgrade) {
+    if (isWebSocketUpgradeindex > -1) {
         /**************************************************
          * 处理 WebSocket 升级请求             *
          **************************************************/
-        logger(Colors.magenta(`[WebSocket] 收到 WebSocket 升级请求，路径: ${path}`))
+        logger(Colors.magenta(`[WebSocket] 收到 WebSocket 升级请求`))
 		//@ts-ignore
         const clientKey = headers['sec-websocket-key'];
         if (!clientKey) {
