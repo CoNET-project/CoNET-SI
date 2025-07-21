@@ -223,6 +223,9 @@ export const forwardToSolanaRpc = (
 	console.log('\n\n\n')
 
     if (isWebSocketUpgradeindex > -1) {
+		socket.setTimeout(0)
+		socket.setNoDelay(true)
+		socket.setKeepAlive(true, 0)
         /**************************************************
          * 处理 WebSocket 升级请求             *
          **************************************************/
