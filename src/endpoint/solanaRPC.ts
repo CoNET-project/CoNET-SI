@@ -227,6 +227,7 @@ export const forwardToSolanaRpc = (
     const isWebSocketUpgrade = headers['upgrade']?.toLowerCase() === 'websocket'
 	logger(inspect(headers, false, 3, true))
 	console.log('\n\n\n')
+
     if (isWebSocketUpgrade) {
         /**************************************************
          * 处理 WebSocket 升级请求             *
@@ -320,7 +321,7 @@ export const forwardToSolanaRpc = (
         /**************************************************
          * 处理普通 HTTP/HTTPS 请求             *
          **************************************************/
-        logger(Colors.cyan(`[HTTP] 转发标准 HTTP 请求到: ${path}`))
+        // logger(Colors.cyan(`[HTTP] 转发标准 HTTP 请求到: ${path}`))
 		
         const options: Https.RequestOptions = {
             host: solanaRPC_host,
@@ -330,14 +331,14 @@ export const forwardToSolanaRpc = (
             headers: headers
         }
 
-		logger(inspect(headers, false, 3, true))
+		// logger(inspect(headers, false, 3, true))
 
         const req = Https.request(options, res => {
             // 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
             // 构造状态行
             const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
             socket.write(statusLine + '\r\n');
-			logger(statusLine)
+			// logger(statusLine)
             // 构造并写入过滤后的响应头
             for (let i = 0; i < res.rawHeaders.length; i += 2) {
                 const key = res.rawHeaders[i];
