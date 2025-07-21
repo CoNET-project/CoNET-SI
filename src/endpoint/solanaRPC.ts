@@ -328,14 +328,16 @@ export const forwardToSolanaRpc = (
             path: path,
             method: method,
             headers: headers
-        };
+        }
+
+		logger(inspect(headers, false, 3, true))
 
         const req = Https.request(options, res => {
             // 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
             // 构造状态行
             const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
             socket.write(statusLine + '\r\n');
-
+			logger(res)
             // 构造并写入过滤后的响应头
             for (let i = 0; i < res.rawHeaders.length; i += 2) {
                 const key = res.rawHeaders[i];
