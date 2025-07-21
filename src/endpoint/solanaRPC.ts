@@ -9,6 +9,8 @@ import {readFileSync} from 'node:fs'
 import { join } from 'node:path'
 import Https from 'node:https'
 import Http from 'node:http'
+import WebSocket from 'ws'
+import Crypto from 'node:crypto'
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
@@ -202,128 +204,181 @@ function parseHeaders(requestHeaders: string[]): Record<string, string> {
     return headers
 }
 
+
 /**
- * 將客戶端請求代理轉發到指定的 Solana RPC 主機。
- * 完整處理標準 HTTPS 請求（含 CORS 修改）和 WebSocket (WSS) 升級請求。
- *
- * @param socket 客戶端的 net.Socket 連接。
- * @param body 初始請求中可能包含的 body 數據。
- * @param requestHanders 原始的 HTTP 請求頭陣列。
- * @param solanaRpcHost 要轉發到的 Solana RPC 主機名。
+ * 将请求转发到 Solana RPC，同时支持 HTTP 和 WebSocket 协议。
+ * @param socket 客户端的原始 TCP socket 连接。
+ * @param body 从客户端收到的初始请求体 (主要用于POST请求)。
+ * @param requestHanders 原始的 HTTP 请求头数组。
  */
 export const forwardToSolanaRpc = (
     socket: Net.Socket,
     body: string,
     requestHanders: string[]
 ) => {
-    const method = requestHanders[0].split(' ')
-	const path = method[1]
-	logger(`forwardToSolana path = ${path}`)
-	logger(inspect(requestHanders, false, 3, true))
+    // 解析请求行和请求头
+    const requestLine = requestHanders[0].split(' ')
+    const method = requestLine[0];
+    const path = requestLine[1]; // 路径，例如 /solana-rpc
+    const headers = getHeaderJSON(requestHanders.slice(1))
 
-	// if (/^OPTIONS/i.test(method[0]) ) {
+    // 检查是否是 WebSocket 升级请求
+	//@ts-ignore
+    const isWebSocketUpgrade = headers['upgrade']?.toLowerCase() === 'websocket'
+	logger(inspect(headers, false, 3, true))
+	console.log('\n\n\n')
+    if (isWebSocketUpgrade) {
+        /**************************************************
+         * 处理 WebSocket 升级请求             *
+         **************************************************/
+        logger(Colors.magenta(`[WebSocket] 收到 WebSocket 升级请求，路径: ${path}`))
+		//@ts-ignore
+        const clientKey = headers['sec-websocket-key'];
+        if (!clientKey) {
+            logger(Colors.red('[WebSocket] 错误: 请求缺少 "sec-websocket-key" 头。'))
+            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
+            return
+        }
+
+        // 1. 构造到上游 Solana RPC WebSocket 服务的 URL
+        const upstreamWsUrl = `wss://${solanaRPC_host}${path}`;
+        logger(Colors.cyan(`[WebSocket] 正在连接到上游服务器: ${upstreamWsUrl}`))
+
+        // 2. 创建一个 WebSocket 客户端实例，连接到 Solana
+        const upstreamSocket = new WebSocket(upstreamWsUrl)
+
+        // 3. 当与上游服务器的连接建立后，完成与客户端的握手
+        upstreamSocket.on('open', () => {
+            logger(Colors.green(`[WebSocket] 已成功连接到上游: ${upstreamWsUrl}`))
+
+            // 计算 Sec-WebSocket-Accept 的值用于响应
+            const acceptKey = Crypto
+                .createHash('sha1')
+                .update(clientKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
+                .digest('base64');
+
+            // 构造 101 Switching Protocols 响应
+            const responseHeaders = [
+                'HTTP/1.1 101 Switching Protocols',
+                'Upgrade: websocket',
+                'Connection: Upgrade',
+                `Sec-WebSocket-Accept: ${acceptKey}`
+            ];
+
+            // 发送握手响应给客户端
+            socket.write(responseHeaders.join('\r\n') + '\r\n\r\n')
+            logger(Colors.green('[WebSocket] 与客户端握手成功，开始代理数据...'))
+
+            // 4. 在两个连接之间双向代理数据
+            // 从客户端接收数据 -> 发送到上游
+            socket.on('data', data => {
+                if (upstreamSocket.readyState === WebSocket.OPEN) {
+                    upstreamSocket.send(data)
+                }
+            })
+
+            // 从上游接收消息 -> 发送到客户端
+            upstreamSocket.on('message', message => {
+                if (socket.writable) {
+					//@ts-ignore
+                    socket.write(message)
+                }
+            })
+        })
+
+        // 5. 处理连接关闭
+        socket.on('close', () => {
+            logger(Colors.yellow('[WebSocket] 客户端连接已关闭。'))
+            if (upstreamSocket.readyState === WebSocket.OPEN || upstreamSocket.readyState === WebSocket.CONNECTING) {
+                upstreamSocket.close()
+            }
+        });
+
+        upstreamSocket.on('close', () => {
+            logger(Colors.yellow(`[WebSocket] 上游连接 ${upstreamWsUrl} 已关闭。`))
+            if (socket.writable) {
+                socket.end()
+            }
+        })
+
+        // 6. 处理错误
+        socket.on('error', err => {
+            logger(Colors.red(`[WebSocket] 客户端 Socket 发生错误: ${err.message}`));
+            if (upstreamSocket.readyState === WebSocket.OPEN || upstreamSocket.readyState === WebSocket.CONNECTING) {
+                upstreamSocket.close()
+            }
+        })
+
+        upstreamSocket.on('error', err => {
+            logger(Colors.red(`[WebSocket] 上游 WebSocket 发生错误: ${err.message}`))
+            if (socket.writable) {
+                socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+            }
+        })
+
+    } else {
+        /**************************************************
+         * 处理普通 HTTP/HTTPS 请求             *
+         **************************************************/
+        logger(Colors.cyan(`[HTTP] 转发标准 HTTP 请求到: ${path}`))
 		
-	// 	return responseOPTIONS(socket, requestHanders)
-	// }
+        const options: Https.RequestOptions = {
+            host: solanaRPC_host,
+            port: 443,
+            path: path,
+            method: method,
+            headers: headers
+        };
 
-	
-	let Upgrade = false
-	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	// if (/^Upgrade/i.test(method[0])) {
-	// 	Upgrade = true
-	// 	socket.setTimeout(0)
-	// 	socket.setNoDelay(true)
-	// 	socket.setKeepAlive(true, 0)
-	// }
-	
-	const option: Https.RequestOptions = {
-		host: solanaRPC_host,
-		port: 443,
-		path: '/',
-		method: method[0],
-		headers: rehandles
-	}
+        const req = Https.request(options, res => {
+            // 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
+            // 构造状态行
+            const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
+            socket.write(statusLine + '\r\n');
 
-	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
-	logger(inspect(option, false, 3, true))
+            // 构造并写入过滤后的响应头
+            for (let i = 0; i < res.rawHeaders.length; i += 2) {
+                const key = res.rawHeaders[i];
+                const value = res.rawHeaders[i + 1];
+                // 过滤掉可能包含客户端限制的头 (例如 CORS, Date, Allow)
+                if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
+                    socket.write(`${key}: ${value}\r\n`);
+                }
+            }
+            
+            // 添加自定义的、更宽松的CORS头
+            socket.write('Access-Control-Allow-Origin: *\r\n')
+            socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
+            socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
 
-	let responseHeader = ''
+            socket.write('\r\n');
 
-	const req = Https.request(option, res => {
-		logger(`forwardToSolanaRpc got response!`)
+            // 使用 pipe 将响应体直接流式传输给客户端
+            res.pipe(socket);
 
-		
-		let _responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : !responseHeader ? getResponseHeaders(requestHanders) : ''
+            res.on('error', err => {
+                logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
+                if (socket.writable) {
+                    socket.destroy()
+                }
+            })
+        })
 
-		for (let i = 0; i < res.rawHeaders.length; i += 2) {
-			const key = res.rawHeaders[i]
-			const value = res.rawHeaders[i+1]
-			if (!/^Access|^date|^allow/i.test(key)) {
-				_responseHeader += `${key}: ${value}\r\n`
-			}
-		}
-		
-		socket.write(_responseHeader + '\r\n')
-		logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(responseHeader, false, 3, true))
-		
-		res.on('data', chunk => {
-			if (socket.writable) {
-				socket.write(chunk)
-			}
-		})
-		
-		res.once ('end', () => {
-			logger(`on end chunk = close`)
-			if (socket.writable) {
-				socket.end()
-				socket.destroy()
-			}
-		})
+        req.on('error', err => {
+            logger(Colors.red(`[HTTP] 转发请求错误: ${err.message}`))
+            if (socket.writable) {
+                socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+            }
+        });
 
-		res.once('error', () => {
-			logger(`on error chunk = close`)
-			
-		})
+        // 如果有请求体 (例如 POST)，则写入请求体
+        if (body) {
+            req.write(body)
+        }
 
-		
-	})
-
-
-	req.on('error', err => {
-
-	})
-
-	req.once('end', () => {
-		
-	})
-
-
-	if (body) {
-		logger(`req.write body size = ${body.length}`)
-		req.write(body)
-		if (!Upgrade) {
-			req.end()
-		}
-		return 
-	}
-
-	responseHeader = getResponseHeaders(requestHanders)
-
-	if (socket.writable) {
-		socket.once ('data', data => {
-			
-			req.write(data)
-			logger(`!body on body`, data.toString())
-			if (!Upgrade) {
-				logger(`req.end()`)
-				req.end()
-			}
-		})
-		socket.write(responseHeader)
-	}
+        req.end()
+    }
 }
-
-
 
 const getHeader = (requestHanders: string[], key: string) => {
 	const keyLow = key.toLowerCase()
