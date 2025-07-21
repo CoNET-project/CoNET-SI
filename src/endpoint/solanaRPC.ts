@@ -241,7 +241,7 @@ export const forwardToSolanaRpc = (
         }
 
         // 1. 构造到上游 Solana RPC WebSocket 服务的 URL
-        const upstreamWsUrl = `wss://${solanaRPC_host}${path}`;
+        const upstreamWsUrl = `wss://${solanaRPC_host}`
         logger(Colors.cyan(`[WebSocket] 正在连接到上游服务器: ${upstreamWsUrl}`))
 
         // 2. 创建一个 WebSocket 客户端实例，连接到 Solana
