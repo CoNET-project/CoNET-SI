@@ -226,93 +226,86 @@ export const forwardToSolanaRpc = (
 		socket.setTimeout(0)
 		socket.setNoDelay(true)
 		socket.setKeepAlive(true, 0)
-        /**************************************************
-         * 处理 WebSocket 升级请求             *
-         **************************************************/
-        logger(Colors.magenta(`[WebSocket] 收到 WebSocket 升级请求`))
-		//@ts-ignore
-        const clientKey = headers['sec-websocket-key'];
-        if (!clientKey) {
-            logger(Colors.red('[WebSocket] 错误: 请求缺少 "sec-websocket-key" 头。'))
-            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n')
-            return
+		const options: Https.RequestOptions = {
+            host: solanaRPC_host,
+            port: 443,
+            path: '/',
+            method: method,
+            headers: {
+                ...headers, // 包含從客戶端轉發過來的、已過濾的頭
+                'host': solanaRPC_host // 手動設置正確的 Host 頭
+            }
         }
+        const req = Https.request(options, res => {
+			
 
-        // 1. 构造到上游 Solana RPC WebSocket 服务的 URL
-        const upstreamWsUrl = `wss://${solanaRPC_host}`
-        logger(Colors.cyan(`[WebSocket] 正在连接到上游服务器: ${upstreamWsUrl}`))
+			let _responseHeader = createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers)
 
-        // 2. 创建一个 WebSocket 客户端实例，连接到 Solana
-        const upstreamSocket = new WebSocket(upstreamWsUrl)
+			for (let i = 0; i < res.rawHeaders.length; i += 2) {
+				const key = res.rawHeaders[i]
+				const value = res.rawHeaders[i+1]
+				if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
+					_responseHeader += `${key}: ${value}\r\n`
+				}
+			}
 
-        // 3. 当与上游服务器的连接建立后，完成与客户端的握手
-        upstreamSocket.on('open', () => {
-            logger(Colors.green(`[WebSocket] 已成功连接到上游: ${upstreamWsUrl}`))
+			socket.write(_responseHeader + '\r\n')
+			logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(_responseHeader, false, 3, true))
+			
+			res.on('data', chunk => {
+				console.log(`on data chunk = ${chunk.toString()}`)
+				chunk.pipe(socket)
+			})
+			
+			res.once ('end', () => {
+				console.log(`on end chunk = close`)
+				
+			})
 
-            // 计算 Sec-WebSocket-Accept 的值用于响应
-            const acceptKey = Crypto
-                .createHash('sha1')
-                .update(clientKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
-                .digest('base64')
+			res.once('error', () => {
+				console.log(`on error chunk = close`)
+				
+			})
 
-            // 构造 101 Switching Protocols 响应
-            const responseHeaders = [
-                'HTTP/1.1 101 Switching Protocols',
-                'Upgrade: websocket',
-                'Connection: Upgrade',
-                `Sec-WebSocket-Accept: ${acceptKey}`
-            ];
+			
+		})
 
-            // 发送握手响应给客户端
-            socket.write(responseHeaders.join('\r\n') + '\r\n\r\n')
-            logger(Colors.green('[WebSocket] 与客户端握手成功，开始代理数据...'))
+		req.on('error', err => {
 
-            // 4. 在两个连接之间双向代理数据
-            // 从客户端接收数据 -> 发送到上游
-            socket.on('data', data => {
-                if (upstreamSocket.readyState === WebSocket.OPEN) {
-                    upstreamSocket.send(data)
-                }
-            })
+		})
 
-            // 从上游接收消息 -> 发送到客户端
-            upstreamSocket.on('message', message => {
-                if (socket.writable) {
-					//@ts-ignore
-                    socket.write(message)
-                }
-            })
-        })
+		req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+			logger(`req.on('upgrade')`)
+			logger(inspect(proxyRes.headers, false, 3, true))
+			proxySocket.on('error', err => {
+				logger(Colors.red(`proxySocket.on('error')`), err.message)
+			})
 
-        // 5. 处理连接关闭
-        socket.on('close', () => {
-            logger(Colors.yellow('[WebSocket] 客户端连接已关闭。'))
-            if (upstreamSocket.readyState === WebSocket.OPEN || upstreamSocket.readyState === WebSocket.CONNECTING) {
-                upstreamSocket.close()
-            }
-        });
+			proxySocket.on('end', function () {
+				logger(Colors.red(`proxySocket.on('end')`))
+			})
 
-        upstreamSocket.on('close', () => {
-            logger(Colors.yellow(`[WebSocket] 上游连接 ${upstreamWsUrl} 已关闭。`))
-            if (socket.writable) {
-                socket.end()
-            }
-        })
+			proxySocket.setTimeout(0)
+			proxySocket.setNoDelay(true)
+			proxySocket.setKeepAlive(true, 0)
 
-        // 6. 处理错误
-        socket.on('error', err => {
-            logger(Colors.red(`[WebSocket] 客户端 Socket 发生错误: ${err.message}`));
-            if (upstreamSocket.readyState === WebSocket.OPEN || upstreamSocket.readyState === WebSocket.CONNECTING) {
-                upstreamSocket.close()
-            }
-        })
+			if (proxyHead && proxyHead.length) {
+				proxySocket.unshift(proxyHead)
+			}
+			logger(inspect(proxyRes.headers, false, 3, true))
+			const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
 
-        upstreamSocket.on('error', err => {
-            logger(Colors.red(`[WebSocket] 上游 WebSocket 发生错误: ${err.message}`))
-            if (socket.writable) {
-                socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
-            }
-        })
+			logger(inspect(socketHandle, false, 3, true))
+
+			socket.write(socketHandle)
+			
+			proxySocket.pipe(socket).pipe(proxySocket)
+
+		})
+
+		req.once('end', () => {
+			
+		})
 
     } else {
         /**************************************************
