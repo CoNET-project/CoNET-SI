@@ -137,34 +137,26 @@ const getResponseHeaders = ( _headers: string[]) => {
 }
 
 
-const getHeaderJSON = (requestHanders: string[]) => {
-	let _ret = "{"
-	requestHanders.forEach((n, index) => {
-		const key = n.split(': ')
-		
-		if (key[0] !=='' && key[1] !== '' && !/(^Host|^Origin|^Referer|^Accept\-Encoding)/i.test(key[0])) {
+/**
+ * 解析原始 HTTP 標頭陣列，過濾掉特定標頭，並將剩餘標頭的鍵轉換為小寫。
+ * @param requestHeaders - 從 socket 收到的原始標頭字串陣列。
+ * @returns 一個鍵值對物件，其中所有鍵均為小寫。
+ */
+const getHeaderJSON = (requestHeaders: string[]): { [key: string]: string } => {
+    const headers: { [key: string]: string } = {}
+    const filterRegex = /^(host|origin|referer|accept-encoding)$/i
 
-			key[1] = key[1].replaceAll('"', '')
-			_ret += `"${key[0]}": "${key[1]}"`
-			if (index < requestHanders.length-1) {
-				_ret += ','
-			}
-		}
-
-	})
-	if (_ret[_ret.length - 1] === ',') {
-		_ret = _ret.slice(0, _ret.length-1)
-	}
-	_ret += "}"
-	let ret = {}
-	try {
-		ret = JSON.parse(_ret)
-	} catch (ex: any) {
-		logger(Colors.red(`getHeaderJSON JSON parse Error`))
-		logger(inspect(_ret, false, 3, true))
-	}
-	return ret
-	
+    requestHeaders.forEach(line => {
+        const separatorIndex = line.indexOf(':')
+        if (separatorIndex > 0) {
+            const key = line.substring(0, separatorIndex).trim()
+            const value = line.substring(separatorIndex + 1).trim()
+            if (!filterRegex.test(key)) {
+                headers[key.toLowerCase()] = value
+            }
+        }
+    })
+    return headers
 }
 
 var createHttpHeader = (line: string, headers: Http.IncomingHttpHeaders) => {
@@ -258,7 +250,7 @@ export const forwardToSolanaRpc = (
             const acceptKey = Crypto
                 .createHash('sha1')
                 .update(clientKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11')
-                .digest('base64');
+                .digest('base64')
 
             // 构造 101 Switching Protocols 响应
             const responseHeaders = [
@@ -330,7 +322,10 @@ export const forwardToSolanaRpc = (
             port: 443,
             path: '/',
             method: method,
-            headers: headers
+            headers: {
+                ...headers, // 包含從客戶端轉發過來的、已過濾的頭
+                'host': solanaRPC_host // 手動設置正確的 Host 頭
+            }
         }
 
 		// logger(inspect(headers, false, 3, true))
