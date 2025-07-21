@@ -226,86 +226,51 @@ export const forwardToSolanaRpc = (
 		socket.setTimeout(0)
 		socket.setNoDelay(true)
 		socket.setKeepAlive(true, 0)
-		const options: Https.RequestOptions = {
-            host: solanaRPC_host,
-            port: 443,
-            path: '/',
-            method: method,
-            headers: {
-                ...headers, // 包含從客戶端轉發過來的、已過濾的頭
-                'host': solanaRPC_host // 手動設置正確的 Host 頭
-            }
+
+		/**************************************************
+         * 使用 'ws' 庫處理 WebSocket 代理 (推薦方式) *
+         **************************************************/
+        logger(Colors.magenta(`[WebSocket] 收到 WebSocket 升級請求`));
+        
+        const clientKey = headers['sec-websocket-key'];
+        if (!clientKey) {
+            logger(Colors.red('[WebSocket] 錯誤: 請求缺少 "sec-websocket-key" 頭。'));
+            socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+            return;
         }
-        const req = Https.request(options, res => {
-			
 
-			let _responseHeader = createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers)
+        // 【關鍵】: 使用客戶端請求的 path 來建構上游 WebSocket URL
+        const upstreamWsUrl = `wss://${solanaRPC_host}/`;
+        logger(Colors.cyan(`[WebSocket] 正在連接到上游伺服器: ${upstreamWsUrl}`));
 
-			for (let i = 0; i < res.rawHeaders.length; i += 2) {
-				const key = res.rawHeaders[i]
-				const value = res.rawHeaders[i+1]
-				if (!/^Access|^date|^allow|^content\-type/i.test(key)) {
-					_responseHeader += `${key}: ${value}\r\n`
-				}
-			}
+        const forwardHeaders = {
+            'Origin': headers['origin']
+        };
 
-			socket.write(_responseHeader + '\r\n')
-			logger(`const req = Https.request(option, res => socket.write(responseHeader + '\r\n')`, inspect(_responseHeader, false, 3, true))
-			
-			res.on('data', chunk => {
-				console.log(`on data chunk = ${chunk.toString()}`)
-				chunk.pipe(socket)
-			})
-			
-			res.once ('end', () => {
-				console.log(`on end chunk = close`)
-				
-			})
+        const upstreamSocket = new WebSocket(upstreamWsUrl, { headers: forwardHeaders });
 
-			res.once('error', () => {
-				console.log(`on error chunk = close`)
-				
-			})
+        upstreamSocket.on('open', () => {
+            logger(Colors.green(`[WebSocket] 已成功連接到上游: ${upstreamWsUrl}`));
+            const acceptKey = Crypto.createHash('sha1').update(clientKey + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+            const responseHeaders = [
+                'HTTP/1.1 101 Switching Protocols', 'Upgrade: websocket', 'Connection: Upgrade', `Sec-WebSocket-Accept: ${acceptKey}`
+            ];
+            socket.write(responseHeaders.join('\r\n') + '\r\n\r\n');
+            logger(Colors.green('[WebSocket] 與客戶端握手成功，開始代理數據...'));
 
-			
-		})
+            // 【修正】: 建立兩個獨立的管道來雙向轉發數據
+            // 客戶端 -> 上游
+            socket.on('data', data => { if (upstreamSocket.readyState === WebSocket.OPEN) upstreamSocket.send(data); });
+            // 上游 -> 客戶端
+            upstreamSocket.on('message', message => { if (socket.writable) socket.write(message as Buffer); });
+        });
 
-		req.on('error', err => {
+        // 處理關閉和錯誤事件
+        socket.on('close', () => { logger(Colors.yellow('[WebSocket] 客戶端連接已關閉。')); if (upstreamSocket.readyState < 2) upstreamSocket.close(); });
+        upstreamSocket.on('close', (code, reason) => { logger(Colors.yellow(`[WebSocket] 上游連接 ${upstreamWsUrl} 已關閉。 Code: ${code}, Reason: ${reason.toString()}`)); if (socket.writable) socket.end(); });
+        socket.on('error', err => { logger(Colors.red(`[WebSocket] 客戶端 Socket 錯誤: ${err.message}`)); if (upstreamSocket.readyState < 2) upstreamSocket.close(); });
+        upstreamSocket.on('error', err => { logger(Colors.red(`[WebSocket] 上游 WebSocket 錯誤: ${err.message}`)); if (socket.writable) socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n'); });
 
-		})
-
-		req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-			logger(`req.on('upgrade')`)
-			logger(inspect(proxyRes.headers, false, 3, true))
-			proxySocket.on('error', err => {
-				logger(Colors.red(`proxySocket.on('error')`), err.message)
-			})
-
-			proxySocket.on('end', function () {
-				logger(Colors.red(`proxySocket.on('end')`))
-			})
-
-			proxySocket.setTimeout(0)
-			proxySocket.setNoDelay(true)
-			proxySocket.setKeepAlive(true, 0)
-
-			if (proxyHead && proxyHead.length) {
-				proxySocket.unshift(proxyHead)
-			}
-			logger(inspect(proxyRes.headers, false, 3, true))
-			const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
-
-			logger(inspect(socketHandle, false, 3, true))
-
-			socket.write(socketHandle)
-			
-			proxySocket.pipe(socket).pipe(proxySocket)
-
-		})
-
-		req.once('end', () => {
-			
-		})
 
     } else {
         /**************************************************
