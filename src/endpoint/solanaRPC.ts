@@ -225,7 +225,7 @@ export const forwardToSolanaRpc = (
     // 检查是否是 WebSocket 升级请求
 	//@ts-ignore
     const isWebSocketUpgrade = headers['upgrade']?.toLowerCase() === 'websocket'
-	logger(inspect(headers, false, 3, true))
+	logger(inspect(requestHanders, false, 3, true))
 	console.log('\n\n\n')
 
     if (isWebSocketUpgrade) {
