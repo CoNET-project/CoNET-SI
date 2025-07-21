@@ -214,8 +214,7 @@ function parseHeaders(requestHeaders: string[]): Record<string, string> {
 export const forwardToSolanaRpc = (
     socket: Net.Socket,
     body: string,
-    requestHanders: string[],
-    solanaRpcHost = solanaRPC_host
+    requestHanders: string[]
 ) => {
     const method = requestHanders[0].split(' ')
 	const path = method[1]
@@ -230,12 +229,12 @@ export const forwardToSolanaRpc = (
 	
 	let Upgrade = false
 	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	if (/^Upgrade/i.test(method[0])) {
-		Upgrade = true
-		socket.setTimeout(0)
-		socket.setNoDelay(true)
-		socket.setKeepAlive(true, 0)
-	}
+	// if (/^Upgrade/i.test(method[0])) {
+	// 	Upgrade = true
+	// 	socket.setTimeout(0)
+	// 	socket.setNoDelay(true)
+	// 	socket.setKeepAlive(true, 0)
+	// }
 	
 	const option: Https.RequestOptions = {
 		host: solanaRPC_host,
@@ -250,16 +249,10 @@ export const forwardToSolanaRpc = (
 
 	let responseHeader = ''
 
-
-
-
-
-const req = Https.request(option, res => {
+	const req = Https.request(option, res => {
 		logger(`forwardToSolanaRpc got response!`)
-		if (!Upgrade) {
-			res.pipe(socket)
-		}
 
+		
 		let _responseHeader = Upgrade ? createHttpHeader('HTTP/' + res.httpVersion + ' ' + res.statusCode + ' ' + res.statusMessage, res.headers) : !responseHeader ? getResponseHeaders(requestHanders) : ''
 
 		for (let i = 0; i < res.rawHeaders.length; i += 2) {
@@ -297,35 +290,6 @@ const req = Https.request(option, res => {
 
 
 	req.on('error', err => {
-
-	})
-
-	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
-		logger(`req.on('upgrade')`)
-		logger(inspect(proxyRes.headers, false, 3, true))
-		proxySocket.on('error', err => {
-			logger(Colors.red(`proxySocket.on('error')`), err.message)
-		})
-
-		proxySocket.on('end', function () {
-			logger(Colors.red(`proxySocket.on('end')`))
-		})
-
-		proxySocket.setTimeout(0)
-		proxySocket.setNoDelay(true)
-		proxySocket.setKeepAlive(true, 0)
-
-		if (proxyHead && proxyHead.length) {
-			proxySocket.unshift(proxyHead)
-		}
-		logger(inspect(proxyRes.headers, false, 3, true))
-		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
-
-		logger(inspect(socketHandle, false, 3, true))
-
-		socket.write(socketHandle)
-		
-		proxySocket.pipe(socket).pipe(proxySocket)
 
 	})
 
