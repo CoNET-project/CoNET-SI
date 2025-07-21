@@ -119,6 +119,13 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 	const path = requestProtocol.split(' ')[1]
 	const method = requestProtocol.split(' ')[0]
 
+
+
+	//	*********************
+	if (/^\/solana\-rpc/i.test(path)) {
+		return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
+	}
+
 	if (method === 'GET') {
 		//		GET Home
 		if (path === '/') {
@@ -130,11 +137,6 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 		}
 		//		unknow request!
 		return distorySocket(socket)
-	}
-
-	//	*********************
-	if (/^\/solana\-rpc/i.test(path)) {
-		return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
 	}
 
 	let body: {data?: string}
