@@ -88,15 +88,19 @@ const responseOPTIONS = (socket: Socket, requestHanders: string[]) => {
 }
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
-
-	const getMoreData = (): Promise<string> => new Promise(executor => {
-		let data = chunk.toString()
-		socket.on('data', _data => {
+	
+	const getMoreData = (data: string): Promise<string> => new Promise(async executor => {
+		
+		
+		socket.once('data', _data => {
 			data += _data.toString()
 		})
-		socket.once('end', () => {
-			return executor(data)
-		})
+
+		const request_line = data.split('\r\n\r\n')
+		if (request_line.length < 2) {
+			return await getMoreData(data)
+		}
+		executor (data)
 	})
 
 
@@ -106,11 +110,11 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 		return distorySocket(socket)
 	}
 
-	const data = await getMoreData()
+	const data = await getMoreData(chunk.toString())
 
 	const request_line = data.split('\r\n\r\n')
 	const htmlHeaders = request_line[0].split('\r\n')
-	const bodyLength = getLengthHander (htmlHeaders)
+	
 	const requestProtocol = htmlHeaders[0]
 	const path = requestProtocol.split(' ')[1]
 	const method = requestProtocol.split(' ')[0]
@@ -137,7 +141,7 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 	try {
 		body = JSON.parse(request_line[1])
 	} catch (ex) {
-		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${request_line[0]} bodyLength = ${bodyLength}`, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
+		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${request_line[0]}`, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
 		return distorySocket(socket)
 	}
 
