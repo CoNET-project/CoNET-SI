@@ -325,7 +325,7 @@ export const forwardToSolanaRpc = (
         const options: Https.RequestOptions = {
             host: solanaRPC_host,
             port: 443,
-            path: path,
+            path: '/',
             method: method,
             headers: headers
         }
