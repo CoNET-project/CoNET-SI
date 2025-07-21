@@ -337,7 +337,7 @@ export const forwardToSolanaRpc = (
             // 构造状态行
             const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
             socket.write(statusLine + '\r\n');
-			logger(res)
+			logger(statusLine)
             // 构造并写入过滤后的响应头
             for (let i = 0; i < res.rawHeaders.length; i += 2) {
                 const key = res.rawHeaders[i];
