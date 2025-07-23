@@ -341,6 +341,86 @@ export const forwardToSolanaRpc = (
     }
 }
 
+const host_jup_ag = 'lite-api.jup.ag'
+export const forwardTojup_ag = (
+    socket: Net.Socket,
+    body: string,
+    requestHanders: string[]
+) => {
+    // 解析请求行和请求头
+    const requestLine = requestHanders[0].split(' ')
+    const method = requestLine[0]
+	const path = requestLine[1].split('jup_ag/')[1]||'/'
+    const headers = getHeaderJSON(requestHanders.slice(1))
+
+	/**************************************************
+	 * 处理普通 HTTP/HTTPS 请求             *
+	 **************************************************/
+	// logger(Colors.cyan(`[HTTP] 转发标准 HTTP 请求到: ${path}`))
+	
+	const options: Https.RequestOptions = {
+		host: host_jup_ag,
+		port: 443,
+		path: path,
+		method: method,
+		headers: {
+			...headers, // 包含從客戶端轉發過來的、已過濾的頭
+			'host': host_jup_ag // 手動設置正確的 Host 頭
+		}
+	}
+
+
+
+	const req = Https.request(options, res => {
+		// 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
+		// 构造状态行
+		const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
+		socket.write(statusLine + '\r\n');
+		// logger(statusLine)
+		// 构造并写入过滤后的响应头
+		for (let i = 0; i < res.rawHeaders.length; i += 2) {
+			const key = res.rawHeaders[i];
+			const value = res.rawHeaders[i + 1];
+			// 过滤掉可能包含客户端限制的头 (例如 CORS, Date, Allow)
+			if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
+				socket.write(`${key}: ${value}\r\n`);
+			}
+		}
+		
+		// 添加自定义的、更宽松的CORS头
+		socket.write('Access-Control-Allow-Origin: *\r\n')
+		socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
+		socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
+
+		socket.write('\r\n');
+
+		// 使用 pipe 将响应体直接流式传输给客户端
+		res.pipe(socket);
+
+		res.on('error', err => {
+			logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
+			if (socket.writable) {
+				socket.destroy()
+			}
+		})
+	})
+
+	req.on('error', err => {
+		logger(Colors.red(`[HTTP] 转发请求错误: ${err.message}`))
+		if (socket.writable) {
+			socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+		}
+	});
+
+	// 如果有请求体 (例如 POST)，则写入请求体
+	if (body) {
+		req.write(body)
+	}
+
+	req.end()
+    
+}
+
 const getHeader = (requestHanders: string[], key: string) => {
 	const keyLow = key.toLowerCase()
 	let ret = ''

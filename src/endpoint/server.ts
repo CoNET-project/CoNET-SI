@@ -10,7 +10,7 @@ import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
-import {forwardToSolanaRpc, forwardToSilentpass } from './solanaRPC'
+import {forwardToSolanaRpc, forwardToSilentpass, forwardTojup_ag } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -124,6 +124,10 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 	//	*********************
 	if (/^\/solana\-rpc/i.test(path)) {
 		return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
+	}
+
+	if (/^\/jup_ag/i.test(path)) {
+		return forwardTojup_ag(socket, request_line[1], htmlHeaders)
 	}
 
 	if (method === 'GET') {
