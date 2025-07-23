@@ -341,7 +341,7 @@ export const forwardToSolanaRpc = (
     }
 }
 
-const host_jup_ag = 'lite-api.jup.ag'
+const host_jup_ag = 'quote-api.jup.ag'
 export const forwardTojup_ag = (
     socket: Net.Socket,
     body: string,
@@ -354,7 +354,7 @@ export const forwardTojup_ag = (
     const headers = getHeaderJSON(requestHanders.slice(1))
 
 	/**************************************************
-	 * 处理普通 HTTP/HTTPS 请求             *
+	 * 处理普通 HTTP/HTTPS 请求             *					https://quote-api.jup.ag/v6/quote?inputMint=Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB&outputMint=Bzr4aEQEXrk7k8mbZffrQ9VzX6V3PAH4LvWKXkKppump&amount=100000000&slippageBps=250&swapMode=ExactOut
 	 **************************************************/
 	logger(Colors.cyan(`forwardTojup_ag [HTTP] 转发标准 HTTP 请求到: ${path}`))
 	
