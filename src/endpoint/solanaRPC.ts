@@ -356,7 +356,7 @@ export const forwardTojup_ag = (
 	/**************************************************
 	 * 处理普通 HTTP/HTTPS 请求             *
 	 **************************************************/
-	// logger(Colors.cyan(`[HTTP] 转发标准 HTTP 请求到: ${path}`))
+	logger(Colors.cyan(`forwardTojup_ag [HTTP] 转发标准 HTTP 请求到: ${path}`))
 	
 	const options: Https.RequestOptions = {
 		host: host_jup_ag,
