@@ -350,7 +350,7 @@ export const forwardTojup_ag = (
     // 解析请求行和请求头
     const requestLine = requestHanders[0].split(' ')
     const method = requestLine[0]
-	const path = requestLine[1].split('jup_ag/')[1]||'/'
+	const path = '/' + requestLine[1].split('jup_ag/')[1]||''
     const headers = getHeaderJSON(requestHanders.slice(1))
 
 	/**************************************************
