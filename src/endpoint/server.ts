@@ -117,15 +117,11 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 
 			// 否则再等下一段数据
 			socket.once('data', chunk => {
-			data += chunk.toString()
-			// 递归：把新的 data 传回自己
-			getMoreData(data).then(resolve, reject)
+				data += chunk.toString()
+				// 递归：把新的 data 传回自己
+				getMoreData(data).then(resolve, reject)
 			})
 
-			// 错误处理
-			socket.once('error', err => {
-				reject(err)
-			})
 		})
 	}
 
