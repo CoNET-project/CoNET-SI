@@ -93,6 +93,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
         '\r\n' // 响应头结束的空行
     ].join('\r\n')
 
+	logger(inspect(response, false, 3, true))
     socket.end(response)
 };
 
