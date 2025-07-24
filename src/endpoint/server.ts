@@ -89,19 +89,45 @@ const responseOPTIONS = (socket: Socket, requestHanders: string[]) => {
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
 	
-	const getMoreData = (data: string): Promise<string> => new Promise(async executor => {
-		
-		
-		socket.once('data', _data => {
-			data += _data.toString()
-		})
+	const getMoreData = (data: string): Promise<string> => {
+		return new Promise((resolve, reject) => {
+			// 如果上一次调用就已经读到了完整包，也可以直接返回
+			const tryResolve = () => {
+				const sepIndex = data.indexOf('\r\n\r\n')
+				if (sepIndex < 0) return false
 
-		const request_line = data.split('\r\n\r\n')
-		if (request_line.length < 2) {
-			return await getMoreData(data)
-		}
-		executor (data)
-	})
+				const headerPart = data.slice(0, sepIndex)
+				const bodyPart   = data.slice(sepIndex + 4)
+
+				// 提取 Content-Length
+				const m = headerPart.match(/Content-Length:\s*(\d+)/i)
+				const contentLength = m ? parseInt(m[1], 10) : 0
+
+				// 如果 body 不足，就不能 resolve
+				if (bodyPart.length < contentLength) return false;
+
+				// 只返回 header + body（body 截断到正确长度）
+				const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength)
+				resolve(full)
+				return true
+			}
+
+			// 先尝试一下（data 可能是上层传入已有的 buffer）
+			if (tryResolve()) return
+
+			// 否则再等下一段数据
+			socket.once('data', chunk => {
+			data += chunk.toString()
+			// 递归：把新的 data 传回自己
+			getMoreData(data).then(resolve, reject)
+			})
+
+			// 错误处理
+			socket.once('error', err => {
+				reject(err)
+			})
+		})
+	}
 
 
 
