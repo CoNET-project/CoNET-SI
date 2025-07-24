@@ -68,24 +68,33 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 }
 
 
-//		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-// 輔助函數：處理 OPTIONS 預檢請求
-const responseOPTIONS = (socket: Socket, requestHanders: string[]) => {
-	const originHeader = requestHanders.find(h => h.toLowerCase().startsWith('origin:'))
-	const origin = originHeader ? originHeader.split(/: */, 2)[1] : '*'
+/**
+ * 响应 CORS 预检请求 (OPTIONS)
+ * @param socket 客户端 socket 连接
+ * @param requestHeaders 原始 HTTP 请求头数组
+ */
+const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
+    // 【关键修复】: 动态获取并返回请求的 Origin，而不是使用 '*' 通配符。
+    // Safari 在处理带凭证的请求或重定向时，对通配符的支持非常严格。
+    const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
+    const origin = originHeader ? originHeader.split(/: */, 2)[1] : '*'
 
-	const response = [
-		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: *`,
-		'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
-		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
-		'Content-Length: 0',
-		'Connection: keep-alive',
-		'\r\n'
-	].join('\r\n')
+    logger(Colors.cyan(`[CORS] 正在响应来自 ${origin} 的 OPTIONS 预检请求`))
 
-	socket.end(response)
-}
+    const response = [
+        'HTTP/1.1 204 No Content',
+        `Access-Control-Allow-Origin: ${origin}`, // 动态返回 Origin
+        'Access-Control-Allow-Credentials: true', // 建议添加，以支持未来可能存在的凭证请求
+        'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS',
+        // 确保这个列表包含了所有客户端可能发送的自定义请求头
+        'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Authorization',
+        'Content-Length: 0',
+        'Connection: keep-alive',
+        '\r\n' // 响应头结束的空行
+    ].join('\r\n')
+
+    socket.end(response)
+};
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
 	
