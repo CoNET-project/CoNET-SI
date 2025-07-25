@@ -203,7 +203,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 		''
 	].join('\r\n');
 	console.log(response)
-	socket.end(response);
+	socket.write(response)
 };
 
 
@@ -224,7 +224,8 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 		const requestProtocol = htmlHeaders[0]
 		if (lines[0].startsWith('OPTIONS')) {
 			logger (inspect(htmlHeaders, false, 3, true))
-			return responseOPTIONS(socket, lines)
+			responseOPTIONS(socket, lines)
+			return socketData (socket, server)
 		}
 
 		if (/^(POST|GET)/.test(requestProtocol)) {
