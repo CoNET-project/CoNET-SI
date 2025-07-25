@@ -871,7 +871,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 			const prosyData = command.requestData[0]
-			return socks5ConnectV3(prosyData, socket, command.walletAddress)
+			return socks5Connect(prosyData, socket, command.walletAddress)
 		}
 
 		case 'mining': {		
@@ -1434,7 +1434,7 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 		return response200Html(socket, JSON.stringify({}))
 	}
 	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route}`))
-	return socketForwardV2( _route, 80, socket, encryptedText)
+	return socketForward( _route, 80, socket, encryptedText)
 
 }
 
