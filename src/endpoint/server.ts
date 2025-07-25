@@ -160,7 +160,8 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 
 	if (!body?.data || typeof body.data !== 'string') {
 		logger (Colors.magenta(`startServer HTML body is ont string error! ${socket.remoteAddress}`))
-		logger(request_line[1])
+		logger(inspect(body, false, 3, true))
+
 		return distorySocket(socket)
 	}
 
