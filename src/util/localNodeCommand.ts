@@ -1364,7 +1364,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddress}`))
-		return forwardEncryptedSocket(socket, pgpData, customerKeyID)
+		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers)
 	}
 
 	let content
