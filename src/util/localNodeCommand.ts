@@ -877,7 +877,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 			const prosyData: VE_IPptpStream = command.requestData[0]
-			if(prosyData.type === 'http') {
+			if(prosyData?.type && /http/i.test(prosyData.type)) {
 				logger(`SaaS_Sock5 call socks5ConnectV3`)
 				return socks5ConnectV3(prosyData, socket, command.walletAddress)
 			}
