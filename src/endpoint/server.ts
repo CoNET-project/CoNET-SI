@@ -69,28 +69,7 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
-	// 自动提取 Origin 值
-	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
-	const origin = originHeader ? originHeader.split(/: */, 2)[1].trim() : '*';
 
-	// 日志：调试 Origin 提取是否正确
-	console.log(`[CORS] OPTIONS request from Origin: ${origin}`);
-
-	const response = [
-		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: ${origin}`, // ⭐️ 自动回传请求中的 Origin，iOS 必须精确匹配
-		'Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH',
-		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
-		'Access-Control-Max-Age: 86400',
-		'Content-Length: 0',
-		'Connection: keep-alive',
-		'', // Header 结束空行（\r\n）
-		''  // 再一行，确保形成 \r\n\r\n
-	].join('\r\n');
-	console.log(response)
-	socket.end(response);
-};
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
 	
@@ -191,6 +170,41 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 	//console.log (`------${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
 	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
 }
+
+
+// 支持的 Origin 白名单（可以改为从配置文件读取）
+const originWhitelist = [
+	/^https?:\/\/([a-zA-Z0-9-]+\.)?openpgp\.online(:\d+)?$/,
+	/^https?:\/\/([a-zA-Z0-9-]+\.)?conet\.network(:\d+)?$/,
+	/^https?:\/\/([a-zA-Z0-9-]+\.)?silentpass\.io(:\d+)?$/,
+	/^local\-first:\/\/localhost(:\d+)?$/,
+	/^http:\/\/localhost(:\d+)?$/
+];
+
+const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
+	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
+	const rawOrigin = originHeader ? originHeader.slice(originHeader.indexOf(':') + 1).trim() : '*';
+
+	// 检查 origin 是否在白名单中
+	const isAllowed = originWhitelist.some(pattern => pattern.test(rawOrigin));
+	const allowOrigin = isAllowed ? rawOrigin : 'null'; // or set to '*' only if no credentials used
+
+	console.log(`[CORS] OPTIONS request from Origin: ${rawOrigin} => allowed: ${isAllowed}`);
+
+	const response = [
+		'HTTP/1.1 204 No Content',
+		`Access-Control-Allow-Origin: ${allowOrigin}`,
+		'Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH',
+		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
+		'Access-Control-Max-Age: 86400',
+		'Content-Length: 0',
+		'Connection: keep-alive',
+		'',
+		''
+	].join('\r\n');
+
+	socket.end(response);
+};
 
 
 const socketData = (socket: Socket, server: conet_si_server, incomeData = '') => {
