@@ -207,37 +207,62 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 };
 
 
-const socketData = (socket: Socket, server: conet_si_server, incomeData = '') => {
-	// ==========================================================
-	// ===== 這是關鍵：為 socket 實例添加 'error' 事件監聽器 =====
-	// ==========================================================
+const socketData = (socket: Socket, server: conet_si_server) => {
+    let buffer = ''; // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
+    let handledOptions = false; // 状态标记，标识是否处理过OPTIONS
 
-	socket.once('data', data => {
-		const requestText = data.toString()
-		const lines = requestText.split('\r\n').filter(Boolean)
+    // 使用 .on 来持续监听数据，而不是 .once
+    socket.on('data', (chunk: Buffer) => {
+        buffer += chunk.toString(); // 将新收到的数据追加到缓冲区
 
+        // 因为预检请求和实际请求是两个独立的HTTP请求，我们需要分别解析
+        // 预检请求没有消息体，以 `\r\n\r\n` 结尾
+        const separator = '\r\n\r\n';
 
-		const request = incomeData + data.toString()
-		const request_line = request.split('\r\n\r\n')
+        // 检查是否是 OPTIONS 请求（只在第一次检查）
+        if (!handledOptions && buffer.startsWith('OPTIONS')) {
+            const requestEndIndex = buffer.indexOf(separator);
+            
+            if (requestEndIndex !== -1) { // 找到了完整的 OPTIONS 请求头
+                const requestText = buffer.substring(0, requestEndIndex);
+                const lines = requestText.split('\r\n').filter(Boolean);
+                
+                console.log("[CORS] Handling OPTIONS request...");
+                logger(inspect(lines, false, 3, true));
 
-		const htmlHeaders = request_line[0].split('\r\n')
-		const requestProtocol = htmlHeaders[0]
-		if (lines[0].startsWith('OPTIONS')) {
-			logger (inspect(htmlHeaders, false, 3, true))
-			responseOPTIONS(socket, lines)
-			return socketData (socket, server)
-		}
+                // 发送 OPTIONS 响应，保持连接
+                responseOPTIONS(socket, lines);
+                
+                // 从缓冲区中移除已处理的 OPTIONS 请求
+                buffer = buffer.substring(requestEndIndex + separator.length);
+                handledOptions = true; // 标记已处理，不再进入此逻辑
 
-		if (/^(POST|GET)/.test(requestProtocol)) {
-			
-			return getDataPOST (socket, server, data )
-			
-		}
+                // 注意：这里不做任何返回，让代码继续向下执行，
+                // 因为 POST 请求的数据可能已经紧跟着在缓冲区里了。
+            }
+        }
+        
+        // 检查 POST/GET 请求 (在处理完 OPTIONS 或一开始就不是 OPTIONS 的情况下)
+        // 确保缓冲区里有内容，并且是以 POST 或 GET 开头
+        const trimmedBuffer = buffer.trim();
+        if (trimmedBuffer.length > 0 && (trimmedBuffer.startsWith('POST') || trimmedBuffer.startsWith('GET'))) {
+            // 此处，我们已经确认收到了POST/GET请求的开始部分
+            // 我们可以直接把当前的socket和数据交给getDataPOST处理
+            // getDataPOST内部有处理不完整包的逻辑，所以这是安全的
+            
+            // 关键：为了避免重复监听，要先移除当前的 'data' 监听器
+            socket.removeAllListeners('data');
+            
+            // 然后调用你的POST处理器，并将当前已缓冲的数据作为初始数据块传给它
+            getDataPOST(socket, server, Buffer.from(buffer));
 
-		return distorySocket(socket)
-	})
-	
-}
+        } else if (handledOptions && trimmedBuffer.length === 0) {
+            // 如果处理完OPTIONS后缓冲区为空，则什么都不做，等待下一个 data 事件
+        } else if (!handledOptions && buffer.length > 2000) { // 防止恶意请求撑爆内存
+            distorySocket(socket);
+        }
+    });
+};
 
 class conet_si_server {
 
@@ -322,6 +347,10 @@ class conet_si_server {
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
 			})
 
+			socket.on('end', () => {
+				console.log('Client disconnected.');
+			});
+
 			return socketData (socket, this)
 
 		})
@@ -361,6 +390,10 @@ class conet_si_server {
 				
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
 			})
+
+			socket.on('end', () => {
+				console.log('Client disconnected.');
+			});
 
 			return socketData( socket, this)
 		})
