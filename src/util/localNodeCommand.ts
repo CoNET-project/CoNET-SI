@@ -876,14 +876,11 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
-			const prosyData = command.requestData[0]
-			const hasConnectionClose = headers.some(h => h.toLowerCase().trim() === 'connection: close')
-
-			if(hasConnectionClose) {
+			const prosyData: VE_IPptpStream = command.requestData[0]
+			if(prosyData.type === 'http') {
 				logger(`SaaS_Sock5 call socks5ConnectV3`)
 				return socks5ConnectV3(prosyData, socket, command.walletAddress)
 			}
-
 			return socks5Connect(prosyData, socket, command.walletAddress)
 		}
 
