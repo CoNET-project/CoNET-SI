@@ -69,27 +69,23 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-// 輔助函數：處理 OPTIONS 預檢請求
 const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
 	const origin = originHeader ? originHeader.split(/: */, 2)[1].trim() : '*';
 
-	const acrm = requestHeaders.find(h => h.toLowerCase().startsWith('access-control-request-method:'));
-	const acrmValue = acrm ? acrm.split(/: */, 2)[1].trim() : 'POST';
-
 	const response = [
 		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: ${origin}`,
-		`Access-Control-Allow-Methods: ${acrmValue}, OPTIONS`,
+		`Access-Control-Allow-Origin: ${origin}`, // ★ 必须完整返回
+		'Access-Control-Allow-Methods: POST, OPTIONS',
 		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
 		'Access-Control-Max-Age: 86400',
 		'Content-Length: 0',
 		'Connection: keep-alive',
-		'', // \r\n 结尾
+		'', // <--- \r\n
 		''
 	].join('\r\n');
 	console.log(response)
-	socket.end(response);
+	socket.end(response); // 或 socket.write(response) + socket.end()
 };
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
