@@ -292,27 +292,28 @@ export const forwardToSolanaRpc = (
 		// logger(inspect(headers, false, 3, true))
 
         const req = Https.request(options, res => {
-            // 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
-            // 构造状态行
-            const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
-            socket.write(statusLine + '\r\n');
-			// logger(statusLine)
-            // 构造并写入过滤后的响应头
-            for (let i = 0; i < res.rawHeaders.length; i += 2) {
-                const key = res.rawHeaders[i];
-                const value = res.rawHeaders[i + 1];
-                // 过滤掉可能包含客户端限制的头 (例如 CORS, Date, Allow)
-                if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
-                    socket.write(`${key}: ${value}\r\n`);
-                }
-            }
-            
-            // 添加自定义的、更宽松的CORS头
-            socket.write('Access-Control-Allow-Origin: *\r\n')
-            socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
-            socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
+            const originHeader = requestHanders.find(h => h.toLowerCase().startsWith('origin:'));
+			const origin = originHeader ? originHeader.slice(originHeader.indexOf(':') + 1).trim() : '*';
 
-            socket.write('\r\n');
+			// 写入状态行
+			const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
+			socket.write(statusLine + '\r\n');
+
+			// 写入原始响应头（去掉 Access-Control-* 和 Date 等）
+			for (let i = 0; i < res.rawHeaders.length; i += 2) {
+				const key = res.rawHeaders[i];
+				const value = res.rawHeaders[i + 1];
+				if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
+					socket.write(`${key}: ${value}\r\n`);
+				}
+			}
+
+			// 注入 CORS 响应头
+			socket.write(`Access-Control-Allow-Origin: ${origin}\r\n`);
+			socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n');
+			socket.write('Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Authorization\r\n');
+			socket.write('Access-Control-Allow-Credentials: true\r\n');
+			socket.write('\r\n');
 
             // 使用 pipe 将响应体直接流式传输给客户端
             res.pipe(socket);
