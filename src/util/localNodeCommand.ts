@@ -780,6 +780,70 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
     serverReq.end()
 }
 
+/**
+ * Connects to the final destination and relays data.
+ * First, it sends an HTTP 200 OK response to establish the tunnel, then pipes data.
+ * @param prosyData The decrypted data from the client.
+ * @param requestSocket The socket connection from Node 1.
+ * @param wallet The wallet address for logging.
+ */
+const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket, wallet: string) => {
+    let host: string;
+    let port: number;
+
+    try {
+        port = prosyData.port;
+        let tempHost = prosyData.host || '';
+        const isIpV4 = IP.isV4Format(tempHost);
+        host = isIpV4 ? (IP.isPublic(tempHost) ? tempHost : '') : await getHostIpv4(tempHost);
+
+        if (port < 1 || port > 65535 || !host) {
+            throw new Error(`Invalid host or port: ${prosyData.host}:${prosyData.port}`);
+        }
+    } catch (ex: any) {
+        logger(Colors.red(`socks5Connect: Invalid prosyData. Error: ${ex.message}`));
+        if (!requestSocket.destroyed) {
+            requestSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+        }
+        return;
+    }
+
+    const targetSocket = createConnection(port, host, () => {
+        logger(Colors.cyan(`Successfully connected to target [${host}:${port}] for ${wallet}.`));
+
+        // 1. Send the success handshake response back to Node 1
+        // This is the signal that the tunnel can be established.
+        logger(Colors.green(`Sending '200 Connection established' handshake to Node 1.`));
+        requestSocket.write('HTTP/1.1 200 Connection established\r\n\r\n');
+
+        // 2. NOW, create the raw tunnel using pipe()
+        targetSocket.pipe(requestSocket).on('error', err => logger(`Pipe error: target -> request`, err));
+        requestSocket.pipe(targetSocket).on('error', err => logger(`Pipe error: request -> target`, err));
+
+        // 3. Write the initial data packet from the client
+        const initialData = Buffer.from(prosyData.buffer, 'base64');
+        if (initialData.length > 0) {
+            targetSocket.write(initialData);
+        }
+    });
+
+    targetSocket.on('error', (err) => {
+        logger(Colors.red(`Could not connect to target [${host}:${port}]. Error: ${err.message}`));
+        if (!requestSocket.destroyed) {
+            requestSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        }
+    });
+    
+    requestSocket.on('close', () => {
+        targetSocket.destroy();
+    });
+
+    targetSocket.on('close', () => {
+        requestSocket.destroy();
+    });
+};
+
+
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
@@ -807,7 +871,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 			const prosyData = command.requestData[0]
-			return socks5Connect(prosyData, socket, command.walletAddress)
+			return socks5ConnectV3(prosyData, socket, command.walletAddress)
 		}
 
 		case 'mining': {		
@@ -1111,7 +1175,75 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 
 }
 
+const otherRequestForNetV2 = (body: string, host: string, port: number): string => {
+    return `POST / HTTP/1.1\r\nHost: ${host}:${port}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: keep-alive\r\n\r\n${body}`;
+};
 
+/**
+ * Forwards a request from a source socket to a target node.
+ * It waits for a successful HTTP handshake before piping the sockets together.
+ * @param ipAddr The IP address of the target node (Node 2).
+ * @param port The port of the target node.
+ * @param sourceSocket The original client socket.
+ * @param encryptedText The encrypted data payload.
+ */
+const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, encryptedText: string) => {
+
+    const requestBody = JSON.stringify({ encryptedText });
+    const rawHttpRequest = otherRequestForNetV2(requestBody, ipAddr, port);
+
+    const conn = createConnection(port, ipAddr, () => {
+        logger(Colors.blue(`Forwarded packet to node ${ipAddr}:${port} success!`));
+        conn.write(rawHttpRequest);
+    });
+
+    let handshakeComplete = false;
+
+    conn.on('data', (chunk) => {
+        if (!handshakeComplete) {
+            const responseStr = chunk.toString();
+            // Check for a valid HTTP success response from Node 2
+            if (responseStr.startsWith('HTTP/1.1 200')) {
+                handshakeComplete = true;
+
+                // 1. Forward the success handshake back to the original client
+                logger(Colors.green(`Handshake with Node 2 complete. Relaying success to client.`));
+                sourceSocket.write(chunk);
+
+                // 2. NOW, create the raw tunnel for streaming data
+                logger(Colors.cyan(`Establishing raw tunnel between client and Node 2.`));
+                conn.pipe(sourceSocket).on('error', err => logger(`Pipe error: conn -> sourceSocket`, err));
+                sourceSocket.pipe(conn).on('error', err => logger(`Pipe error: sourceSocket -> conn`, err));
+                
+                return; // Stop processing this chunk further
+            } else {
+                 // If Node 2 sent an error, forward it and close
+                logger(Colors.red(`Node 2 responded with an error: ${responseStr}`));
+                sourceSocket.write(chunk);
+                sourceSocket.end();
+                conn.destroy();
+            }
+        }
+    });
+
+    conn.on('error', err => {
+        logger(Colors.red(`Fardward node ${ipAddr}:${port} on error [${err.message}] STOP connect \n`));
+        if (!sourceSocket.destroyed) {
+            sourceSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        }
+        sourceSocket.destroy();
+    });
+
+    conn.once('close', () => {
+        logger(Colors.magenta(`Fardward node ${ipAddr}:${port} on Close!`));
+        sourceSocket.destroy();
+    });
+
+    sourceSocket.once('close', () => {
+        logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`));
+        conn.destroy();
+    });
+};
 
 
 
@@ -1302,7 +1434,7 @@ const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpg
 		return response200Html(socket, JSON.stringify({}))
 	}
 	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route}`))
-	return socketForward( _route, 80, socket, encryptedText)
+	return socketForwardV2( _route, 80, socket, encryptedText)
 
 }
 
