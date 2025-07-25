@@ -91,7 +91,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 		'', // <- 这两个空行是关键！形成 \r\n\r\n
 		''
 	].join('\r\n');
-
+	logger(`${response}`)
 	socket.end(response);
 };
 
