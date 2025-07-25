@@ -1109,6 +1109,10 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 
 }
 
+
+
+
+
 const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
 	
 	const decrypted = await decrypt ({
