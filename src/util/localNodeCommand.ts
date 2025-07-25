@@ -1030,6 +1030,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 }
 
+
+
 class transferCount extends Transform {
 	public data  = ''
 	constructor(private upload: boolean, private info: ITypeTransferCount) {
@@ -1254,8 +1256,6 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string) => {
 
 	const rawHttpRequest = otherRequestForNet(JSON.stringify({data}), ipAddr, port)
-
-
 
 	const conn = createConnection ( port, ipAddr, () => {
 
