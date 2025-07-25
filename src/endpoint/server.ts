@@ -202,7 +202,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 		'',
 		''
 	].join('\r\n');
-
+	console.log(response)
 	socket.end(response);
 };
 
