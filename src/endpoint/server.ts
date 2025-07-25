@@ -70,22 +70,26 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
+	// 自动提取 Origin 值
 	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
 	const origin = originHeader ? originHeader.split(/: */, 2)[1].trim() : '*';
 
+	// 日志：调试 Origin 提取是否正确
+	console.log(`[CORS] OPTIONS request from Origin: ${origin}`);
+
 	const response = [
 		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: ${origin}`, // ★ 必须完整返回
-		'Access-Control-Allow-Methods: POST, OPTIONS',
+		`Access-Control-Allow-Origin: ${origin}`, // ⭐️ 自动回传请求中的 Origin，iOS 必须精确匹配
+		'Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH',
 		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
 		'Access-Control-Max-Age: 86400',
 		'Content-Length: 0',
 		'Connection: keep-alive',
-		'', // <--- \r\n
-		''
+		'', // Header 结束空行（\r\n）
+		''  // 再一行，确保形成 \r\n\r\n
 	].join('\r\n');
 	console.log(response)
-	socket.end(response); // 或 socket.write(response) + socket.end()
+	socket.end(response);
 };
 
 const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
@@ -195,16 +199,18 @@ const socketData = (socket: Socket, server: conet_si_server, incomeData = '') =>
 	// ==========================================================
 
 	socket.once('data', data => {
+		const requestText = data.toString()
+		const lines = requestText.split('\r\n').filter(Boolean)
+
 
 		const request = incomeData + data.toString()
 		const request_line = request.split('\r\n\r\n')
 
 		const htmlHeaders = request_line[0].split('\r\n')
 		const requestProtocol = htmlHeaders[0]
-
-		if (/^OPTIONS /.test(requestProtocol)) {
+		if (lines[0].startsWith('OPTIONS')) {
 			logger (inspect(htmlHeaders, false, 3, true))
-			return responseOPTIONS(socket, htmlHeaders)
+			return responseOPTIONS(socket, lines)
 		}
 
 		if (/^(POST|GET)/.test(requestProtocol)) {
