@@ -88,7 +88,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 		'', // \r\n 结尾
 		''
 	].join('\r\n');
-
+	console.log(response)
 	socket.end(response);
 };
 
