@@ -782,89 +782,76 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 }
 
 /**
- * V2 connector, now acting as a pure HTTP proxy for standard (non-CONNECT) requests.
- * It uses the high-level http.request module for robust forwarding.
- * @param prosyData The decrypted data containing the original HTTP request.
- * @param requestSocket The socket connection from Node 1, expecting an HTTP response.
+ * V2 SOCKS connector, now PURELY for standard HTTP requests (GET, POST, etc.).
+ * It acts as a simple, real-time data relay for HTTP proxying.
+ * @param prosyData The decrypted data from the client.
+ * @param requestSocket The socket connection from Node 1.
  * @param wallet The wallet address for logging.
  */
 const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket, wallet: string) => {
     const session_id = Crypto.randomBytes(4).toString('hex');
-    logger(Colors.cyan(`[V2-HTTP] [${session_id}] New HTTP proxy session for [${wallet}]`));
+    logger(Colors.cyan(`[V2] [${session_id}] New PURE HTTP session for [${wallet}]`));
+
+    let host: string;
+    let port: number;
+    
+    const initialData = Buffer.from(prosyData.buffer, 'base64');
 
     try {
-        // Decode the original request from the client
-        const originalRequestBuffer = Buffer.from(prosyData.buffer, 'base64');
-        const requestString = originalRequestBuffer.toString('utf8');
+        port = prosyData.port;
+        host = prosyData.host || '';
         
-        // Separate headers from the body
-        const separatorIndex = requestString.indexOf('\r\n\r\n');
-        if (separatorIndex === -1) {
-            throw new Error("Invalid HTTP request format: no separator found.");
+        // 示例：您自己的域名解析逻辑
+        if (!IP.isV4Format(host)) { 
+            host = await getHostIpv4(host); 
         }
-        const headerString = requestString.substring(0, separatorIndex);
-        const bodyString = requestString.substring(separatorIndex + 4);
-
-        const headersLines = headerString.split('\r\n');
-        const [method, path, httpVersion] = headersLines.shift()!.split(' ');
-
-        // Prepare options for the outgoing request
-        const options: RequestOptionsHttp = {
-            hostname: prosyData.host,
-            port: prosyData.port,
-            path: path,
-            method: method,
-            headers: {}
-        };
         
-        // Reconstruct headers, but remove the Host header as it will be set by http.request
-        headersLines.forEach(line => {
-            const [key, value] = line.split(': ');
-            if (key && value && key.toLowerCase() !== 'host') {
-                options.headers![key] = value;
-            }
-        });
-
-        logger(Colors.blue(`[V2-HTTP] [${session_id}] Forwarding to ${method} ${prosyData.host}:${prosyData.port}${path}`));
-
-        // V2 only handles standard HTTP, so we always use the http module.
-        const proxyRequest = requestHttp (options, (proxyResponse: any) => {
-            // Forward the response from the target server back to Node 1
-            
-            // Write the status line
-            requestSocket.write(`HTTP/${proxyResponse.httpVersion} ${proxyResponse.statusCode} ${proxyResponse.statusMessage}\r\n`);
-            
-            // Write the headers
-            for (const [key, value] of Object.entries(proxyResponse.headers)) {
-                if (value) {
-                    requestSocket.write(`${key}: ${value}\r\n`);
-                }
-            }
-            requestSocket.write('\r\n'); // End of headers
-
-            // Pipe the response body directly to the socket from Node 1
-            proxyResponse.pipe(requestSocket);
-        });
-
-        proxyRequest.on('error', (err: any) => {
-            logger(Colors.red(`[V2-HTTP] [${session_id}] Request to target failed: ${err.message}`));
-            if (!requestSocket.destroyed) {
-                requestSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-            }
-        });
-
-        // Write the original request body and end the request
-        if (bodyString) {
-            proxyRequest.write(bodyString);
+        if (port < 1 || port > 65535 || !host) {
+            throw new Error(`Invalid host or port`);
         }
-        proxyRequest.end();
+        logger(Colors.blue(`[V2] [${session_id}] Parsed target: [${host}:${port}]`));
 
     } catch (ex: any) {
-        logger(Colors.red(`[V2-HTTP] [${session_id}] Critical error in proxy logic: ${ex.message}`));
+        logger(Colors.red(`[V2] [${session_id}] Invalid prosyData. Error: ${ex.message}`));
         if (!requestSocket.destroyed) {
-            requestSocket.end('HTTP/1.1 500 Internal Server Error\r\n\r\n');
+            requestSocket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
         }
+        return;
     }
+
+    const targetSocket = createConnection(port, host, () => {
+        logger(Colors.cyan(`[V2] [${session_id}] Successfully connected to target [${host}:${port}].`));
+
+        // 立即将客户端的原始HTTP请求发往目标服务器
+        if (initialData.length > 0) {
+            targetSocket.write(initialData);
+        }
+
+        // 因为此函数只处理纯HTTP，逻辑被简化为直接的数据隧道。
+        // 无需握手，无需条件判断。
+        logger(Colors.green(`[V2] [${session_id}] Establishing direct pipe for HTTP request.`));
+        
+        // 使用 pipe() 在两个套接字之间高效地双向转发数据
+        targetSocket.pipe(requestSocket).on('error', err => logger(Colors.red(`[V2] Pipe error (target -> request)`), err));
+        requestSocket.pipe(targetSocket).on('error', err => logger(Colors.red(`[V2] Pipe error (request -> target)`), err));
+    });
+
+    targetSocket.on('error', (err) => {
+        logger(Colors.red(`[V2] [${session_id}] Could not connect to target. Error: ${err.message}`));
+        if (!requestSocket.destroyed) {
+            requestSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
+        }
+    });
+    
+    // 确保任何一方关闭连接时，另一方也随之关闭，避免资源泄露
+    requestSocket.on('close', () => {
+        logger(Colors.magenta(`[V2] [${session_id}] Node 1 connection closed. Destroying target socket.`));
+        targetSocket.destroy();
+    });
+    targetSocket.on('close', () => {
+        logger(Colors.magenta(`[V2] [${session_id}] Target socket closed. Destroying Node 1 connection.`));
+        requestSocket.destroy();
+    });
 };
 
 
