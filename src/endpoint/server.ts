@@ -179,7 +179,7 @@ const originWhitelist = [
 	/^https?:\/\/([a-zA-Z0-9-]+\.)?conet\.network(:\d+)?$/,
 	/^https?:\/\/([a-zA-Z0-9-]+\.)?silentpass\.io(:\d+)?$/,
 	/^local\-first:\/\/localhost(:\d+)?$/,
-	/^http:\/\/localhost(:\d+)?$/
+	/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
 ];
 
 const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {

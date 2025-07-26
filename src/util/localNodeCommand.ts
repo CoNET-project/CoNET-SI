@@ -2015,4 +2015,4 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 
 ///		885 socks5ConnectV3
-///		1463 return socketForwardV
+///		1463 return socketForwardV2
