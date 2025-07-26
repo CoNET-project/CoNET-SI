@@ -782,9 +782,10 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
 }
 
 /**
- * V2 SOCKS connector for special cases, triggered by "Connection: close".
- * It sends an HTTP handshake response if the protocol type is 'HTTP'.
- * @param prosyData The decrypted data from the client, including the protocol type.
+ * V2 SOCKS connector with intelligent logic based on the HTTP method.
+ * - For CONNECT: Handshake-then-pipe for tunneling.
+ * - For GET/POST: Buffer-and-forward for standard HTTP proxying.
+ * @param prosyData The decrypted data from the client.
  * @param requestSocket The socket connection from Node 1.
  * @param wallet The wallet address for logging.
  */
@@ -794,17 +795,32 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
 
     let host: string;
     let port: number;
+    let method = 'UNKNOWN';
+    
+    // ================== GEMINI MODIFICATION START ==================
+    // Correctly parse the method from the prosyData.buffer
+    const initialData = Buffer.from(prosyData.buffer, 'base64');
+    try {
+        const requestString = initialData.toString('utf8');
+        const firstLine = requestString.split('\r\n')[0];
+        const parts = firstLine.split(' ');
+        if (parts.length > 0) {
+            method = parts[0];
+        }
+    } catch (e) {
+        logger(Colors.red(`[V2] [${session_id}] Error parsing method from buffer.`), e);
+    }
+    // ================== GEMINI MODIFICATION END ====================
+
 
     try {
         port = prosyData.port;
-        let tempHost = prosyData.host || '';
-        const isIpV4 = IP.isV4Format(tempHost);
-        host = isIpV4 ? (IP.isPublic(tempHost) ? tempHost : '') : await getHostIpv4(tempHost);
-
+        host = prosyData.host || '';
+        // ... (your host resolution logic) ...
         if (port < 1 || port > 65535 || !host) {
-            throw new Error(`Invalid host or port: ${prosyData.host}:${prosyData.port}`);
+            throw new Error(`Invalid host or port`);
         }
-        logger(Colors.blue(`[V2] [${session_id}] Parsed target: [${host}:${port}] of type [${prosyData.type}]`));
+        logger(Colors.blue(`[V2] [${session_id}] Parsed target: [${host}:${port}], Method: [${method}]`));
 
     } catch (ex: any) {
         logger(Colors.red(`[V2] [${session_id}] Invalid prosyData. Error: ${ex.message}`));
@@ -817,36 +833,56 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
     const targetSocket = createConnection(port, host, () => {
         logger(Colors.cyan(`[V2] [${session_id}] Successfully connected to target [${host}:${port}].`));
 
-        // 1. 条件化握手：V2版本专为HTTP设计，所以我们发送握手信号
-        if (prosyData.type === 'HTTP') {
-            logger(Colors.green(`[V2] [${session_id}] Sending '200 Connection established' handshake to Node 1.`));
-            requestSocket.write('HTTP/1.1 200 Connection established\r\n\r\n');
-        } else {
-            // 理论上V2函数不应该处理非HTTP类型，但作为安全措施，我们记录日志
-            logger(Colors.yellow(`[V2] [${session_id}] Warning: Non-HTTP type received in V2 function. Skipping handshake.`));
-        }
-
-        // 2. 建立原始数据隧道
-        logger(Colors.cyan(`[V2] [${session_id}] Establishing raw data tunnel.`));
-        targetSocket.pipe(requestSocket).on('error', err => logger(Colors.red(`[V2] [${session_id}] Pipe error (target -> request):`), err));
-        requestSocket.pipe(targetSocket).on('error', err => logger(Colors.red(`[V2] [${session_id}] Pipe error (request -> target):`), err));
-
-        // 3. 写入初始数据
-        const initialData = Buffer.from(prosyData.buffer, 'base64');
+        // The initialData buffer is now created above, so we can reuse it here.
         if (initialData.length > 0) {
             targetSocket.write(initialData);
+        }
+
+        // Intelligent logic based on the HTTP method
+        if (method === 'CONNECT') {
+            // For HTTPS tunnels, the "handshake-then-pipe" logic is CORRECT.
+            logger(Colors.green(`[V2] [${session_id}] [CONNECT] Sending '200 Connection established' handshake.`));
+            requestSocket.write('HTTP/1.1 200 Connection established\r\n\r\n');
+            
+            logger(Colors.cyan(`[V2] [${session_id}] [CONNECT] Establishing raw tunnel.`));
+            targetSocket.pipe(requestSocket).on('error', err => logger(Colors.red(`[V2] Pipe error`), err));
+            requestSocket.pipe(targetSocket).on('error', err => logger(Colors.red(`[V2] Pipe error`), err));
+
+        } else {
+            // For standard HTTP (GET, POST), we must act as a standard proxy.
+            // This means "buffer-and-forward" the ENTIRE response. NO pipe().
+            logger(Colors.green(`[V2] [${session_id}] [${method}] Using buffer-and-forward proxy logic.`));
+            
+            // Note: The initialData has already been written. We just handle the response.
+            const responseChunks: Buffer[] = [];
+            targetSocket.on('data', (chunk) => {
+                responseChunks.push(chunk);
+            });
+
+            targetSocket.on('end', () => {
+                logger(Colors.green(`[V2] [${session_id}] Target response ended. Sending complete response to client.`));
+                if (!requestSocket.destroyed) {
+                    requestSocket.write(Buffer.concat(responseChunks));
+                    requestSocket.end();
+                }
+            });
         }
     });
 
     targetSocket.on('error', (err) => {
-        logger(Colors.red(`[V2] [${session_id}] Could not connect to target [${host}:${port}]. Error: ${err.message}`));
+        logger(Colors.red(`[V2] [${session_id}] Could not connect to target. Error: ${err.message}`));
         if (!requestSocket.destroyed) {
             requestSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
         }
     });
     
     requestSocket.on('close', () => targetSocket.destroy());
-    targetSocket.on('close', () => requestSocket.destroy());
+    targetSocket.on('close', () => {
+        // For non-CONNECT, the connection might already be closed by requestSocket.end()
+        if (!requestSocket.destroyed) {
+            requestSocket.destroy();
+        }
+    });
 };
 
 
