@@ -1199,14 +1199,17 @@ const otherRequestForNetV2 = (body: string, host: string, port: number): string 
  */
 const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, encryptedText: string) => {
     const protocolType = 'HTTP'; // This V2 function is only for the HTTP special case
-    logger(Colors.cyan(`[V2] Using socketForwardV2 for protocol [${protocolType}]`));
+    
 
     // 1. 构造请求体，明确告知节点二这是 'HTTP' 类型
     const requestBody = JSON.stringify({ 
         data: encryptedText,
         type: protocolType 
-    });
-    const host = `${ipAddr}:${port}`;
+    })
+
+    const host = `${ipAddr}:${port}`
+
+	logger(Colors.cyan(`[V2] Using socketForwardV2 to ${host}`))
 
     // 2. 构造发往节点二的 HTTP POST 请求
     const rawHttpRequest = [
@@ -1216,17 +1219,19 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
         `Content-Length: ${Buffer.byteLength(requestBody)}`,
         `Connection: keep-alive`, // Node1 to Node2 connection should be keep-alive
         '\r\n' + requestBody
-    ].join('\r\n');
+    ].join('\r\n')
+
+	logger(rawHttpRequest)
 
     const conn = createConnection(port, ipAddr, () => {
         conn.write(rawHttpRequest);
-    });
+    })
 
     // 3. 等待节点二的握手信号
-    let handshakeComplete = false;
+    let handshakeComplete = false
     conn.on('data', (chunk) => {
         if (!handshakeComplete) {
-            const responseStr = chunk.toString();
+            const responseStr = chunk.toString()
             if (responseStr.startsWith('HTTP/1.1 200')) {
                 handshakeComplete = true;
                 logger(Colors.green(`[V2] Handshake complete. Relaying success to client.`));
@@ -1242,17 +1247,17 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
                 conn.destroy();
             }
         }
-    });
+    })
 
     conn.on('error', err => {
         logger(Colors.red(`[V2] Forward to node ${ipAddr}:${port} error: [${err.message}]`));
         if (!sourceSocket.destroyed) {
             sourceSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
         }
-    });
+    })
 
-    conn.once('close', () => sourceSocket.destroy());
-    sourceSocket.once('close', () => conn.destroy());
+    conn.once('close', () => sourceSocket.destroy())
+    sourceSocket.once('close', () => conn.destroy())
 };
 
 
@@ -2018,5 +2023,5 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 
 
-///		885 socks5Connect
-///		1463 return socketForward
+///		885 socks5ConnectV3
+///		1463 return socketForwardV
