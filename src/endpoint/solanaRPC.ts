@@ -444,110 +444,85 @@ const getHeader = (requestHanders: string[], key: string) => {
 	return ret
 }
 
+/**
+ * @description 修正后的请求转发函数。
+ * 这个函数现在更健壮，并且只负责转发，不再处理读取 socket 的逻辑。
+ * 它会正确设置 Host 头，并处理响应流。
+ */
 export const forwardToHome = (socket: Net.Socket, body: string, requestHanders: string[]) => {
-
-
-	const method = requestHanders[0].split(' ')[0]
-	const path = requestHanders[0].split(' ')[1]||'/'
-	const origin = appHost(getHeader(requestHanders, 'Referer'))
-	logger(`forwardToSilentpass ${requestHanders[0]}`)
-	logger(inspect(requestHanders, false, 3, true))
-
-	// if (/^OPTIONS/i.test(method) ) {
-		
-	// 	return responseOPTIONS(socket, requestHanders)
-	// }
-
-	
-	let Upgrade = false
-	const rehandles = getHeaderJSON(requestHanders.slice(1))
-	
-	const option: Https.RequestOptions = {
-		host: 'silentpass.io',
-		port: 443,
-		path,
-		method,
-		headers: rehandles
-	}
-
-	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
-	logger(inspect(option, false, 3, true))
-
-	let responseHeader = ''
-
-	const req = Https.request(option, res => {
+    const method = requestHanders[0].split(' ')[0];
+    const path = requestHanders[0].split(' ')[1] || '/';
     
-    // 对于非 WebSocket 请求 (文件下载属于此类)
-    if (!Upgrade) {
+    // 从原始请求头中解析出 headers 对象
+    const rehandles = getHeaderJSON(requestHanders.slice(1));
+    
+    // **关键修正**: 强制设置 Host 头。目标服务器依赖这个头来正确路由请求。
+    rehandles['Host'] = 'silentpass.io';
+    // 移除一些代理时不应直接转发的 "hop-by-hop" 头
+    delete rehandles['connection'];
+    delete rehandles['proxy-connection'];
+
+    const option: Https.RequestOptions = {
+        host: 'silentpass.io',
+        port: 443,
+        path,
+        method,
+        headers: rehandles
+    };
+
+    logger(Colors.cyan(`[FORWARDING] ${method} ${path} to silentpass.io`));
+
+    const req = Https.request(option, res => {
+        // 成功从目标服务器收到响应
+
+        // 1. 构建并发送状态行 (e.g., "HTTP/1.1 200 OK")
+        const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`;
+        socket.write(statusLine);
         
-        // 1. 先写入状态行和响应头。
-        //    我们直接使用上游服务器返回的状态码、信息和头文件。
-        //    res.headers 包含了所有必要的头，如 Content-Type, Content-Length 等。
-        socket.write(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`);
-        
-        // 将所有上游响应头原样转发给客户端
+        // 2. 构建并发送所有响应头
+        // 我们需要原样转发大部分头，但同样要处理 "hop-by-hop" 头
         for (const key in res.headers) {
-            // res.headers[key] 的值可能是字符串或字符串数组
-            const value = Array.isArray(res.headers[key]) 
-                ? (res.headers[key] as string[]).join(', ') 
-                : res.headers[key];
+            // 'connection' 和 'transfer-encoding' 是 hop-by-hop 的，不应由代理直接转发
+            if (/^connection|transfer-encoding$/i.test(key)) {
+                continue;
+            }
+            const value = res.headers[key];
             socket.write(`${key}: ${value}\r\n`);
         }
+        
+        // 为了简化，我们告诉客户端在响应结束后关闭连接
+        socket.write('Connection: close\r\n');
 
-        // 写入一个空行，表示头的结束
+        // 3. 发送头和主体之间的空行
         socket.write('\r\n');
 
-        // 2. 在所有头都发送完毕后，再使用 .pipe() 高效地传输响应体。
-        //    Node.js 的流会自动处理 'data', 'end', 'error' 等事件。
-        //    我们不再需要手写 res.on('data', ...) 和 res.on('end', ...)。
+        // 4. 使用 pipe 高效地将响应主体（如 HTML, CSS 文件内容）直接流式传输给客户端
         res.pipe(socket);
         
-        return; // 处理完毕，直接返回
+        res.on('error', (err) => {
+            logger(Colors.red(`[ERROR] Response stream error from silentpass.io: ${err.message}`));
+            socket.end();
+        });
+    });
+
+    req.on('error', err => {
+        // 请求无法发送到目标服务器（例如，DNS错误，连接被拒绝）
+        logger(Colors.red(`[ERROR] Request failed to silentpass.io: ${err.message}`));
+        if (!socket.destroyed) {
+            // 向客户端发送一个 502 Bad Gateway 错误
+            socket.write('HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n');
+            socket.end('Proxy Error: Could not connect to the upstream server.');
+        }
+    });
+
+    // 如果原始请求是 POST 或 PUT，它会有一个主体。我们需要将这个主体写入到转发请求中。
+    if (body) {
+        req.write(body);
     }
 
-    // ... 处理 Upgrade (WebSocket) 的逻辑保留在这里 ...
-    // 注意：原始代码中的 Upgrade 逻辑也有类似问题，这里暂时只修复非 Upgrade 的情况。
-})
-
-	req.on('error', err => {
-
-	})
-
-	req.once('end', () => {
-		
-	})
-
-
-	if (body) {
-		logger(`req.write body size = ${body.length}`)
-		req.write(body)
-		if (!Upgrade) {
-			req.end()
-		}
-		return
-	}
-
-	if (/GET/.test(method)) {
-		return req.end('\r\n')
-	}
-
-	responseHeader = getResponseHeaders(requestHanders)
-
-	if (socket.writable) {
-		socket.once ('data', data => {
-			
-			req.write(data)
-			logger(`!body on body`, data.toString())
-			if (!Upgrade) {
-				logger(`req.end()`)
-				req.end()
-			}
-		})
-		socket.write(responseHeader)
-	}
-	
-	
-}
+    // 结束请求，这会实际将其发送出去。
+    req.end();
+};
 
 export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHanders: string[]) => {
 

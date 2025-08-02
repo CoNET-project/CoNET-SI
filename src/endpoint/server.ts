@@ -75,107 +75,97 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 //		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 
 
-const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
-	
-	const getMoreData = (data: string): Promise<string> => {
-		return new Promise((resolve, reject) => {
-			// 如果上一次调用就已经读到了完整包，也可以直接返回
-			const tryResolve = () => {
-				const sepIndex = data.indexOf('\r\n\r\n')
-				if (sepIndex < 0) return false
+/**
+ * @description 修正后的服务器主处理函数。
+ * 主要修改了 GET 请求的路由逻辑。
+ */
+export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
+    
+    const getMoreData = (data: string): Promise<string> => {
+        return new Promise((resolve) => {
+            const tryResolve = () => {
+                const sepIndex = data.indexOf('\r\n\r\n');
+                if (sepIndex < 0) return false;
 
-				const headerPart = data.slice(0, sepIndex)
-				const bodyPart   = data.slice(sepIndex + 4)
+                const headerPart = data.slice(0, sepIndex);
+                const bodyPart = data.slice(sepIndex + 4);
 
-				// 提取 Content-Length
-				const m = headerPart.match(/Content-Length:\s*(\d+)/i)
-				const contentLength = m ? parseInt(m[1], 10) : 0
+                const m = headerPart.match(/Content-Length:\s*(\d+)/i);
+                const contentLength = m ? parseInt(m[1], 10) : 0;
 
-				// 如果 body 不足，就不能 resolve
-				if (bodyPart.length < contentLength) return false;
+                if (bodyPart.length < contentLength) return false;
 
-				// 只返回 header + body（body 截断到正确长度）
-				const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength)
-				resolve(full)
-				return true
-			}
+                const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength);
+                resolve(full);
+                return true;
+            };
 
-			// 先尝试一下（data 可能是上层传入已有的 buffer）
-			if (tryResolve()) return
+            if (tryResolve()) return;
 
-			// 否则再等下一段数据
-			socket.once('data', chunk => {
-				data += chunk.toString()
-				// 递归：把新的 data 传回自己
-				getMoreData(data).then(resolve, reject)
-			})
+            socket.once('data', newChunk => {
+                data += newChunk.toString();
+                getMoreData(data).then(resolve);
+            });
+        });
+    };
 
-		})
-	}
+    if (!conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
+        logger(Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n');
+        return distorySocket(socket);
+    }
 
+    const data = await getMoreData(chunk.toString());
+    const requestParts = data.split('\r\n\r\n');
+    const headerLines = requestParts[0].split('\r\n');
+    const requestProtocol = headerLines[0];
+    const path = requestProtocol.split(' ')[1];
+    const method = requestProtocol.split(' ')[0];
+    const bodyStr = requestParts[1] || '';
 
+    // RPC 和特定 API 的路由保持不变
+    if (/^\/solana\-rpc/i.test(path)) {
+        return forwardToSolanaRpc(socket, bodyStr, headerLines);
+    }
 
-	if (!conet_si_server.initData || !conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
-		logger (Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n')
-		return distorySocket(socket)
-	}
+    if (/^\/jup_ag/i.test(path)) {
+        return forwardTojup_ag(socket, bodyStr, headerLines);
+    }
 
-	const data = await getMoreData(chunk.toString())
+    if (/^\/silentpass\-rpc/i.test(path)) {
+        return forwardToSilentpass(socket, bodyStr, headerLines);
+    }
 
-	const request_line = data.split('\r\n\r\n')
-	const htmlHeaders = request_line[0].split('\r\n')
-	
-	const requestProtocol = htmlHeaders[0]
-	const path = requestProtocol.split(' ')[1]
-	const method = requestProtocol.split(' ')[0]
+    // **关键修正**: 处理所有 GET 请求
+    if (method === 'GET') {
+        // 不再需要检查 path === '/'。
+        // 任何未被上面规则捕获的 GET 请求都应被转发。
+        // forwardToHome 函数会使用请求中正确的 path (例如 /_next/static/css/...).
+        return forwardToHome(socket, bodyStr, headerLines);
+    }
 
+    // 处理 POST 请求的逻辑
+    if (method === 'POST') {
+        let body: { data?: string };
+        try {
+            body = JSON.parse(bodyStr);
+        } catch (ex) {
+            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true));
+            return distorySocket(socket);
+        }
 
+        if (!body?.data || typeof body.data !== 'string') {
+            logger(Colors.magenta(`startServer HTML body is not string error! ${socket.remoteAddress}`));
+            logger(inspect(body, false, 3, true));
+            return distorySocket(socket);
+        }
 
-	//	*********************
-	if (/^\/solana\-rpc/i.test(path)) {
-		return forwardToSolanaRpc (socket, request_line[1], htmlHeaders)
-	}
+        return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet);
+    }
 
-	if (/^\/jup_ag/i.test(path)) {
-		return forwardTojup_ag(socket, request_line[1], htmlHeaders)
-	}
-
-	if (method === 'GET') {
-		//		GET Home
-		if (path === '/') {
-			return forwardToHome(socket,  request_line[1], htmlHeaders)
-		}
-		
-		//		forward to silentpass package
-		if (/\/silentpass\-rpc/i.test(path)) {
-			return forwardToSilentpass (socket, request_line[1], htmlHeaders)
-		}
-		//		unknow request!
-		return distorySocket(socket)
-	}
-
-	let body: {data?: string}
-	try {
-		body = JSON.parse(request_line[1])
-	} catch (ex) {
-		console.log (`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${request_line[0]}`, inspect({request:request_line[1], addr: socket.remoteAddress}, false, 3, true))
-		return distorySocket(socket)
-	}
-
-
-	if (!body?.data || typeof body.data !== 'string') {
-		logger (Colors.magenta(`startServer HTML body is ont string error! ${socket.remoteAddress}`))
-		logger(inspect(body, false, 3, true))
-
-		return distorySocket(socket)
-	}
-
-	
-
-	//logger (Colors.magenta(`SERVER call postOpenpgpRouteSocket body.data = ${body.data.length}  ${socket.remoteAddress}`))
-	//console.log (`------${socket.remoteAddress}  [${JSON.stringify(body.data)}]`)
-	return postOpenpgpRouteSocket (socket, htmlHeaders, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
-}
+    // 对于其他方法 (PUT, DELETE, etc.) 或无法识别的请求，关闭连接
+    logger(Colors.yellow(`[WARN] Unhandled method '${method}' for path '${path}'. Closing connection.`));
+    return distorySocket(socket);
+};
 
 
 // 支持的 Origin 白名单（可以改为从配置文件读取）
