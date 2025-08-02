@@ -43,7 +43,11 @@ const getLengthHander = (headers: string[]) => {
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
+const silentpassHome = 'https://'
+
 const responseRootHomePage = (socket: Socket|TLSSocket) => {
+
+	
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
 	const ret = `HTTP/1.1 200 OK\r\n` +

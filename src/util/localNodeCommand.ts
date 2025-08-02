@@ -16,7 +16,7 @@ import { request as requestHttp} from 'node:http'
 import type {IncomingMessage, RequestOptions as RequestOptionsHttp} from 'node:http'
 import {Transform} from 'node:stream'
 import type { KeyID as typeOpenPGPKeyID } from 'openpgp'
-import type { GenerateKeyOptions, Key, PrivateKey, Message, MaybeStream, Data, DecryptMessageResult, WebStream, NodeStream } from 'openpgp'
+import type {Key, PrivateKey, Message, MaybeStream, DecryptMessageResult, WebStream } from 'openpgp'
 import { Wallet } from 'ethers'
 import { exec } from 'node:child_process'
 import { Writable } from 'node:stream'
@@ -188,7 +188,7 @@ export const regiestPrivateKey = ( privateKey: string, password: string ) => {
 }
 
 export const generatePgpKey = async (walletAddr: string, passwd: string ) => {
-	const option: GenerateKeyOptions = {
+	const option = {
         type: 'ecc',
 		passphrase: passwd,
 		userIDs: [{
@@ -1481,7 +1481,7 @@ const pgpTest = async () => {
 	const password = 'ddd'
 	const { privateKey, publicKey, revocationCertificate } = await generateKey({
         type: 'ecc', // Type of the key, defaults to ECC
-        curve: 'curve25519', // ECC curve name, defaults to curve25519
+        curve: 'curve25519Legacy', // ECC curve name, defaults to curve25519
         userIDs: [{ name: 'Jon Smith', email: 'jon@example.com' }], // you can pass multiple user IDs
         passphrase: password, // protects the private key
         format: 'armored' // output key format, defaults to 'armored' (other options: 'binary' or 'object')
@@ -2012,7 +2012,10 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 // startEPOCH_EventListeningForMining1()
 
-
-
+const test = async () => {
+	const uuu = await generatePgpKey('ffff', '')
+	logger(inspect(uuu, false, 3, true))
+}
+// test()
 ///		885 socks5ConnectV3
 ///		1463 return socketForwardV2

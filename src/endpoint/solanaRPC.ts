@@ -17,7 +17,7 @@ import Crypto from 'node:crypto'
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://127.0.0.1:4000/solana-rpc
 //		curl -v -i -X OPTIONS https://api.mainnet-beta.solana.com
 
-const iOSUrl = 'vpn9.conet.network'
+
 const iOSVPN = 'ios-vpn.silentpass.io'
 const testVPN = 'vpn-beta.conet.network'
 const solanaRPC_host = 'api.mainnet-beta.solana.com'
@@ -442,6 +442,111 @@ const getHeader = (requestHanders: string[], key: string) => {
 		}
 	})
 	return ret
+}
+
+export const forwardToHome = (socket: Net.Socket, body: string, requestHanders: string[]) => {
+
+
+	const method = requestHanders[0].split(' ')[0]
+	const path = requestHanders[0].split(' ')[1]||'/'
+	const origin = appHost(getHeader(requestHanders, 'Referer'))
+	logger(`forwardToSilentpass ${requestHanders[0]}`)
+	logger(inspect(requestHanders, false, 3, true))
+
+	// if (/^OPTIONS/i.test(method) ) {
+		
+	// 	return responseOPTIONS(socket, requestHanders)
+	// }
+
+	
+	let Upgrade = false
+	const rehandles = getHeaderJSON(requestHanders.slice(1))
+	
+	const option: Https.RequestOptions = {
+		host: 'silentpass.io',
+		port: 443,
+		path,
+		method,
+		headers: rehandles
+	}
+
+	logger(Colors.magenta(`getHeaderJSON! Upgrade = ${Upgrade} `))
+	logger(inspect(option, false, 3, true))
+
+	let responseHeader = ''
+
+	const req = Https.request(option, res => {
+    
+    // 对于非 WebSocket 请求 (文件下载属于此类)
+    if (!Upgrade) {
+        
+        // 1. 先写入状态行和响应头。
+        //    我们直接使用上游服务器返回的状态码、信息和头文件。
+        //    res.headers 包含了所有必要的头，如 Content-Type, Content-Length 等。
+        socket.write(`HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n`);
+        
+        // 将所有上游响应头原样转发给客户端
+        for (const key in res.headers) {
+            // res.headers[key] 的值可能是字符串或字符串数组
+            const value = Array.isArray(res.headers[key]) 
+                ? (res.headers[key] as string[]).join(', ') 
+                : res.headers[key];
+            socket.write(`${key}: ${value}\r\n`);
+        }
+
+        // 写入一个空行，表示头的结束
+        socket.write('\r\n');
+
+        // 2. 在所有头都发送完毕后，再使用 .pipe() 高效地传输响应体。
+        //    Node.js 的流会自动处理 'data', 'end', 'error' 等事件。
+        //    我们不再需要手写 res.on('data', ...) 和 res.on('end', ...)。
+        res.pipe(socket);
+        
+        return; // 处理完毕，直接返回
+    }
+
+    // ... 处理 Upgrade (WebSocket) 的逻辑保留在这里 ...
+    // 注意：原始代码中的 Upgrade 逻辑也有类似问题，这里暂时只修复非 Upgrade 的情况。
+})
+
+	req.on('error', err => {
+
+	})
+
+	req.once('end', () => {
+		
+	})
+
+
+	if (body) {
+		logger(`req.write body size = ${body.length}`)
+		req.write(body)
+		if (!Upgrade) {
+			req.end()
+		}
+		return
+	}
+
+	if (/GET/.test(method)) {
+		return req.end('\r\n')
+	}
+
+	responseHeader = getResponseHeaders(requestHanders)
+
+	if (socket.writable) {
+		socket.once ('data', data => {
+			
+			req.write(data)
+			logger(`!body on body`, data.toString())
+			if (!Upgrade) {
+				logger(`req.end()`)
+				req.end()
+			}
+		})
+		socket.write(responseHeader)
+	}
+	
+	
 }
 
 export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHanders: string[]) => {
