@@ -10,7 +10,7 @@ import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
-import {forwardToSolanaRpc, forwardToSilentpass, forwardTojup_ag } from './solanaRPC'
+import {forwardToSolanaRpc, forwardToSilentpass, forwardTojup_ag, forwardToHome } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
 
@@ -47,7 +47,7 @@ const silentpassHome = 'https://'
 
 const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
-	
+
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
 	const ret = `HTTP/1.1 200 OK\r\n` +
@@ -143,8 +143,9 @@ const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chu
 	if (method === 'GET') {
 		//		GET Home
 		if (path === '/') {
-			return responseRootHomePage(socket)
+			return forwardToHome(socket,  request_line[1], htmlHeaders)
 		}
+		
 		//		forward to silentpass package
 		if (/\/silentpass\-rpc/i.test(path)) {
 			return forwardToSilentpass (socket, request_line[1], htmlHeaders)
