@@ -27,7 +27,7 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
 process.on('uncaughtException', (err, origin) => {
 	console.error(`Caught exception: ${err}\n` +
 					`Exception origin: ${origin}`)
-	Restart()
+	
 })
 
 const getLengthHander = (headers: string[]) => {
@@ -165,7 +165,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
     // 对于其他方法 (PUT, DELETE, etc.) 或无法识别的请求，关闭连接
     logger(Colors.yellow(`[WARN] Unhandled method '${method}' for path '${path}'. Closing connection.`));
     return distorySocket(socket);
-};
+}
 
 
 // 支持的 Origin 白名单（可以改为从配置文件读取）
