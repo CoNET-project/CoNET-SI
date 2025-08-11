@@ -16,10 +16,12 @@ if (Cluster.isPrimary) {
 	let domain = 0
 	const startNode = () => {
 		
-		const worker = Math.floor(cpus().length/2)
+		const worker = Math.floor(cpus().length)
 		logger(Colors.magenta(`startNode worker<2 = ${worker<2}`))
+		for (let i = 0; i < worker; i ++) {
+			Cluster.fork()
+		}
 		
-		new conet_si_server()
 		
 	}
 
