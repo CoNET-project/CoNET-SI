@@ -43,7 +43,6 @@ const getLengthHander = (headers: string[]) => {
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
-const silentpassHome = 'https://'
 
 const responseRootHomePage = (socket: Socket|TLSSocket) => {
 
@@ -84,55 +83,55 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
     const getMoreData = (data: string): Promise<string> => {
         return new Promise((resolve) => {
             const tryResolve = () => {
-                const sepIndex = data.indexOf('\r\n\r\n');
-                if (sepIndex < 0) return false;
+                const sepIndex = data.indexOf('\r\n\r\n')
+                if (sepIndex < 0) return false
 
-                const headerPart = data.slice(0, sepIndex);
-                const bodyPart = data.slice(sepIndex + 4);
+                const headerPart = data.slice(0, sepIndex)
+                const bodyPart = data.slice(sepIndex + 4)
 
-                const m = headerPart.match(/Content-Length:\s*(\d+)/i);
-                const contentLength = m ? parseInt(m[1], 10) : 0;
+                const m = headerPart.match(/Content-Length:\s*(\d+)/i)
+                const contentLength = m ? parseInt(m[1], 10) : 0
 
-                if (bodyPart.length < contentLength) return false;
+                if (bodyPart.length < contentLength) return false
 
-                const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength);
-                resolve(full);
-                return true;
-            };
+                const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength)
+                resolve(full)
+                return true
+            }
 
             if (tryResolve()) return;
 
             socket.once('data', newChunk => {
-                data += newChunk.toString();
-                getMoreData(data).then(resolve);
-            });
-        });
-    };
+                data += newChunk.toString()
+                getMoreData(data).then(resolve)
+            })
+        })
+    }
 
     if (!conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
         logger(Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n');
-        return distorySocket(socket);
+        return distorySocket(socket)
     }
 
-    const data = await getMoreData(chunk.toString());
-    const requestParts = data.split('\r\n\r\n');
-    const headerLines = requestParts[0].split('\r\n');
-    const requestProtocol = headerLines[0];
-    const path = requestProtocol.split(' ')[1];
-    const method = requestProtocol.split(' ')[0];
-    const bodyStr = requestParts[1] || '';
+    const data = await getMoreData(chunk.toString())
+    const requestParts = data.split('\r\n\r\n')
+    const headerLines = requestParts[0].split('\r\n')
+    const requestProtocol = headerLines[0]
+    const path = requestProtocol.split(' ')[1]
+    const method = requestProtocol.split(' ')[0]
+    const bodyStr = requestParts[1] || ''
 
     // RPC 和特定 API 的路由保持不变
     if (/^\/solana\-rpc/i.test(path)) {
-        return forwardToSolanaRpc(socket, bodyStr, headerLines);
+        return forwardToSolanaRpc(socket, bodyStr, headerLines)
     }
 
     if (/^\/jup_ag/i.test(path)) {
-        return forwardTojup_ag(socket, bodyStr, headerLines);
+        return forwardTojup_ag(socket, bodyStr, headerLines)
     }
 
     if (/^\/silentpass\-rpc/i.test(path)) {
-        return forwardToSilentpass(socket, bodyStr, headerLines);
+        return forwardToSilentpass(socket, bodyStr, headerLines)
     }
 
     // **关键修正**: 处理所有 GET 请求
@@ -140,31 +139,31 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         // 不再需要检查 path === '/'。
         // 任何未被上面规则捕获的 GET 请求都应被转发。
         // forwardToHome 函数会使用请求中正确的 path (例如 /_next/static/css/...).
-        return forwardToHome(socket, bodyStr, headerLines);
+        return forwardToHome(socket, bodyStr, headerLines)
     }
 
     // 处理 POST 请求的逻辑
     if (method === 'POST') {
-        let body: { data?: string };
+        let body: { data?: string }
         try {
-            body = JSON.parse(bodyStr);
+            body = JSON.parse(bodyStr)
         } catch (ex) {
-            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true));
-            return distorySocket(socket);
+            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
+            return distorySocket(socket)
         }
 
         if (!body?.data || typeof body.data !== 'string') {
-            logger(Colors.magenta(`startServer HTML body is not string error! ${socket.remoteAddress}`));
-            logger(inspect(body, false, 3, true));
-            return distorySocket(socket);
+            logger(Colors.magenta(`startServer HTML body is not string error! ${socket.remoteAddress}`))
+            logger(inspect(body, false, 3, true))
+            return distorySocket(socket)
         }
-
-        return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet);
+		console.log(`postOpenpgpRouteSocket from ${socket.remoteAddress}\n = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
+        return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
     }
 
     // 对于其他方法 (PUT, DELETE, etc.) 或无法识别的请求，关闭连接
-    logger(Colors.yellow(`[WARN] Unhandled method '${method}' for path '${path}'. Closing connection.`));
-    return distorySocket(socket);
+    logger(Colors.yellow(`[WARN] Unhandled method '${method}' for path '${path}'. Closing connection.`))
+    return distorySocket(socket)
 }
 
 
@@ -175,17 +174,17 @@ const originWhitelist = [
 	/^https?:\/\/([a-zA-Z0-9-]+\.)?silentpass\.io(:\d+)?$/,
 	/^local\-first:\/\/localhost(:\d+)?$/,
 	/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/
-];
+]
 
 const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
-	const rawOrigin = originHeader ? originHeader.slice(originHeader.indexOf(':') + 1).trim() : '*';
+	const rawOrigin = originHeader ? originHeader.slice(originHeader.indexOf(':') + 1).trim() : '*'
 
 	// 检查 origin 是否在白名单中
 	const isAllowed = originWhitelist.some(pattern => pattern.test(rawOrigin));
 	const allowOrigin = isAllowed ? rawOrigin : 'null'; // or set to '*' only if no credentials used
 
-	console.log(`[CORS] OPTIONS request from Origin: ${rawOrigin} => allowed: ${isAllowed}`);
+	console.log(`[CORS] OPTIONS request from Origin: ${rawOrigin} => allowed: ${isAllowed}`)
 
 	const response = [
 		'HTTP/1.1 204 No Content',
@@ -197,11 +196,10 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 		'Connection: keep-alive',
 		'',
 		''
-	].join('\r\n');
+	].join('\r\n')
 	console.log(response)
 	socket.write(response)
-};
-
+}
 
 const socketData = (socket: Socket, server: conet_si_server) => {
     let buffer = ''; // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
@@ -258,7 +256,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
             distorySocket(socket);
         }
     });
-};
+}
 
 class conet_si_server {
 
