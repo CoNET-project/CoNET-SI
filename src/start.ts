@@ -18,9 +18,9 @@ if (Cluster.isPrimary) {
 		
 		const worker = Math.floor(cpus().length)
 		logger(Colors.magenta(`startNode worker<2 = ${worker<2}`))
-		for (let i = 0; i < worker; i ++) {
+		// for (let i = 0; i < worker; i ++) {
 			Cluster.fork()
-		}
+		
 		
 		
 	}
