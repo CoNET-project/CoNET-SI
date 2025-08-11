@@ -1429,7 +1429,7 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 	})
 }
 
-const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[]) => {
+export const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[]) => {
 
 
 	//			forward encrypted text

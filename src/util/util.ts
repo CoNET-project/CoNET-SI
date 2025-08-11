@@ -16,7 +16,7 @@ import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
 import { throws } from 'node:assert'
 import passport_distributor_ABI from './passport_distributor-ABI.json'
 import duplicateFactoryABI from './duplicateFactoryABI.json'
-
+import newNodeInfoABI from './newNodeInfoABI.json'
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
@@ -25,6 +25,7 @@ export const CONETCancun= new ethers.JsonRpcProvider(CoNET_CancunRPC)
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
+const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'
 
 
 let GlobalIpAddress = ''
@@ -44,7 +45,7 @@ const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Pa
 const CoNETDePIN_passport_distributor_mainnet_readonly = new ethers.Contract(CoNETDePIN_passport_distributor_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
 const GuardianNodes = new ethers.Contract(GuardianPlan_CancunAddr, GuardianNodesV2ABI, CONETCancun)
 const paymendUser: Map<string, boolean> = new Map()
-const GuardianNodesInfo = new ethers.Contract(GuardianNodeInfo_CancunAddr, openPGPContractAbi, CONETCancun)
+const GuardianNodesMainnet = new ethers.Contract(GuardianNodeInfo_mainnet, newNodeInfoABI, CONETP_mainnet_rovider)
 
 	//		_nftIDs, _expires, _expiresDays, _premium
 
@@ -110,7 +111,7 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 }
 
 let getAllNodesProcess = false
-let Guardian_Nodes: nodeInfo[] = []
+const Guardian_Nodes: nodeInfo[] = []
 
 
 export const getAllNodes = () => new Promise(async resolve=> {
@@ -121,51 +122,29 @@ export const getAllNodes = () => new Promise(async resolve=> {
 
 	getAllNodesProcess = true
 
-	
-	let scanNodes = 0
-	
-	const maxNodes: BigInt = await GuardianNodes.currentNodeID()
-	scanNodes = parseInt(maxNodes.toString())
-
-	
-	if (!scanNodes) {
-		getAllNodesProcess = false
-		resolve (false)
-		return logger(`getAllNodes STOP scan because scanNodes == 0`)
-	}
-
-
-
-	for (let i = 0; i < scanNodes; i ++) {
-		Guardian_Nodes.push({
-			regionName: '',
-			ipaddress: '',
-			pgpArmored: '',
-			nftNumber: 100 + i,
-			domain: '',
-			pgpKeyID: '',
+	const _nodes = await GuardianNodesMainnet.getAllNodes(0, 1000)
+	for (let i = 0; i < _nodes.length; i ++) {
+		const node = _nodes[i]
+		const id = parseInt(node[0].toString())
+		const pgpString: string = Buffer.from( node[1], 'base64').toString()
+		const domain: string = node[2]
+		const ipAddr: string = node[3]
+		const region: string = node[4]
+		const itemNode: nodeInfo = {
+			ipaddress: ipAddr,
+			pgpArmored: pgpString,
+			domain: domain,
+			nftNumber: id,
+			regionName: region,
+			pgpKeyID: domain,
 			wallet: ''
-		})
-	}
+		}
 		
-	
-	let i = 0
-	mapLimit(Guardian_Nodes, 10, async (n: nodeInfo, next) => {
-		i = n.nftNumber
-		const nodeInfo = await GuardianNodesInfo.getNodeInfoById(n.nftNumber)
-		n.regionName = nodeInfo.regionName
-		n.ipaddress = nodeInfo.ipaddress
-		n.pgpArmored = Buffer.from(nodeInfo.pgp,'base64').toString()
-		const pgpKey1 = await readKey({ armoredKey: n.pgpArmored})
-		n.domain = pgpKey1.getKeyIDs()[1].toHex().toUpperCase()
-		routerInfo.set(n.domain, n)
-	}, err => {
-		const index = Guardian_Nodes.findIndex(n => n.nftNumber === i) - 1
-		Guardian_Nodes = Guardian_Nodes.slice(0, index)
-		logger(Colors.red(`mapLimit catch ex! Guardian_Nodes = ${Guardian_Nodes.length} `))
-		getAllNodesProcess = false
-		resolve(true)
-	})
+		routerInfo.set(domain, itemNode)
+		Guardian_Nodes.push(itemNode)
+  	}
+	logger(Colors.red(`mapLimit catch ex! Guardian_Nodes = ${Guardian_Nodes.length} `))
+	resolve(true)
 })
 
 
@@ -229,6 +208,7 @@ export const getRoute = async (keyID: string) => {
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
 		return null
 	}
+
 	return node.ipaddress
 }
 
@@ -338,7 +318,9 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	
 }
 const test = async () => {
-	const aa = await checkPayment('0x45e5feb3288b9400f0e054fc23da2f1b1c9880cd')
-	logger(Colors.magenta(`test aa = ${aa}`))
+	await getAllNodes()
+	const kkk = await getRoute('D888C4E8C7D58AAF')
+	logger(kkk)
+
 }
 // test()
