@@ -157,7 +157,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
             logger(inspect(body, false, 3, true))
             return distorySocket(socket)
         }
-		console.log(`postOpenpgpRouteSocket from ${socket.remoteAddress}\n = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
+		//console.log(`postOpenpgpRouteSocket from ${socket.remoteAddress}\n = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
         return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
     }
 
