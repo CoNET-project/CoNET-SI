@@ -111,7 +111,7 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 }
 
 let getAllNodesProcess = false
-const Guardian_Nodes: nodeInfo[] = []
+let Guardian_Nodes: nodeInfo[] = []
 
 
 export const getAllNodes = () => new Promise(async resolve=> {
@@ -121,7 +121,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
 	}
 
 	getAllNodesProcess = true
-
+	const tempGuardian_Nodes: nodeInfo[] = [] 
 	const _nodes = await GuardianNodesMainnet.getAllNodes(0, 1000)
 	for (let i = 0; i < _nodes.length; i ++) {
 		const node = _nodes[i]
@@ -141,10 +141,12 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		}
 		
 		routerInfo.set(domain, itemNode)
-		Guardian_Nodes.push(itemNode)
+		tempGuardian_Nodes.push(itemNode)
   	}
 	logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
 	getAllNodesProcess = false
+
+	Guardian_Nodes = tempGuardian_Nodes
 	resolve(true)
 })
 

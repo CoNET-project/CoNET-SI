@@ -2035,9 +2035,9 @@ const checkNodeUpdate = async(block: number) => {
 // startEPOCH_EventListeningForMining1()
 
 const test = async () => {
-	const uuu = await generatePgpKey('ffff', '')
-	logger(inspect(uuu, false, 3, true))
+	//2615447
+	checkNodeUpdate(2615447)
 }
-// test()
+test()
 ///		885 socks5ConnectV3
 ///		1463 return socketForwardV2
