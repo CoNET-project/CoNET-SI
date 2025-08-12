@@ -319,6 +319,7 @@ class conet_si_server {
 		}
 
 		this.startServer ()
+		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 	}
 
 	constructor () {

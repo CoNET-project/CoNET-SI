@@ -25,7 +25,7 @@ export const CONETCancun= new ethers.JsonRpcProvider(CoNET_CancunRPC)
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
-const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'
+const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
 
 
 let GlobalIpAddress = ''
@@ -318,6 +318,9 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	}
 	
 }
+
+
+
 const test = async () => {
 	await getAllNodes()
 	const kkk = await getRoute('D888C4E8C7D58AAF')

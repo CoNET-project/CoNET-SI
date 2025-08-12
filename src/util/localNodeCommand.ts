@@ -1751,6 +1751,8 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 	resolve (true)
 })
 
+
+
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	localNodeKey = nodePrivate
 	const result = await getAllNodes()
@@ -1930,6 +1932,8 @@ export let lastRate = 0
 
 let stratlivenessV2Process = false
 let localNodeKey: Wallet
+
+
 const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
 	if (stratlivenessV2Process) {
 		return
@@ -1978,6 +1982,24 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 	stratlivenessV2Process = false
 }
 
+const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
+export const checkNodeUpdate = async(block: number) => {
+	const blockTs = await CONETProvider_Mainnet.getBlock(block)
+	
+	if (!blockTs?.transactions) {
+		return 
+	}
+
+
+	for (let tx of blockTs.transactions) {
+
+		const event = await CONETProvider_Mainnet.getTransactionReceipt(tx)
+		if ( event?.to?.toLowerCase() === GuardianNodeInfo_mainnet) {
+			getAllNodes()
+		}
+		
+	}
+}
 
 // export const startEPOCH_EventListeningForMining1 = async () => {
 
