@@ -1728,8 +1728,6 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 	//logger(`searchEpochEvent started on block [${block}]`)
 	clearTimeout(searchEpochEventRestartTimeout)
 
-	logger('')
-	logger('')
 	if (searchEpochEventProcess) {
 		resolve (false)
 		return
@@ -1773,6 +1771,8 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 
 	CONETProvider_Mainnet.on('block', block => {
 		searchEpochEvent(block)
+		checkNodeUpdate(block)
+		
 		if (block % 2) {
 			return
 		}
@@ -1983,7 +1983,7 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 }
 
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
-export const checkNodeUpdate = async(block: number) => {
+const checkNodeUpdate = async(block: number) => {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
 	
 	if (!blockTs?.transactions) {
