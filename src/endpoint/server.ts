@@ -407,3 +407,5 @@ class conet_si_server {
 }
 
 export default conet_si_server
+
+new conet_si_server()
