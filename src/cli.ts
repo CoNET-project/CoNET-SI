@@ -11,8 +11,6 @@ import { getServerIPV4Address, getSetup, waitKeyInput, generateWalletAddress, sa
 import conet_si_server from './endpoint/server'
 import {logger} from './util/logger'
 
-import type {HDNodeWallet} from 'ethers'
-
 if ( Cluster.isPrimary ) {
 
 	const startCommand = `cd; conet-mvp-si start -d > system.log &`

@@ -62,7 +62,7 @@ export const generateWalletAddress = async ( password: string ) => {
 	const acc = await accountw.encrypt (password)
 	return (acc)
 }
-const CONETProvider_Cancun = new ethers.JsonRpcProvider(CoNET_CancunRPC)
+
 const CONETProvider_Mainnet = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 export const loadWalletAddress = async ( walletBase: string, password: string ) => {
 	//logger (inspect(walletBase, false, 3, true))
