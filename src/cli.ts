@@ -60,9 +60,6 @@ if ( Cluster.isPrimary ) {
 		process.exit (0)
 	}
 
-	const processRestart = () => {
-		
-	}
 
 	const printInfo = () => {
 		logger (

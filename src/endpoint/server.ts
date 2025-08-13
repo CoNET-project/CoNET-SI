@@ -27,7 +27,7 @@ export const hexDebug = ( buffer: Buffer, length: number= 256 ) => {
 process.on('uncaughtException', (err, origin) => {
 	console.error(`Caught exception: ${err}\n` +
 					`Exception origin: ${origin}`)
-	
+	Restart()
 })
 
 const getLengthHander = (headers: string[]) => {

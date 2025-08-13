@@ -296,7 +296,7 @@ export const startPackageSelfVersionCheckAndUpgrade = async (packageName: string
 }
 
 export const Restart = () => {
-	exec ( `sudo reboot` )
+	exec ( `sudo systemctl restart conet` )
 }
 
 
