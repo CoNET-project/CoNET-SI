@@ -277,14 +277,10 @@ class conet_si_server {
 			this.workerNumber = Cluster?.worker?.id
 		}
 
-		logger (inspect(this.initData, false, 3, true))
-
 		if ( !this.initData?.keychain || this.initData?.passwd === undefined) {
             logger ('initData?.keychain = ',this.initData?.keychain,'initData.passwd = ', this.initData?.passwd)
 			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI with node dist/cli start!`)
 		}
-
-        logger (`initSetupData initData.passwd = [${this.initData.passwd}]`)
 
 		this.password = this.initData.passwd
 
