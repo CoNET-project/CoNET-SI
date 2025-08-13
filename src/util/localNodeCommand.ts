@@ -412,8 +412,9 @@ export const saveSetup = ( setup: ICoNET_NodeSetup|null, debug: boolean ) => {
 		return writeFile (setupFile, JSON.stringify (setupInfo), 'utf-8', err => {
 			if ( err ) {
 				logger (`saveSetup [${setupFile}] Error!`, err )
-				resolve (false)
+				return resolve (false)
 			}
+			
 			logger (`saveSetup [${setupFile}] Success!` )
 			return resolve (true)
 		})
