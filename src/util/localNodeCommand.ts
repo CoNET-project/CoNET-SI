@@ -1202,8 +1202,9 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     const requestBody = JSON.stringify({ 
         data: encryptedText,
         type: 'HTTP' // Signal to Node 2 that this is a standard HTTP request
-    });
-    const host = `${ipAddr}:${port}`;
+    })
+
+    const host = `${ipAddr}:${port}`
 
     const rawHttpRequest = [
         `POST /post HTTP/1.1`,
@@ -1212,11 +1213,18 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
         `Content-Length: ${Buffer.byteLength(requestBody)}`,
         `Connection: keep-alive`,
         '\r\n' + requestBody
-    ].join('\r\n');
+    ].join('\r\n')
 
     const conn = createConnection(port, ipAddr, () => {
-        conn.write(rawHttpRequest);
-    });
+        conn.setNoDelay(true)
+        sourceSocket.setNoDelay?.(true)
+
+        if (!conn.write(rawHttpRequest)) {
+            sourceSocket.pause()
+            conn.once('drain', () => sourceSocket.resume())
+        }
+        
+    })
 
     // Buffer the entire response from Node 2
     const responseChunks: Buffer[] = [];
@@ -1227,11 +1235,13 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     conn.on('end', () => {
         logger(Colors.green(`[V2-HTTP] Received full response from Node 2. Forwarding to client.`));
         if (!sourceSocket.destroyed) {
-            const fullResponse = Buffer.concat(responseChunks);
-            sourceSocket.write(fullResponse);
-            sourceSocket.end();
-        }
-    });
+                const fullResponse = Buffer.concat(responseChunks)
+                sourceSocket.write(fullResponse)
+                sourceSocket.end()
+            }
+            
+        
+    })
 
     conn.on('error', (err) => {
         logger(Colors.red(`[V2-HTTP] Forward to node ${ipAddr}:${port} error: ${err.message}`));
@@ -1396,6 +1406,7 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
+
         // 入口回程同理（老 Node 可能没有该方法，用可选链）
         sourceSocket.setNoDelay?.(true)
        ;(sourceSocket as any).setKeepAlive?.(true, 30_000)

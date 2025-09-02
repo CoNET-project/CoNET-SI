@@ -80,30 +80,29 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
  */
 export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_server, chunk: Buffer) => {
     
-    const getMoreData = (data: string): Promise<string> => {
+    const getMoreData = (buf: Buffer): Promise<{ header: string, body: string, tail: Buffer }> => {
         return new Promise((resolve) => {
-            const tryResolve = () => {
-                const sepIndex = data.indexOf('\r\n\r\n')
+            const sep = Buffer.from('\r\n\r\n')
+            const tryResolve = (b: Buffer): boolean => {
+                const sepIndex = b.indexOf(sep)
                 if (sepIndex < 0) return false
 
-                const headerPart = data.slice(0, sepIndex)
-                const bodyPart = data.slice(sepIndex + 4)
-
-                const m = headerPart.match(/Content-Length:\s*(\d+)/i)
+                const headerPart = b.slice(0, sepIndex).toString('ascii')
+                const m = /Content-Length:\s*(\d+)/i.exec(headerPart)
                 const contentLength = m ? parseInt(m[1], 10) : 0
 
-                if (bodyPart.length < contentLength) return false
+                const need = sepIndex + sep.length + contentLength
+                if (b.length < need) return false
 
-                const full = headerPart + '\r\n\r\n' + bodyPart.slice(0, contentLength)
-                resolve(full)
+                const bodyBuf = b.slice(sepIndex + sep.length, need)
+                const tail = b.slice(need); // ★ Content-Length 之后已到达的原始流
+                resolve({ header: headerPart, body: bodyBuf.toString('utf8'), tail })
                 return true
             }
 
-            if (tryResolve()) return;
-
-            socket.once('data', newChunk => {
-                data += newChunk.toString()
-                getMoreData(data).then(resolve)
+            if (tryResolve(buf)) return
+            socket.once('data', (more: Buffer) => {
+                getMoreData(Buffer.concat([buf, more])).then(resolve)
             })
         })
     }
@@ -113,13 +112,16 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         return distorySocket(socket)
     }
 
-    const data = await getMoreData(chunk.toString())
-    const requestParts = data.split('\r\n\r\n')
-    const headerLines = requestParts[0].split('\r\n')
+    const { header, body, tail } = await getMoreData(chunk)
+    const bodyStr = body           
+    if (tail && tail.length) {
+        socket.unshift(tail)
+    }
+
+    const headerLines = header.split('\r\n')
     const requestProtocol = headerLines[0]
     const path = requestProtocol.split(' ')[1]
     const method = requestProtocol.split(' ')[0]
-    const bodyStr = requestParts[1] || ''
 
     // RPC 和特定 API 的路由保持不变
     if (/^\/solana\-rpc/i.test(path)) {
@@ -148,7 +150,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         try {
             body = JSON.parse(bodyStr)
         } catch (ex) {
-            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestParts[0]}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
+            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestProtocol}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
             return distorySocket(socket)
         }
 
@@ -202,60 +204,40 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 }
 
 const socketData = (socket: Socket, server: conet_si_server) => {
-    let buffer = ''; // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
+    let buffer = Buffer.alloc(0); // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
     let handledOptions = false; // 状态标记，标识是否处理过OPTIONS
 
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {
-        buffer += chunk.toString(); // 将新收到的数据追加到缓冲区
+        buffer = Buffer.concat([buffer, chunk])
 
-        // 因为预检请求和实际请求是两个独立的HTTP请求，我们需要分别解析
-        // 预检请求没有消息体，以 `\r\n\r\n` 结尾
-        const separator = '\r\n\r\n';
+        
+        const peek = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii')
+        const separator = '\r\n\r\n'
 
-        // 检查是否是 OPTIONS 请求（只在第一次检查）
-        if (!handledOptions && buffer.startsWith('OPTIONS')) {
-            const requestEndIndex = buffer.indexOf(separator);
-            
-            if (requestEndIndex !== -1) { // 找到了完整的 OPTIONS 请求头
-                const requestText = buffer.substring(0, requestEndIndex);
-                const lines = requestText.split('\r\n').filter(Boolean);
-                
-                console.log("[CORS] Handling OPTIONS request...");
-                logger(inspect(lines, false, 3, true));
-
-                // 发送 OPTIONS 响应，保持连接
-                responseOPTIONS(socket, lines);
-                
-                // 从缓冲区中移除已处理的 OPTIONS 请求
-                buffer = buffer.substring(requestEndIndex + separator.length);
-                handledOptions = true; // 标记已处理，不再进入此逻辑
-
-                // 注意：这里不做任何返回，让代码继续向下执行，
-                // 因为 POST 请求的数据可能已经紧跟着在缓冲区里了。
+        if (!handledOptions && peek.startsWith('OPTIONS')) {
+            const end = peek.indexOf(separator)
+            if (end !== -1) {
+                const requestText = peek.substring(0, end)
+                const lines = requestText.split('\r\n').filter(Boolean)
+                responseOPTIONS(socket, lines)
+                // 真正从 Buffer 中剥离已处理部分
+                buffer = buffer.subarray(end + separator.length)
+                handledOptions = true
             }
         }
-        
-        // 检查 POST/GET 请求 (在处理完 OPTIONS 或一开始就不是 OPTIONS 的情况下)
-        // 确保缓冲区里有内容，并且是以 POST 或 GET 开头
-        const trimmedBuffer = buffer.trim();
-        if (trimmedBuffer.length > 0 && (trimmedBuffer.startsWith('POST') || trimmedBuffer.startsWith('GET'))) {
-            // 此处，我们已经确认收到了POST/GET请求的开始部分
-            // 我们可以直接把当前的socket和数据交给getDataPOST处理
-            // getDataPOST内部有处理不完整包的逻辑，所以这是安全的
-            
-            // 关键：为了避免重复监听，要先移除当前的 'data' 监听器
-            socket.removeAllListeners('data');
-            
-            // 然后调用你的POST处理器，并将当前已缓冲的数据作为初始数据块传给它
-            getDataPOST(socket, server, Buffer.from(buffer));
 
-        } else if (handledOptions && trimmedBuffer.length === 0) {
-            // 如果处理完OPTIONS后缓冲区为空，则什么都不做，等待下一个 data 事件
-        } else if (!handledOptions && buffer.length > 2000) { // 防止恶意请求撑爆内存
-            distorySocket(socket);
+        // 识别 POST/GET 起始
+        const headStr = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii').trim()
+        
+        if (headStr.length > 0 && (headStr.startsWith('POST') || headStr.startsWith('GET'))) {
+            socket.removeAllListeners('data')
+            // 直接把当前 Buffer 交给 getDataPOST（它会继续按 Buffer 读取）
+            return getDataPOST(socket, server, buffer)
         }
-    });
+       
+        return distorySocket(socket)
+    })
 }
 
 class conet_si_server {
@@ -325,6 +307,8 @@ class conet_si_server {
 	private startServer = () => {
 		
 		const server = createServer( socket => {
+            socket.setNoDelay(true)
+            
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
@@ -340,7 +324,7 @@ class conet_si_server {
 
 			socket.on('end', () => {
 				console.log('Client disconnected.');
-			});
+			})
 
 			return socketData (socket, this)
 
@@ -369,6 +353,7 @@ class conet_si_server {
 		}
 		
 		const server = createServerSSL (options, socket => {
+            socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
@@ -383,7 +368,7 @@ class conet_si_server {
 			})
 
 			socket.on('end', () => {
-				console.log('Client disconnected.');
+				console.log('Client disconnected.')
 			});
 
 			return socketData( socket, this)
