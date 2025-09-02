@@ -1071,38 +1071,31 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 	try {
 		const socket = createConnection ( port, host, () => {
+            socket.setNoDelay(true)
+            resoestSocket.setNoDelay?.(true)
 
-			socket.pipe(resoestSocket).on('error', err => {
-				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
-			})
+            socket.setKeepAlive(true, 30_000);
+            resoestSocket.setKeepAlive?.(true, 30_000);
 
-			resoestSocket.pipe(socket).on('error', err => {
-				logger(Colors.red(`socks5Connect pipe on Error ${wallet}`), err)
-			})
+			socket.pipe(resoestSocket).on('error', err => { /* log */ });
+            resoestSocket.pipe(socket).on('error', err => { /* log */ });
 			
 			const data = Buffer.from(prosyData.buffer, 'base64')
-			if (data) {
-				socket.write (data)
-			}
+            if (data && data.length) {
+                if (!socket.write(data)) {
+                    // 发生背压：暂停入口到上游的泵，待 drain 再恢复
+                    resoestSocket.pause()
+                    socket.once('drain', () => resoestSocket.resume())
+                }
+            }
+			
 			
 			resoestSocket.resume()
 		})
 	
-		socket.once ( 'end', () => {
-			// logger (Colors.red(`socks5Connect host [${host}:${port}] on END!`))
-			resoestSocket.end().destroy()
-		})
-	
-		socket.on ( 'error', err => {
-			resoestSocket.end().destroy()
-			logger (Colors.red(`socks5Connect [${host}:${port}] on Error! [${err.message}]`))
-	
-		})
-	
-		resoestSocket.on('error', err => {
-			resoestSocket.end().destroy()
-			logger (Colors.red(`socks5Connect host [${host}:${port}] resoestSocket ON Err [${err.message}]`))
-		})
+		socket.once('end', () => { resoestSocket.end().destroy(); });
+        socket.on('error', err => { resoestSocket.end().destroy(); /* log */ });
+        resoestSocket.on('error', err => { resoestSocket.end().destroy(); /* log */ });
 	} catch (ex) {
 		logger(`createConnection On catch ${wallet}`, ex)
 		resoestSocket.end().destroy()
@@ -1400,13 +1393,24 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 		logger (Colors.blue (`Fardward packet to node ${ ipAddr }:${port} success !`))
 		
-		//	conn.setNoDelay(true)
+        // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
+        conn.setNoDelay(true)
+        conn.setKeepAlive(true, 30_000)
+        // 入口回程同理（老 Node 可能没有该方法，用可选链）
+        sourceSocket.setNoDelay?.(true)
+       ;(sourceSocket as any).setKeepAlive?.(true, 30_000)
+
 
 		sourceSocket.once ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
 			// conn.end().destroy()
 		})
-		conn.write (rawHttpRequest)
+
+        // 首包可能较大，处理写背压，避免被内核缓冲憋住
+        if (!conn.write(rawHttpRequest)) {
+            sourceSocket.pause()
+            conn.once('drain', () => sourceSocket.resume())
+        }
 
 		conn.pipe (sourceSocket).on('error', err => {
 			logger(`socketForward conn.pipe (sourceSocket) on error`, err)
