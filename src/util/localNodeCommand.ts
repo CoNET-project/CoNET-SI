@@ -1074,12 +1074,15 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
             socket.setNoDelay(true)
             resoestSocket.setNoDelay?.(true)
 
-            socket.setKeepAlive(true, 30_000);
-            resoestSocket.setKeepAlive?.(true, 30_000);
+            socket.setKeepAlive(true, 30_000)
+            resoestSocket.setKeepAlive?.(true, 30_000)
 
-			socket.pipe(resoestSocket).on('error', err => { /* log */ });
-            resoestSocket.pipe(socket).on('error', err => { /* log */ });
-			
+			socket.pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
+            resoestSocket.pipe(socket, { end: false }).on('error', err => { /* log */ })
+
+			socket.on('end', () => resoestSocket.end())
+            resoestSocket.on('end', () => socket.end())
+
 			const data = Buffer.from(prosyData.buffer, 'base64')
             if (data && data.length) {
                 if (!socket.write(data)) {
@@ -1098,7 +1101,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
         resoestSocket.on('error', err => { resoestSocket.end().destroy(); /* log */ });
 	} catch (ex) {
 		logger(`createConnection On catch ${wallet}`, ex)
-		resoestSocket.end().destroy()
+		resoestSocket.end()
 	}
 
 }
@@ -1406,16 +1409,17 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
-
-        // 入口回程同理（老 Node 可能没有该方法，用可选链）
+        sourceSocket.setKeepAlive?.(true, 30_000)
         sourceSocket.setNoDelay?.(true)
-       ;(sourceSocket as any).setKeepAlive?.(true, 30_000)
 
-
-		sourceSocket.once ('end', () => {
+		sourceSocket.on ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			// conn.end().destroy()
+			conn.end()
 		})
+
+        conn.on('end', () => {
+            sourceSocket.end()
+        })
 
         // 首包可能较大，处理写背压，避免被内核缓冲憋住
         if (!conn.write(rawHttpRequest)) {
@@ -1423,11 +1427,11 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
             conn.once('drain', () => sourceSocket.resume())
         }
 
-		conn.pipe (sourceSocket).on('error', err => {
+		conn.pipe (sourceSocket, { end: false }).on('error', err => {
 			logger(`socketForward conn.pipe (sourceSocket) on error`, err)
 		})
 
-		sourceSocket.pipe(conn).on('error', err => {
+		sourceSocket.pipe(conn, { end: false }).on('error', err => {
 			logger(`socketForward sourceSocket.pipe(conn) on error`, err)
 		})
 
