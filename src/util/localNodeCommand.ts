@@ -880,7 +880,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
+			logger(Colors.magenta(`${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 			const prosyData: VE_IPptpStream = command.requestData[0]
 			if(prosyData?.type && /http/i.test(prosyData.type)) {
@@ -1071,6 +1071,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 	try {
 		const socket = createConnection ( port, host, () => {
+            logger(`socks5Connect ${resoestSocket.remoteAddress} ==> ${host}:${port} Success!`)
             socket.setNoDelay(true)
             resoestSocket.setNoDelay?.(true)
 
