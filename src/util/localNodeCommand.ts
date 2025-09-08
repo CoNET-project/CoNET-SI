@@ -882,7 +882,14 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			
 			logger(Colors.magenta(`${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
+            if (!command?.requestData?.length) {
+                logger(Colors.red(`SaaS_Sock5 ERROR ==========> command.requestData is null`))
+                return distorySocket(socket)
+            }
+
 			const prosyData: VE_IPptpStream = command.requestData[0]
+
+
 			if(prosyData?.type && /http/i.test(prosyData.type)) {
 				logger(`SaaS_Sock5 call socks5ConnectV3`)
 				return socks5ConnectV3(prosyData, socket, command.walletAddress)
@@ -903,7 +910,13 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			logger(Colors.magenta(`SaaS_Sock5_v2 ==========> ${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 
-			const prosyData: VE_IPptpStream = command?.requestData[0]
+			
+            if (!command?.requestData?.length) {
+                logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> command.requestData is null`))
+                return distorySocket(socket)
+            }
+
+            const prosyData: VE_IPptpStream = command?.requestData[0]
 
             if (!prosyData || !prosyData.host || !prosyData.port || !command.Securitykey) {
                 logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> invalid prosyData [${inspect(prosyData, false, 3, true)}]`))
