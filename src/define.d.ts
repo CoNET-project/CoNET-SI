@@ -74,7 +74,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
@@ -151,7 +151,7 @@ interface VE_IPptpStream {
     buffer: string
     host: string|null
     port: number
-    uuid?: string
+    order?: number
     hostName?: string       //      for test gateway from client
 }
 

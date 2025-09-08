@@ -855,7 +855,7 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
     });
 };
 
-
+const peerPool: Map<string, { socket: Socket, data: VE_IPptpStream }> = new Map()
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
@@ -887,7 +887,60 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				logger(`SaaS_Sock5 call socks5ConnectV3`)
 				return socks5ConnectV3(prosyData, socket, command.walletAddress)
 			}
+
 			return socks5Connect(prosyData, socket, command.walletAddress)
+		}
+
+
+        case 'SaaS_Sock5_v2': {
+			const payment = await checkPayment(command.walletAddress)
+
+			if (!payment) {
+				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
+				return distorySocketPayment(socket)
+			}
+			
+			logger(Colors.magenta(`${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
+
+
+			const prosyData: VE_IPptpStream = command.requestData[0]
+
+            if (!prosyData || !prosyData.host || !prosyData.port || !command.Securitykey) {
+                logger(Colors.red(`SaaS_Sock5_v2 invalid prosyData [${inspect(prosyData, false, 3, true)}]`))
+                return distorySocket(socket)
+            }
+
+            const peer = peerPool.get(command.Securitykey)
+            if (!peer) {
+
+                peerPool.set(command.Securitykey, { socket, data: prosyData })
+                socket.once('close', () => {
+                    peerPool.delete(command.Securitykey)
+                    logger(Colors.magenta(`SaaS_Sock5_v2 ${command.Securitykey} from ${socket.remoteAddress} closed and removed from peerPool`))
+                })
+
+                socket.once('error', (err: Error) => {
+                    peerPool.delete(command.Securitykey)
+                    logger(Colors.red(`SaaS_Sock5_v2 ${command.Securitykey} from ${socket.remoteAddress} error and removed from peerPool`), err)
+                })
+
+                logger(Colors.red(`SaaS_Sock5_v2 can not found peer with Securitykey ${command.Securitykey}`))
+                return
+            }
+
+            peerPool.delete(command.Securitykey)
+
+            if (peer.socket.destroyed) {
+                logger(Colors.red(`SaaS_Sock5_v2 peer socket destroyed`))
+                return distorySocket(socket)
+            }
+
+            const reqSocket = peer.data.order === 0 ? peer.socket : socket
+            const resSocket = peer.data.order === 0 ? socket : peer.socket
+            const _prosyData = peer.data.order === 0 ? peer.data : prosyData
+
+
+			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket)
 		}
 
 		case 'mining': {		
@@ -1051,7 +1104,6 @@ const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Pro
 
 const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
 
-    
 	let host: string, port: number, ipStyle: boolean
 	try {
 		port = prosyData.port
@@ -1103,6 +1155,65 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 	} catch (ex) {
 		logger(`createConnection On catch ${wallet}`, ex)
 		resoestSocket.end()
+	}
+
+}
+
+const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wallet: string, resSocket: Socket) => {
+
+	let host: string, port: number, ipStyle: boolean
+	try {
+		port = prosyData.port
+		host = prosyData.host || ''
+		ipStyle = IP.isV4Format(host)
+		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+		if ( port < 1 || port > 65535 || ! host) {
+			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
+		}
+		
+	} catch (ex: any) {
+		logger(inspect(prosyData, false, 3, true))
+		logger(`socks5Connect_v2 req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} Error! ${ex.message}`)
+        distorySocket(reqSocket)
+		return distorySocket(resSocket)
+	}
+
+
+	try {
+		const socket = createConnection ( port, host, () => {
+            logger(`socks5Connect_v2 req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} ==> ${host}:${port} Success!`)
+            socket.setNoDelay(true)
+            resSocket.setNoDelay?.(true)
+            reqSocket.setNoDelay?.(true)
+            socket.setKeepAlive(true, 30_000)
+            resSocket.setKeepAlive?.(true, 30_000)
+            reqSocket.setKeepAlive?.(true, 30_000)
+
+			socket.pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {resSocket.end(); socket.end()})
+            reqSocket.pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {reqSocket.end(); socket.end()})
+
+
+			const data = Buffer.from(prosyData.buffer, 'base64')
+            if (data && data.length) {
+                if (!socket.write(data)) {
+                    // 发生背压：暂停入口到上游的泵，待 drain 再恢复
+                    reqSocket.pause()
+                    socket.once('drain', () => reqSocket.resume())
+                }
+            }
+			
+			
+			reqSocket.resume()
+		})
+	
+		socket.once('end', () => { reqSocket.end(); resSocket.end()})
+        socket.on('error', err => { })
+        resSocket.on('error', err => { resSocket.end() /* log */ })
+        reqSocket.on('error', err => { reqSocket.end() /* log */ })
+	} catch (ex) {
+		logger(`socks5Connect_v2 On catch ${wallet}`, ex)
+		resSocket.end()
+        reqSocket.end()
 	}
 
 }
