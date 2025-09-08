@@ -900,13 +900,13 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-			logger(Colors.magenta(`${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
+			logger(Colors.magenta(`SaaS_Sock5_v2 ==========> ${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 
 			const prosyData: VE_IPptpStream = command.requestData[0]
 
             if (!prosyData || !prosyData.host || !prosyData.port || !command.Securitykey) {
-                logger(Colors.red(`SaaS_Sock5_v2 invalid prosyData [${inspect(prosyData, false, 3, true)}]`))
+                logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> invalid prosyData [${inspect(prosyData, false, 3, true)}]`))
                 return distorySocket(socket)
             }
 
@@ -916,22 +916,22 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 peerPool.set(command.Securitykey, { socket, data: prosyData })
                 socket.once('close', () => {
                     peerPool.delete(command.Securitykey)
-                    logger(Colors.magenta(`SaaS_Sock5_v2 ${command.Securitykey} from ${socket.remoteAddress} closed and removed from peerPool`))
+                    logger(Colors.magenta(`SaaS_Sock5_v2 ==========> ${command.Securitykey} from ${socket.remoteAddress} closed and removed from peerPool`))
                 })
 
                 socket.once('error', (err: Error) => {
                     peerPool.delete(command.Securitykey)
-                    logger(Colors.red(`SaaS_Sock5_v2 ${command.Securitykey} from ${socket.remoteAddress} error and removed from peerPool`), err)
+                    logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> ${command.Securitykey} from ${socket.remoteAddress} error and removed from peerPool`), err)
                 })
 
-                logger(Colors.red(`SaaS_Sock5_v2 can not found peer with Securitykey ${command.Securitykey}`))
+                logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${command.Securitykey}`))
                 return
             }
 
             peerPool.delete(command.Securitykey)
 
             if (peer.socket.destroyed) {
-                logger(Colors.red(`SaaS_Sock5_v2 peer socket destroyed`))
+                logger(Colors.red(`SaaS_Sock5_v2 ==========> peer socket destroyed`))
                 return distorySocket(socket)
             }
 
@@ -1181,7 +1181,7 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
 
 	try {
 		const socket = createConnection ( port, host, () => {
-            logger(`socks5Connect_v2 req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} ==> ${host}:${port} Success!`)
+            logger(`socks5Connect_v2 ==========> req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} ==> ${host}:${port} Success!`)
             socket.setNoDelay(true)
             resSocket.setNoDelay?.(true)
             reqSocket.setNoDelay?.(true)
@@ -1211,7 +1211,7 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
         resSocket.on('error', err => { resSocket.end() /* log */ })
         reqSocket.on('error', err => { reqSocket.end() /* log */ })
 	} catch (ex) {
-		logger(`socks5Connect_v2 On catch ${wallet}`, ex)
+		logger(`socks5Connect_v2 ==========> On catch ${wallet}`, ex)
 		resSocket.end()
         reqSocket.end()
 	}
@@ -1472,7 +1472,6 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	}
 	
 	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
-
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddress}`))
@@ -2170,6 +2169,6 @@ const test = async () => {
 	//2615447
 	checkNodeUpdate(2615447)
 }
-test()
+// test()
 ///		885 socks5ConnectV3
 ///		1463 return socketForwardV2
