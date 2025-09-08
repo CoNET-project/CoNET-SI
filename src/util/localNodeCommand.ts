@@ -915,8 +915,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
                 peerPool.set(command.Securitykey, { socket, data: prosyData })
                 socket.once('close', () => {
-                    peerPool.delete(command.Securitykey)
-                    logger(Colors.magenta(`SaaS_Sock5_v2 ==========> ${command.Securitykey} from ${socket.remoteAddress} closed and removed from peerPool`))
+                    
                 })
 
                 socket.once('error', (err: Error) => {
