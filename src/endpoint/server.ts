@@ -150,7 +150,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         try {
             body = JSON.parse(bodyStr)
         } catch (ex) {
-            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestProtocol}`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
+            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestProtocol}`, inspect({ request: bodyStr, addr: socket.remoteAddress, header  }, false, 3, true))
             return distorySocket(socket)
         }
 
