@@ -880,7 +880,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-			logger(Colors.magenta(`${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
+			logger(Colors.magenta(`${socket.remoteAddress?.split(':')[1]}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
             if (!command?.requestData?.length) {
                 logger(Colors.red(`SaaS_Sock5 ERROR ==========> command.requestData is null`))
@@ -907,7 +907,6 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-			logger(Colors.magenta(`SaaS_Sock5_v2 ==========> ${socket.remoteAddress}:${command.walletAddress} passed payment [${payment}] process SaaS_Sock5!`))
 
 
 			
@@ -933,7 +932,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
                 socket.once('error', (err: Error) => {
                     peerPool.delete(command.Securitykey)
-                    logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> ${command.Securitykey} from ${socket.remoteAddress} error and removed from peerPool`), err)
+                    logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> ${command.Securitykey} from ${socket.remoteAddress?.split(':')[1]} error and removed from peerPool`), err)
                 })
 
                 logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey}, false, 3, true)} add to peerPool and wait another connection`))
@@ -953,7 +952,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
             
             logger(Colors.red(`SaaS_Sock5_v2  ==========> Peer ${command.Securitykey} SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`))
 
-			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket)
+			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket, command.Securitykey)
 		}
 
 		case 'mining': {		
@@ -1129,14 +1128,14 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 		
 	} catch (ex: any) {
 		logger(inspect(prosyData, false, 3, true))
-		logger(`socks5Connect ${resoestSocket.remoteAddress} Error! ${ex.message}`)
+		logger(`socks5Connect ${resoestSocket.remoteAddress?.split(':')[1]} Error! ${ex.message}`)
 		return distorySocket(resoestSocket)
 	}
 
 
 	try {
 		const socket = createConnection ( port, host, () => {
-            logger(`socks5Connect ${resoestSocket.remoteAddress} ==> ${host}:${port} Success!`)
+            logger(`socks5Connect ${resoestSocket.remoteAddress?.split(':')[1]} ==> ${host}:${port} Success!`)
             socket.setNoDelay(true)
             resoestSocket.setNoDelay?.(true)
 
@@ -1172,7 +1171,7 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 }
 
-const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wallet: string, resSocket: Socket) => {
+const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wallet: string, resSocket: Socket, uuid: string) => {
 
 	let host: string, port: number, ipStyle: boolean
 	try {
@@ -1186,7 +1185,7 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
 		
 	} catch (ex: any) {
 		logger(inspect(prosyData, false, 3, true))
-		logger(`socks5Connect_v2 req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} Error! ${ex.message}`)
+		logger(`socks5Connect_v2 req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress?.split(':')[1]} Error! ${ex.message}`)
         distorySocket(reqSocket)
 		return distorySocket(resSocket)
 	}
@@ -1194,7 +1193,7 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
 
 	try {
 		const socket = createConnection ( port, host, () => {
-            logger(`socks5Connect_v2 ==========> req = ${reqSocket.remoteAddress} res = ${resSocket.remoteAddress} ==> ${host}:${port} Success!`)
+            logger(`socks5Connect_v2 ==========> req = ${reqSocket.remoteAddress?.split(':')[1]} res = ${resSocket.remoteAddress?.split(':')[1]} ==> ${host}:${port} [${uuid}] Success!`)
             socket.setNoDelay(true)
             resSocket.setNoDelay?.(true)
             reqSocket.setNoDelay?.(true)
