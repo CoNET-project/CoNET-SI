@@ -1092,12 +1092,16 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 class BandwidthCount extends Transform {
 	private count = 0
 	constructor(private tab: string){
-		super()
+		super({
+            readableHighWaterMark: 1024,
+            writableHighWaterMark: 1024
+        })
 	}
 	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
 		this.count += chunk.length
         logger(`${this.tab} BandwidthCount ${ this.count} bytes`)
-		callback ()
+		this.push(chunk)
+        callback()
 	}
 	public _final(callback: (error?: Error | null | undefined) => void): void {
 		callback()
@@ -1209,14 +1213,18 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
             const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
             const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
 
-			socket.pipe(downloadCount).pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+			socket.pipe(downloadCount).pipe(resSocket, { end: false }).on('error', err => {
+                logger(`socks5Connect_v2 ==========> ${uuid} socket.pipe(downloadCount).pipe(resSocket) on error `, err)
+            }).on('end', () => {
                 logger(`socks5Connect_v2 ==========> ${uuid} upload pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
                 uploadCount.end()
                 downloadCount.end()
                 resSocket.end()
                 socket.end()
             })
-            reqSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+            reqSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { 
+                logger(`socks5Connect_v2 ==========> ${uuid} reqSocket.pipe(uploadCount).pipe(socket) on error `, err)
+            }).on('end', () => {
                 logger(`socks5Connect_v2 ==========> ${uuid} download pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
                 reqSocket.end()
                 socket.end()
@@ -1234,6 +1242,8 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
 			
 			
 			reqSocket.resume()
+            resSocket.resume()
+            
 		})
 	
 		socket.once('end', () => { reqSocket.end(); resSocket.end()})
