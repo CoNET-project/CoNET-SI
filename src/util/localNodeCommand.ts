@@ -1899,7 +1899,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	localNodeKey = nodePrivate
 	const result = await getAllNodes()
 	if (!result) {
-		startEPOCH_EventListeningForMining(nodePrivate, domain, nodeIpAddr)
+		
 		return
 	}
 
@@ -1920,6 +1920,8 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
     }
     blockListeningProcess = true
     logger(Colors.blue(`startEPOCH_EventListeningForMining START`))
+
+
 	CONETProvider_Mainnet.on('block', async block => {
         
         
