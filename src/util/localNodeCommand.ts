@@ -1209,14 +1209,14 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
             const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
             const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
 
-			socket.pipe(uploadCount).pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+			socket.pipe(downloadCount).pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
                 logger(`socks5Connect_v2 ==========> ${uuid} upload pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
                 uploadCount.end()
                 downloadCount.end()
                 resSocket.end()
                 socket.end()
             })
-            reqSocket.pipe(downloadCount).pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+            reqSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
                 logger(`socks5Connect_v2 ==========> ${uuid} download pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
                 reqSocket.end()
                 socket.end()
