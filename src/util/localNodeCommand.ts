@@ -1914,10 +1914,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
 	}
 	
-    if (blockListeningProcess) {
-        
-        return
-    }
+    
     blockListeningProcess = true
     logger(Colors.blue(`startEPOCH_EventListeningForMining START`))
 
