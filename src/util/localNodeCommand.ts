@@ -949,8 +949,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
             const reqSocket = peer.data.order === 0 ? peer.socket : socket
             const resSocket = peer.data.order === 0 ? socket : peer.socket
             const _prosyData = peer.data.order === 0 ? peer.data : prosyData
-            
-            logger(Colors.red(`SaaS_Sock5_v2  ==========> Peer ${command.Securitykey} SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`))
+        
 
 			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket, command.Securitykey)
 		}
