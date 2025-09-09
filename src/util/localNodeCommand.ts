@@ -936,7 +936,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                     logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> ${command.Securitykey} from ${socket.remoteAddress} error and removed from peerPool`), err)
                 })
 
-                logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey, prosyData}, false, 3, true)} add to peerPool and wait another connection`))
+                logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey}, false, 3, true)} add to peerPool and wait another connection`))
                 return
             }
 
@@ -950,7 +950,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
             const reqSocket = peer.data.order === 0 ? peer.socket : socket
             const resSocket = peer.data.order === 0 ? socket : peer.socket
             const _prosyData = peer.data.order === 0 ? peer.data : prosyData
-
+            
+            logger(Colors.red(`SaaS_Sock5_v2  ==========> Peer ${command.Securitykey} SUCCESS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`))
 
 			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket)
 		}
