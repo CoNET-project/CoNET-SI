@@ -1091,16 +1091,22 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 
 class BandwidthCount extends Transform {
 	private count = 0
-	constructor(){
+	constructor(private tab: string){
 		super()
 	}
 	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
 		this.count += chunk.length
+        logger(`${this.tab} BandwidthCount ${ this.count} bytes`)
 		callback ()
 	}
 	public _final(callback: (error?: Error | null | undefined) => void): void {
-		callback
+		callback()
 	}
+
+    public getTotalBytes() {
+        return this.count
+    }
+
 }
 
 const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Promise(resolve => {
@@ -1200,8 +1206,21 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
             resSocket.setKeepAlive?.(true, 30_000)
             reqSocket.setKeepAlive?.(true, 30_000)
 
-			socket.pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {resSocket.end(); socket.end()})
-            reqSocket.pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {reqSocket.end(); socket.end()})
+            const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
+            const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
+
+			socket.pipe(uploadCount).pipe(resSocket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+                logger(`socks5Connect_v2 ==========> ${uuid} upload pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
+                uploadCount.end()
+                downloadCount.end()
+                resSocket.end()
+                socket.end()
+            })
+            reqSocket.pipe(downloadCount).pipe(socket, { end: false }).on('error', err => { /* log */ }).on('end', () => {
+                logger(`socks5Connect_v2 ==========> ${uuid} download pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
+                reqSocket.end()
+                socket.end()
+            })
 
 
 			const data = Buffer.from(prosyData.buffer, 'base64')
