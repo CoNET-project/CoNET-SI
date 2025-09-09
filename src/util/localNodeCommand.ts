@@ -2018,7 +2018,7 @@ const moveData = (block: number) => {
 	})
 
 	moveDataProcess = false
-	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalConnectNode ${previousGossipStatus.totalConnectNode}  totalMiners ${totalMiners} total Users ${userWallets.length}`))
+	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
 }
 const apiEndpoint = `https://apiv4.conet.network/api/`
 const rateUrl = `${apiEndpoint}miningRate?eposh=`
