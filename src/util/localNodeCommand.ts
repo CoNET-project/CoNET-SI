@@ -1904,7 +1904,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	}
 
 	serttData = await getSetup()
-    
+
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider_Mainnet.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 	await getFaucet(nodePrivate)
@@ -1914,18 +1914,18 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
 	}
 	
-
+    if (blockListeningProcess) {
+        logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block ${block}, return!`))
+        return
+    }
+    blockListeningProcess = true
 	CONETProvider_Mainnet.on('block', async block => {
-        if (blockListeningProcess) {
-            logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block ${block}, return!`))
-            return
-        }
-        blockListeningProcess = true
+        
+        
 		await searchEpochEvent(block)
 		await checkNodeUpdate(block)
 		
 		if (block % 2) {
-            blockListeningProcess = false
 			return
 		}
 
@@ -1936,7 +1936,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		await moveData(block)
 		// gossipStart(block)
 		await stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
-        blockListeningProcess = false
+        
 	})
 }
 
