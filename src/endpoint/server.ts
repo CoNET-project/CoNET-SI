@@ -375,9 +375,7 @@ class conet_si_server {
 		})
 
 		server.listen(443, () => {
-			if (this.nodeWallet) {
-				startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
-			}
+		
 			
 			return console.table([
                 { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet?.address}` }
