@@ -1832,7 +1832,7 @@ const checkCurrentRate = async (block: number) => {
 		currentRate = {
 			totalMiners,  minerRate, totalUsrs, epoch
 		}
-		logger(inspect(currentRate))
+		//logger(inspect(currentRate))
 	}
 	
 }
