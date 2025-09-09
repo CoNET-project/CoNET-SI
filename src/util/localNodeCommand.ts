@@ -1938,7 +1938,8 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 
 	CONETProvider_Mainnet.on('block', async block => {
         
-        logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START!`),'\n\n')
+        logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START!`))
+        logger('\r\n\r\n')
 		searchEpochEvent(block)
 		checkNodeUpdate(block)
 		
