@@ -150,12 +150,12 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         try {
             body = JSON.parse(bodyStr)
         } catch (ex) {
-            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddress}\n distorySocket request = ${requestProtocol}`, inspect({ request: bodyStr, addr: socket.remoteAddress, header  }, false, 3, true))
+            console.log(`JSON.parse Ex ERROR! ${socket.remoteAddressShow }\n distorySocket request = ${requestProtocol}`, inspect({ request: bodyStr, addr: socket.remoteAddressShow, header  }, false, 3, true))
             return distorySocket(socket)
         }
 
         if (!body?.data || typeof body.data !== 'string') {
-            logger(Colors.magenta(`startServer HTML body is not string error! ${socket.remoteAddress}`))
+            logger(Colors.magenta(`startServer HTML body is not string error! ${socket.remoteAddressShow}`))
             logger(inspect(body, false, 3, true))
             return distorySocket(socket)
         }
@@ -207,6 +207,11 @@ const socketData = (socket: Socket, server: conet_si_server) => {
     let buffer = Buffer.alloc(0); // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
     let handledOptions = false; // 状态标记，标识是否处理过OPTIONS
 
+    const remoteAddress = socket.remoteAddress?.split(':')
+    const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
+    socket.remoteAddressShow = ip
+
+
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk])
@@ -238,6 +243,8 @@ const socketData = (socket: Socket, server: conet_si_server) => {
        
         return distorySocket(socket)
     })
+
+
 }
 
 class conet_si_server {
@@ -313,7 +320,7 @@ class conet_si_server {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
 					// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
-					console.warn(`[${socket.remoteAddress}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
+					console.warn(`[${socket.remoteAddressShow}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
 				} else {
 					// 其他類型的錯誤
 					console.error(`[${socket.remoteAddress}] 發生未預期的 socket 錯誤:`, err)
@@ -358,10 +365,10 @@ class conet_si_server {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
 					// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
-					console.warn(`[${socket.remoteAddress}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
+					console.warn(`[${socket.remoteAddressShow}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
 				} else {
 					// 其他類型的錯誤
-					console.error(`[${socket.remoteAddress}] 發生未預期的 socket 錯誤:`, err)
+					console.error(`[${socket.remoteAddressShow}] 發生未預期的 socket 錯誤:`, err)
 				}
 				
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
@@ -370,7 +377,7 @@ class conet_si_server {
 			socket.on('end', () => {
 				console.log('Client disconnected.')
 			});
-
+            
 			return socketData( socket, this)
 		})
 
