@@ -1902,7 +1902,9 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		startEPOCH_EventListeningForMining(nodePrivate, domain, nodeIpAddr)
 		return
 	}
+
 	serttData = await getSetup()
+    
 	listenValidatorEpoch = CurrentEpoch = await CONETProvider_Mainnet.getBlockNumber()
 	nodeWallet = nodePrivate.address.toLowerCase()
 	await getFaucet(nodePrivate)
