@@ -1915,10 +1915,11 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	}
 	
     if (blockListeningProcess) {
-        logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block, return!`))
+        
         return
     }
     blockListeningProcess = true
+    logger(Colors.blue(`startEPOCH_EventListeningForMining START`))
 	CONETProvider_Mainnet.on('block', async block => {
         
         
