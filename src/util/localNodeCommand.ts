@@ -1915,7 +1915,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	}
 	
     if (blockListeningProcess) {
-        logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block ${block}, return!`))
+        logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block, return!`))
         return
     }
     blockListeningProcess = true
