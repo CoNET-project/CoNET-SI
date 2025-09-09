@@ -1893,7 +1893,7 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 	resolve (true)
 })
 
-
+let blockListeningProcess = false
 
 export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
 	localNodeKey = nodePrivate
@@ -1913,11 +1913,17 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 	}
 	
 
-	CONETProvider_Mainnet.on('block', block => {
-		searchEpochEvent(block)
-		checkNodeUpdate(block)
+	CONETProvider_Mainnet.on('block', async block => {
+        if (blockListeningProcess) {
+            logger(Colors.blue(`startEPOCH_EventListeningForMining already running on block ${block}, return!`))
+            return
+        }
+        blockListeningProcess = true
+		await searchEpochEvent(block)
+		await checkNodeUpdate(block)
 		
 		if (block % 2) {
+            blockListeningProcess = false
 			return
 		}
 
@@ -1925,9 +1931,10 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 		
 		
 		CurrentEpoch = block
-		moveData(block)
+		await moveData(block)
 		// gossipStart(block)
-		stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
+		await stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
+        blockListeningProcess = false
 	})
 }
 
@@ -2127,23 +2134,28 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 }
 
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
-const checkNodeUpdate = async(block: number) => {
+const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
 	
 	if (!blockTs?.transactions) {
 		return 
 	}
 
-
+    let hasGuardianNodeEvent = false
 	for (let tx of blockTs.transactions) {
 
 		const event = await CONETProvider_Mainnet.getTransactionReceipt(tx)
 		if ( event?.to?.toLowerCase() === GuardianNodeInfo_mainnet) {
-			getAllNodes()
+            if (hasGuardianNodeEvent) {
+                return resolve(true)
+            }
+            hasGuardianNodeEvent = true
+			await getAllNodes()
+            return resolve(true)
 		}
 		
 	}
-}
+})
 
 // export const startEPOCH_EventListeningForMining1 = async () => {
 
