@@ -929,8 +929,17 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
             if (!peer) {
                 peerPool.set(command.Securitykey, { socket, data: prosyData, Connect: connectClass })
-                
-                logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey}, false, 3, true)} add to peerPool and wait another connection`))
+                setTimeout(() => {
+                    const peerTimeout = peerPool.get(command.Securitykey)
+                    if (peerTimeout) {
+                        logger(Colors.red(`SaaS_Sock5_v2 ==========> peerPool timeout 60s delete key ${command.Securitykey}`))
+                        peerPool.delete(command.Securitykey)
+                        if (!peerTimeout.socket.destroyed) {
+                            peerTimeout.socket.end()
+                        }
+                    }
+                }, 30000)
+                logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey, socket: socket.remoteAddressShow}, false, 3, true)} add to peerPool and wait another connection`))
                 return
             }
 
