@@ -144,6 +144,7 @@ export class socks5Connect_v2 {
             return
         }
 
+
         resSocket.on('error', err => { 
             this.cleanup(err)
         })
@@ -156,9 +157,10 @@ export class socks5Connect_v2 {
         }).on('end', () => {
             this.cleanup(new Error(`downStreem on END!`))
         })
-
+        this.targetSocket.resume()
         this.resSocket = resSocket
         resSocket.resume()
+        logger(`socks5Connect_v2 ==========> ${this.info} RES connected! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`)
     }
 
 
