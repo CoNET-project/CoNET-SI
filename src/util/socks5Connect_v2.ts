@@ -112,6 +112,7 @@ export class socks5Connect_v2 {
     private info = ''
     private resIpaddress = ''
     public ready = false
+    private disdestroyed = false
 
     private cleanup = (err: Error|null) => {
         logger(`socks5Connect_v2 ==========> ${this.info} cleanup with Error xxxxxxxxxxxxxxxxxxx ${err?.message}`)
@@ -125,6 +126,8 @@ export class socks5Connect_v2 {
         if (this.targetSocket) {
             this.targetSocket.end()
         }
+        this.disdestroyed = true
+        this.ready = false
         
     }
 
@@ -138,9 +141,14 @@ export class socks5Connect_v2 {
 
     public resConnect = async (resSocket: Socket) => {
 
+        if (this.disdestroyed) {
+            logger(`socks5Connect_v2 ==========> ${this.info} RES disdestroyed, return`)
+            distorySocket(resSocket)
+            return
+        }
 
         if (!this.ready||!this.targetSocket) {
-            logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, wait 1s...`)
+            logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, !this.targetSocket = ${!this.targetSocket} wait 0.1s...`)
             setTimeout(() => {
                 this.resConnect(resSocket)
             }, 100)
@@ -185,10 +193,12 @@ export class socks5Connect_v2 {
             logger(inspect(prosyData, false, 3, true))
             logger(`socks5Connect_v2 req = ${reqSocket.remoteAddressShow} Error! ${ex.message}`)
             distorySocket(reqSocket)
+            this.disdestroyed = true
             return
         }
 
         this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start...`)
         try {
             
             const socket = createConnection ( port, host, () => {
@@ -197,9 +207,12 @@ export class socks5Connect_v2 {
                 reqSocket.setNoDelay?.(true)
                 socket.setKeepAlive(true, 30_000)
                 reqSocket.setKeepAlive?.(true, 30_000)
+                this.reqSocket = reqSocket
+                this.ready = true
 
                 reqSocket.pipe(this.uploadCount).pipe(socket, { end: false }).on('error', err => { 
                     logger(`socks5Connect_v2 ==========> ${this.info} reqSocket.pipe(uploadCount).pipe(socket) on error `, err)
+                    this.cleanup(err)
                 }).on('end', () => {
                     this.cleanup(new Error(`upStreem on END!`))
                 })
@@ -228,8 +241,7 @@ export class socks5Connect_v2 {
                this.cleanup(new Error(`reqSocket Error ${err.message}`))
             })
 
-            this.reqSocket = reqSocket
-            this.ready = true
+            
         } catch (ex: any) {
             this.cleanup(new Error(`catch EX ${ex.message}`))
         }
