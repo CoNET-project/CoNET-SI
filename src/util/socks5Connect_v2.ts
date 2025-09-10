@@ -137,10 +137,13 @@ export class socks5Connect_v2 {
      
 
     public resConnect = async (resSocket: Socket) => {
+
+
         if (!this.ready||!this.targetSocket) {
+            logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, wait 1s...`)
             setTimeout(() => {
                 this.resConnect(resSocket)
-            }, 1000)
+            }, 100)
             return
         }
 
