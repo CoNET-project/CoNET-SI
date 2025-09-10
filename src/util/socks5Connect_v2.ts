@@ -5,6 +5,7 @@ import { logger } from './logger'
 import { inspect } from 'util'
 import { distorySocket } from './htmlResponse'
 import { Transform, TransformCallback } from 'stream'
+import { getHostIPv4Cached } from './globalDnsCache'
 
 class BandwidthCount extends Transform {
     private count = 0
@@ -14,8 +15,8 @@ class BandwidthCount extends Transform {
 
     constructor(private tab: string){
         super({
-            readableHighWaterMark: 1024,
-            writableHighWaterMark: 1024
+            readableHighWaterMark: 64 * 1024,
+            writableHighWaterMark: 64 * 1024
         })
     }
 
@@ -90,21 +91,7 @@ class BandwidthCount extends Transform {
     }
 }
 
-const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Promise(resolve => {
-
-    nodeJs_DNS.resolve4(host, (err, addresses) => {
-        if (err || !addresses?.length) {
-            return resolve('')
-        }
-        
-        const ipv4s = addresses.filter(ip => IP.isPublic(ip))
-        if (!ipv4s.length) {
-            return resolve('')
-        }   
-
-        return resolve(ipv4s[0])
-    })
-})
+const getHostIpv4 = (host: string) => getHostIPv4Cached(host)
 
 export class socks5Connect_v2 {
     private targetSocket: Socket | null = null
@@ -121,14 +108,21 @@ export class socks5Connect_v2 {
         logger(`socks5Connect_v2 ==========> ${this.info} cleanup with Error xxxxxxxxxxxxxxxxxxx ${err?.message}`)
         this.uploadCount.end()
         this.downloadCount.end()
-        this.reqSocket.end()
-        if (this.resSocket) {
-            this.resSocket.end()
-        }
         
-        if (this.targetSocket) {
-            this.targetSocket.end()
+        // 第一阶段：优雅 end()
+        this.reqSocket.end()
+        this.resSocket?.end()
+        this.targetSocket?.end()
+
+        // 第二阶段：超时强制 destroy()，防止长尾悬挂
+        const force = () => {
+            this.reqSocket.destroy()
+            this.resSocket?.destroy()
+            this.targetSocket?.destroy()
         }
+
+        setTimeout(force, 2000).unref()
+
         this.disdestroyed = true
         this.ready = false
         
