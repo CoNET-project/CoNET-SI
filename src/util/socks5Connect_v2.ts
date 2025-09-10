@@ -115,6 +115,7 @@ export class socks5Connect_v2 {
     private resIpaddress = ''
     public ready = false
     private disdestroyed = false
+    private resCallListen: () => void = () => {}
 
     private cleanup = (err: Error|null) => {
         logger(`socks5Connect_v2 ==========> ${this.info} cleanup with Error xxxxxxxxxxxxxxxxxxx ${err?.message}`)
@@ -151,31 +152,41 @@ export class socks5Connect_v2 {
             return
         }
 
-        if (!this.ready||!this.targetSocket) {
-            
-            setTimeout(() => {
-                this.resConnect(resSocket)
-            }, 100)
-            return
+        
+        const connecting = () => {
+            if (this.disdestroyed||!this.targetSocket) {
+                logger(`socks5Connect_v2 resConnect ==========> ${this.info} TARGET disdestroyed, return`)
+                distorySocket(resSocket)
+                return
+            }
+
+            resSocket.on('error', err => { 
+                this.cleanup(err)
+            })
+
+            resSocket.setKeepAlive?.(true, 30_000)
+            resSocket.setNoDelay?.(true)
+
+            this.targetSocket.pipe(this.downloadCount).pipe(resSocket, { end: false }).on('error', err => {
+                this.cleanup(err)
+            }).on('end', () => {
+                this.cleanup(new Error(`downStreem on END!`))
+            })
+            this.targetSocket.resume()
+            this.resSocket = resSocket
+            resSocket.resume()
+            logger(`socks5Connect_v2 ==========> ${this.info} RES connected! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`)
         }
 
+        if (!this.ready||!this.targetSocket) {
+            this.resCallListen = connecting
+            logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, wait...`)
+            return
+            
+        }
 
-        resSocket.on('error', err => { 
-            this.cleanup(err)
-        })
-
-        resSocket.setKeepAlive?.(true, 30_000)
-        resSocket.setNoDelay?.(true)
-
-        this.targetSocket.pipe(this.downloadCount).pipe(resSocket, { end: false }).on('error', err => {
-            this.cleanup(err)
-        }).on('end', () => {
-            this.cleanup(new Error(`downStreem on END!`))
-        })
-        this.targetSocket.resume()
-        this.resSocket = resSocket
-        resSocket.resume()
-        logger(`socks5Connect_v2 ==========> ${this.info} RES connected! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!`)
+        connecting()
+        
     }
 
 
@@ -207,8 +218,6 @@ export class socks5Connect_v2 {
             return
         }
 
-        
-        
         try {
         
             const socket = createConnection ( port, host, () => {
@@ -236,7 +245,7 @@ export class socks5Connect_v2 {
                     }
                 }
                 reqSocket.resume()
-
+                this.resCallListen()
             })
         
             
