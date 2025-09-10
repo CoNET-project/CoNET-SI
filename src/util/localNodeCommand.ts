@@ -30,7 +30,7 @@ import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
 import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes,  } from '../util/util'
-
+import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -855,7 +855,7 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
     });
 };
 
-const peerPool: Map<string, { socket: Socket, data: VE_IPptpStream }> = new Map()
+const peerPool: Map<string, { socket: Socket, data: VE_IPptpStream, Connect: socks5ConnectV2|null }> = new Map()
 
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
@@ -908,8 +908,6 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			}
 			
 
-
-			
             if (!command?.requestData?.length) {
                 logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> command.requestData is null`))
                 return distorySocket(socket)
@@ -921,20 +919,17 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> invalid prosyData [${inspect(prosyData, false, 3, true)}]`))
                 return distorySocket(socket)
             }
+            let connectClass: socks5ConnectV2|null = null
+
+            if (prosyData?.buffer?.length ) {
+                connectClass = new socks5ConnectV2(command.Securitykey, prosyData, socket, command.walletAddress)
+            }
 
             const peer = peerPool.get(command.Securitykey)
+
             if (!peer) {
-
-                peerPool.set(command.Securitykey, { socket, data: prosyData })
-                socket.once('close', () => {
-                    
-                })
-
-                socket.once('error', (err: Error) => {
-                    peerPool.delete(command.Securitykey)
-                    logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> ${command.Securitykey} from ${socket.remoteAddressShow} error and removed from peerPool`), err)
-                })
-
+                peerPool.set(command.Securitykey, { socket, data: prosyData, Connect: connectClass })
+                
                 logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey}, false, 3, true)} add to peerPool and wait another connection`))
                 return
             }
@@ -946,12 +941,14 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 return distorySocket(socket)
             }
 
-            const reqSocket = peer.data.order === 0 ? peer.socket : socket
-            const resSocket = peer.data.order === 0 ? socket : peer.socket
-            const _prosyData = peer.data.order === 0 ? peer.data : prosyData
-        
-
-			return socks5Connect_v2(_prosyData, reqSocket, command.walletAddress, resSocket, command.Securitykey)
+            if (!connectClass) {
+                connectClass = new socks5ConnectV2(command.Securitykey, peer.data, peer.socket, command.walletAddress)
+                connectClass.resConnect(socket)
+                return 
+            }
+            
+            connectClass.resConnect(socket)
+			return 
 		}
 
 		case 'mining': {		
