@@ -941,6 +941,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey, socket: socket.remoteAddressShow}, false, 3, true)} add to peerPool and wait another connection`))
                 return
             }
+
+            
             connectClass = peer.Connect
 
             peerPool.delete(command.Securitykey)
@@ -950,6 +952,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 return distorySocket(socket)
             }
 
+            logger(Colors.red(`SaaS_Sock5_v2 ==========> found peer with Securitykey ${command.Securitykey} ! start resConnect`))
+            
             connectClass.resConnect(socket)
 			return 
 		}
