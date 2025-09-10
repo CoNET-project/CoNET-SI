@@ -1,6 +1,6 @@
 import { createConnection, Socket } from 'net'
 import IP from 'ip'
-import { resolve4 } from 'dns/promises'
+import nodeJs_DNS from 'node:dns'
 import { logger } from './logger'
 import { inspect } from 'util'
 import { distorySocket } from './htmlResponse'
@@ -91,14 +91,16 @@ class BandwidthCount extends Transform {
 }
 
 const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Promise(resolve => {
-    
-    return resolve4(host, 
 
-        //@ts-ignore
-        (err: Error | null, ipv4s: string[]) => {
-        if (err||!ipv4s?.length) {
-            return resolve ('')
+    nodeJs_DNS.resolve4(host, (err, addresses) => {
+        if (err || !addresses?.length) {
+            return resolve('')
         }
+        
+        const ipv4s = addresses.filter(ip => IP.isPublic(ip))
+        if (!ipv4s.length) {
+            return resolve('')
+        }   
 
         return resolve(ipv4s[0])
     })
@@ -189,11 +191,13 @@ export class socks5Connect_v2 {
             this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
             logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
             host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
+
             if ( port < 1 || port > 65535 || ! host) {
                 logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... Error Invalid host${host} or port ${port}`)
                 throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
             }
-            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
+            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
             
         } catch (ex: any) {
             logger(inspect(prosyData, false, 3, true))
@@ -204,7 +208,7 @@ export class socks5Connect_v2 {
         }
 
         
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 4`)
         try {
         
             const socket = createConnection ( port, host, () => {
@@ -246,6 +250,12 @@ export class socks5Connect_v2 {
             reqSocket.on('error', err => {
                this.cleanup(new Error(`reqSocket Error ${err.message}`))
             })
+
+
+            reqSocket.once('close', () => {
+                this.cleanup(new Error(`reqSocket on CLOSE!`))
+            })
+
             logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
             
         } catch (ex: any) {
