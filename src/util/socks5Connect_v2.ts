@@ -181,11 +181,13 @@ export class socks5Connect_v2 {
 
         let host: string, port: number, ipStyle: boolean
 
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
+        
        try {
             port = prosyData.port
             host = prosyData.host || ''
             ipStyle = IP.isV4Format(host)
+            this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
+            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
             host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
             if ( port < 1 || port > 65535 || ! host) {
                 throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
