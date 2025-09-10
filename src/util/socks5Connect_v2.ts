@@ -139,7 +139,7 @@ export class socks5Connect_v2 {
         this.uploadCount = new BandwidthCount(`[${this.uuid}] ==> UPLOAD`)
         this.downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
         this.socks5ConnectFirstConnect(prosyData, reqSocket, wallet, uuid)
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 0`)
+
     }
      
 
@@ -189,15 +189,15 @@ export class socks5Connect_v2 {
             host = prosyData.host || ''
             ipStyle = IP.isV4Format(host)
             this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
-            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
+            
             host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
-            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
+            
 
             if ( port < 1 || port > 65535 || ! host) {
                 logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... Error Invalid host${host} or port ${port}`)
                 throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
             }
-            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
+            
             
         } catch (ex: any) {
             logger(inspect(prosyData, false, 3, true))
@@ -208,7 +208,7 @@ export class socks5Connect_v2 {
         }
 
         
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 4`)
+        
         try {
         
             const socket = createConnection ( port, host, () => {
