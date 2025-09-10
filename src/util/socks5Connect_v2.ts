@@ -151,7 +151,7 @@ export class socks5Connect_v2 {
             logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, !this.targetSocket = ${!this.targetSocket} wait 0.1s...`)
             setTimeout(() => {
                 this.resConnect(resSocket)
-            }, 100)
+            }, 1000)
             return
         }
 
@@ -179,7 +179,7 @@ export class socks5Connect_v2 {
 
         let host: string, port: number, ipStyle: boolean
 
-
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
        try {
             port = prosyData.port
             host = prosyData.host || ''
@@ -198,9 +198,9 @@ export class socks5Connect_v2 {
         }
 
         this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start...`)
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
         try {
-            
+        
             const socket = createConnection ( port, host, () => {
                 logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Success!`)
                 socket.setNoDelay(true)
@@ -240,7 +240,7 @@ export class socks5Connect_v2 {
             reqSocket.on('error', err => {
                this.cleanup(new Error(`reqSocket Error ${err.message}`))
             })
-
+            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
             
         } catch (ex: any) {
             this.cleanup(new Error(`catch EX ${ex.message}`))
