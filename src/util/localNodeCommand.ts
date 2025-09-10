@@ -921,13 +921,12 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
             }
             let connectClass: socks5ConnectV2|null = null
 
-            if (prosyData?.buffer?.length ) {
-                connectClass = new socks5ConnectV2(command.Securitykey, prosyData, socket, command.walletAddress)
-            }
-
             const peer = peerPool.get(command.Securitykey)
 
             if (!peer) {
+                if (prosyData?.buffer?.length ) {
+                    connectClass = new socks5ConnectV2(command.Securitykey, prosyData, socket, command.walletAddress)
+                }
                 peerPool.set(command.Securitykey, { socket, data: prosyData, Connect: connectClass })
                 setTimeout(() => {
                     const peerTimeout = peerPool.get(command.Securitykey)
@@ -942,20 +941,15 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 logger(Colors.red(`SaaS_Sock5_v2 ==========> can not found peer with Securitykey ${inspect({Securitykey: command.Securitykey, socket: socket.remoteAddressShow}, false, 3, true)} add to peerPool and wait another connection`))
                 return
             }
+            connectClass = peer.Connect
 
             peerPool.delete(command.Securitykey)
 
-            if (peer.socket.destroyed) {
-                logger(Colors.red(`SaaS_Sock5_v2 ==========> peer socket destroyed`))
+            if (peer.socket.destroyed || !connectClass ) {
+                logger(Colors.red(`SaaS_Sock5_v2 ==========> Securitykey ${inspect({Securitykey: command.Securitykey, socket: socket.remoteAddressShow}, false, 3, true)}  peer socket destroyed = ${peer.socket.destroyed} or connectClass is null`))
                 return distorySocket(socket)
             }
 
-            if (!connectClass) {
-                connectClass = new socks5ConnectV2(command.Securitykey, peer.data, peer.socket, command.walletAddress)
-                connectClass.resConnect(socket)
-                return 
-            }
-            
             connectClass.resConnect(socket)
 			return 
 		}
