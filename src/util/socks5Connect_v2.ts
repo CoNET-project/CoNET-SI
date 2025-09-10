@@ -182,7 +182,6 @@ export class socks5Connect_v2 {
             this.resCallListen = connecting
             logger(`socks5Connect_v2 ==========> ${this.info} RES not ready, wait...`)
             return
-            
         }
 
         connecting()
