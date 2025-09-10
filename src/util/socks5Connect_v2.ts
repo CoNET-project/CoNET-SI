@@ -190,8 +190,10 @@ export class socks5Connect_v2 {
             logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 1`)
             host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
             if ( port < 1 || port > 65535 || ! host) {
+                logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... Error Invalid host${host} or port ${port}`)
                 throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
             }
+            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
             
         } catch (ex: any) {
             logger(inspect(prosyData, false, 3, true))
@@ -201,8 +203,8 @@ export class socks5Connect_v2 {
             return
         }
 
-        this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
-        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 2`)
+        
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
         try {
         
             const socket = createConnection ( port, host, () => {
