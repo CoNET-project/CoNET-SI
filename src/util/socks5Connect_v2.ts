@@ -132,10 +132,12 @@ export class socks5Connect_v2 {
     }
 
     constructor(private uuid: string, private prosyData: VE_IPptpStream, private reqSocket: Socket, private wallet: string) {
-
+        this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${prosyData.host}:${prosyData.port}`
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start.....`)
         this.uploadCount = new BandwidthCount(`[${this.uuid}] ==> UPLOAD`)
         this.downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
         this.socks5ConnectFirstConnect(prosyData, reqSocket, wallet, uuid)
+        logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 0`)
     }
      
 
