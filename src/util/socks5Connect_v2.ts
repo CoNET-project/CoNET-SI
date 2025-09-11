@@ -214,7 +214,6 @@ export class socks5Connect_v2 {
         try {
         
             const socket = createConnection ( port, host, () => {
-                logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Success!`)
                 socket.setNoDelay(true)
                 reqSocket.setNoDelay?.(true)
                 socket.setKeepAlive(true, 30_000)
@@ -257,8 +256,6 @@ export class socks5Connect_v2 {
             reqSocket.once('close', () => {
                 this.cleanup(new Error(`reqSocket on CLOSE!`))
             })
-
-            logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start... stage 3`)
             
         } catch (ex: any) {
             this.cleanup(new Error(`catch EX ${ex.message}`))
