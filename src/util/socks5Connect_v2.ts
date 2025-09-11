@@ -25,7 +25,7 @@ class BandwidthCount extends Transform {
             this.startTime = Date.now()
         }
         this.count += chunk.length
-        //logger(`${this.tab} start at ${this.startTime} BandwidthCount ${this.count} bytes`)
+        logger(`${this.tab} start at ${this.startTime} BandwidthCount ${this.count} bytes`)
         this.push(chunk)
         callback()
     }
