@@ -1936,9 +1936,7 @@ const blockProcess = async (block: number ) => {
     logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
     
     await nodeRestartEvent(block)
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} nodeRestartEvent finished! ${new Date().toISOString()}`))
     await checkNodeUpdate(block)
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} checkNodeUpdate finished! ${new Date().toISOString()}`))
     
     if (block % 2) {
         runningBlockProcess = false
@@ -1948,7 +1946,6 @@ const blockProcess = async (block: number ) => {
     
     CurrentEpoch = block
     await moveData(block)
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} moveData finished! ${new Date().toISOString()}`))
 
     // gossipStart(block)
     await stratlivenessV2(block, localNodeKey, nodeDomain, nodeIpAddr)
