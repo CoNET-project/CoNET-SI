@@ -1898,7 +1898,7 @@ let searchEpochEventProcess = false
 
 let searchEpochEventRestartTimeout:  NodeJS.Timeout
 
-const searchEpochEvent = (block: number) => new Promise (async resolve=> {
+const nodeRestartEvent = (block: number) => new Promise (async resolve=> {
 
 	//logger(`searchEpochEvent started on block [${block}]`)
 	clearTimeout(searchEpochEventRestartTimeout)
@@ -1925,9 +1925,38 @@ const searchEpochEvent = (block: number) => new Promise (async resolve=> {
 })
 
 let blockListeningProcess = false
+let runningBlockProcess = false
 
-export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, nodeIpAddr: string ) => {
+const blockProcess = async (block: number ) => {
+    if (runningBlockProcess) {
+        return
+    }
+    runningBlockProcess = true
+    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START!`))
+    logger('\r\n\r\n')
+    await nodeRestartEvent(block)
+    await checkNodeUpdate(block)
+    
+    if (block % 2) {
+        return
+    }
+
+    
+    CurrentEpoch = block
+    await moveData(block)
+    // gossipStart(block)
+    await stratlivenessV2(block, localNodeKey, nodeDomain, nodeIpAddr)
+    runningBlockProcess = false
+}
+
+let nodeDomain: string 
+let nodeIpAddr: string
+
+export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, _nodeIpAddr: string ) => {
 	localNodeKey = nodePrivate
+    nodeDomain = domain
+    nodeIpAddr = _nodeIpAddr
+
 	const result = await getAllNodes()
 	if (!result) {
 		
@@ -1949,27 +1978,7 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
     blockListeningProcess = true
     logger(Colors.blue(`startEPOCH_EventListeningForMining START`))
 
-
-	CONETProvider_Mainnet.on('block', async block => {
-        
-        logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START!`))
-        logger('\r\n\r\n')
-		searchEpochEvent(block)
-		checkNodeUpdate(block)
-		
-		if (block % 2) {
-			return
-		}
-
-		
-		
-		
-		CurrentEpoch = block
-		await moveData(block)
-		// gossipStart(block)
-		await stratlivenessV2(block, nodePrivate, domain, nodeIpAddr)
-        
-	})
+	CONETProvider_Mainnet.on('block', blockProcess)
 }
 
 interface IGossipStatus {
@@ -2014,16 +2023,17 @@ interface nodeResponse {
 
 let moveDataProcess = false
 
-const moveData = (block: number) => {
+const moveData = (block: number) => new Promise(executor => {
 	if (moveDataProcess) {
-		return
+		return executor(true)
 	}
+
 	moveDataProcess = true
 	const _wallets = [...validatorMinerPool.keys()]
 	if (!_wallets) {
 		moveDataProcess = false
 		logger(Colors.magenta(`moveData doing ${block} validatorPool.get NULL size Error!`))
-		return
+		return executor(true)
 	}
 
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets.length}) `))
@@ -2051,7 +2061,10 @@ const moveData = (block: number) => {
 
 	moveDataProcess = false
 	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
-}
+})
+
+
+
 const apiEndpoint = `https://apiv4.conet.network/api/`
 const rateUrl = `${apiEndpoint}miningRate?eposh=`
 const FaucetURL = `${apiEndpoint}conet-faucet`
@@ -2119,14 +2132,17 @@ let stratlivenessV2Process = false
 let localNodeKey: Wallet
 
 
-const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => {
+const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: string, nodeIpAddr: string) => new Promise( async executor =>{
 	if (stratlivenessV2Process) {
-		return
+		return executor(true)
 	}
+
 	stratlivenessV2Process = true
 	const rate = currentRate
+
 	if (!rate) {
 		stratlivenessV2Process = false
+        executor(true)
 		return logger(Colors.red(`stratlivenessV2 currentRate is NULL error STOP!`))
 	}
 
@@ -2165,7 +2181,8 @@ const stratlivenessV2 = async (block: number, nodeWprivateKey: Wallet, nodeDomai
 
 	await Promise.all(processPool)
 	stratlivenessV2Process = false
-}
+    executor(true)
+})
 
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
 const checkNodeUpdate = async(block: number) => new Promise (async resolve => {

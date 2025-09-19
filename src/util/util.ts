@@ -110,6 +110,7 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 	paymendUser.set(fromAddr, true)
 }
 
+
 let getAllNodesProcess = false
 let Guardian_Nodes: nodeInfo[] = []
 
