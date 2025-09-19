@@ -1909,6 +1909,7 @@ const nodeRestartEvent = (block: number) => new Promise (async resolve=> {
 	}
 
 	searchEpochEventProcess = true
+
 	await Promise.all([
 		checkCurrentRate(block),
 		getRestart(block)
@@ -1940,6 +1941,7 @@ const blockProcess = async (block: number ) => {
     logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} checkNodeUpdate finished! ${new Date().toISOString()}`))
     
     if (block % 2) {
+        runningBlockProcess = false
         return logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} END! ${new Date().toISOString()}`))
     }
 
