@@ -2190,6 +2190,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 })
 
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
+
 const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
 	
@@ -2211,6 +2212,7 @@ const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 		}
 		
 	}
+    resolve(true)
 })
 
 // export const startEPOCH_EventListeningForMining1 = async () => {
