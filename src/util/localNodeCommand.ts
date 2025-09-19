@@ -1942,7 +1942,7 @@ const blockProcess = async (block: number ) => {
     
     if (block % 2) {
         runningBlockProcess = false
-        return logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} END! ${new Date().toISOString()}`))
+        return logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
     }
 
     
@@ -1953,7 +1953,7 @@ const blockProcess = async (block: number ) => {
     // gossipStart(block)
     await stratlivenessV2(block, localNodeKey, nodeDomain, nodeIpAddr)
     runningBlockProcess = false
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} END! ${new Date().toISOString()}`))
+    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
 }
 
 let nodeDomain: string 
