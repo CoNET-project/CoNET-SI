@@ -323,7 +323,7 @@ class conet_si_server {
 	private startServer = () => {
 		
 		const server = createServer( async socket => {
-            logger(`createServerSSL total connect = ${await totalCOnnect(server)} *************************** `)
+            logger(`startServer total connect =**************************  ${await totalCOnnect(server)} `)
             socket.setNoDelay(true)
             
 			socket.on('error', (err: any) => {
@@ -339,8 +339,8 @@ class conet_si_server {
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
 			})
 
-			socket.on('end', () => {
-				console.log('Client disconnected.');
+			socket.on('end', async () => {
+				logger(`startServer total connect = ************************** ${await totalCOnnect(server)} `)
 			})
 
 			return socketData (socket, this)
@@ -372,7 +372,8 @@ class conet_si_server {
 
 		
 		const server = createServerSSL (options, async socket => {
-            logger(`createServerSSL total connect = ${await totalCOnnect(server)} ************************** `)
+            logger(`createServerSSL total connect =  **************************  ${await totalCOnnect(server)} `)
+
             socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
@@ -387,8 +388,9 @@ class conet_si_server {
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
 			})
 
-			socket.on('end', () => {
-				console.log('Client disconnected.')
+			socket.on('end', async () => {
+                logger(`createServerSSL Client disconnected. ************************** ${await totalCOnnect(server)} `)
+				
 			});
             
 			return socketData( socket, this)
