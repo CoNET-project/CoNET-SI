@@ -322,8 +322,8 @@ class conet_si_server {
     
 	private startServer = () => {
 		
-		const server = createServer( socket => {
-            logger(`createServerSSL total connect = ${totalCOnnect(server)} ****** `)
+		const server = createServer( async socket => {
+            logger(`createServerSSL total connect = ${await totalCOnnect(server)} *************************** `)
             socket.setNoDelay(true)
             
 			socket.on('error', (err: any) => {
@@ -372,7 +372,7 @@ class conet_si_server {
 
 		
 		const server = createServerSSL (options, async socket => {
-            logger(`createServerSSL total connect = ${totalCOnnect(server)} ****** `)
+            logger(`createServerSSL total connect = ${await totalCOnnect(server)} ************************** `)
             socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
