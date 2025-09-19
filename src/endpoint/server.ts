@@ -2,7 +2,7 @@
 import { join } from 'node:path'
 import { inspect, } from 'node:util'
 import Cluster from 'node:cluster'
-import {Socket, createServer} from 'node:net'
+import {Socket, createServer, Server} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
 import Colors from 'colors/safe'
@@ -247,6 +247,15 @@ const socketData = (socket: Socket, server: conet_si_server) => {
 
 }
 
+
+const totalCOnnect = (server: Server ): Promise<number> => new Promise( executor => {
+    server.getConnections((err, count) => {
+        if (err) {
+            return executor (0)
+        }
+        return executor (count)
+    })
+})
 class conet_si_server {
 
 	private PORT=0
@@ -310,10 +319,11 @@ class conet_si_server {
 	constructor () {
         this.initSetupData ()
     }
-
+    
 	private startServer = () => {
 		
 		const server = createServer( socket => {
+            logger(`createServerSSL total connect = ${totalCOnnect(server)} ****** `)
             socket.setNoDelay(true)
             
 			socket.on('error', (err: any) => {
@@ -358,8 +368,11 @@ class conet_si_server {
 			key,
 			cert
 		}
+
+
 		
-		const server = createServerSSL (options, socket => {
+		const server = createServerSSL (options, async socket => {
+            logger(`createServerSSL total connect = ${totalCOnnect(server)} ****** `)
             socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
