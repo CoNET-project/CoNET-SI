@@ -1940,7 +1940,7 @@ const blockProcess = async (block: number ) => {
     logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} checkNodeUpdate finished! ${new Date().toISOString()}`))
     
     if (block % 2) {
-        return
+        return logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} END! ${new Date().toISOString()}`))
     }
 
     
