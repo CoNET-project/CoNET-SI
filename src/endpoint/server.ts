@@ -323,6 +323,7 @@ class conet_si_server {
 	private startServer = () => {
 		
 		const server = createServer( async socket => {
+            const start = Date.now()
             logger(`startServer total connect =**************************  ${await totalCOnnect(server)} `)
             socket.setNoDelay(true)
             
@@ -340,7 +341,8 @@ class conet_si_server {
 			})
 
 			socket.on('end', async () => {
-				logger(`startServer total connect = ************************** ${await totalCOnnect(server)} `)
+                const duration = Date.now() - start
+				logger(`startServer socket.on('end') total connect = ************************** ${await totalCOnnect(server)} keep time = ${duration}`)
 			})
 
 			return socketData (socket, this)
@@ -373,13 +375,14 @@ class conet_si_server {
 		
 		const server = createServerSSL (options, async socket => {
             logger(`createServerSSL total connect =  **************************  ${await totalCOnnect(server)} `)
-
+            const start = Date.now()
             socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
 					// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
 					console.warn(`[${socket.remoteAddressShow}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
+                    
 				} else {
 					// 其他類型的錯誤
 					console.error(`[${socket.remoteAddressShow}] 發生未預期的 socket 錯誤:`, err)
@@ -389,9 +392,10 @@ class conet_si_server {
 			})
 
 			socket.on('end', async () => {
-                logger(`createServerSSL Client disconnected. ************************** ${await totalCOnnect(server)} `)
+                const duration = Date.now() - start
+				logger(`createServerSSL socket.on('end') total connect = ************************** ${await totalCOnnect(server)} keep time = ${duration}`)
 				
-			});
+			})
             
 			return socketData( socket, this)
 		})
