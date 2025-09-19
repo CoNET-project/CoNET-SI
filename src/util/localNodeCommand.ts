@@ -2068,6 +2068,7 @@ const moveData = (block: number) => new Promise(executor => {
 
 	moveDataProcess = false
 	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
+    executor(true)
 })
 
 
