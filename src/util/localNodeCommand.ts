@@ -2195,23 +2195,27 @@ const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
 	
 	if (!blockTs?.transactions) {
-		return 
+		return resolve(true)
 	}
 
     let hasGuardianNodeEvent = false
+
 	for (let tx of blockTs.transactions) {
 
 		const event = await CONETProvider_Mainnet.getTransactionReceipt(tx)
+
 		if ( event?.to?.toLowerCase() === GuardianNodeInfo_mainnet) {
-            if (hasGuardianNodeEvent) {
-                return resolve(true)
-            }
+            
             hasGuardianNodeEvent = true
-			await getAllNodes()
-            return resolve(true)
+			
+            break
 		}
 		
 	}
+    if (hasGuardianNodeEvent) {
+        await getAllNodes()
+    }
+    
     resolve(true)
 })
 
