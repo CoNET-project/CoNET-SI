@@ -125,9 +125,11 @@ export const getAllNodes = () => new Promise(async resolve=> {
 
 	getAllNodesProcess = true
 	const tempGuardian_Nodes: nodeInfo[] = [] 
-	const _nodes = await GuardianNodesMainnet.getAllNodes(0, 1000)
-	for (let i = 0; i < _nodes.length; i ++) {
-		const node = _nodes[i]
+	const _nodes1 = await GuardianNodesMainnet.getAllNodes(0, 400)
+    const _nodes2 = await GuardianNodesMainnet.getAllNodes(400, 800)
+    const _node = [..._nodes1, ..._nodes2]
+	for (let i = 0; i < _node.length; i ++) {
+		const node = _node[i]
 		const id = parseInt(node[0].toString())
 		const pgpString: string = Buffer.from( node[1], 'base64').toString()
 		const domain: string = node[2]
@@ -146,10 +148,11 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		routerInfo.set(domain, itemNode)
 		tempGuardian_Nodes.push(itemNode)
   	}
-	logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
+	
 	getAllNodesProcess = false
 
 	Guardian_Nodes = tempGuardian_Nodes
+    logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
 	resolve(true)
 })
 
@@ -328,7 +331,7 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 
 const test = async () => {
 	await getAllNodes()
-	const kkk = await getRoute('D888C4E8C7D58AAF')
+	const kkk = await getRoute('F81BF37456250CCF')
 	logger(kkk)
 
 }
