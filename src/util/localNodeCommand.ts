@@ -857,6 +857,21 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
 
 const peerPool: Map<string, { socket: Socket, data: VE_IPptpStream, Connect: socks5ConnectV2|null }> = new Map()
 
+
+const setToUssrPool = (_wallet: string) => {
+
+    const wallet = _wallet.toLowerCase()
+    const timeout = validatorUserPool.get(wallet)
+    clearTimeout(timeout)
+
+    const _timeout = setTimeout(() => {
+        logger(`DELETE validatorWallet ${wallet} from pool total = ${validatorUserPool.size}`)
+        validatorUserPool.delete(wallet)
+    }, 1000 * 60 * 30)
+
+    validatorUserPool.set (wallet, _timeout)
+}
+
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
@@ -867,6 +882,8 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				logger(Colors.red(`[${command.walletAddress}] Payment Error!`))
 				return distorySocketPayment(socket)
 			}
+            setToUssrPool(command.walletAddress)
+
 			logger(Colors.magenta(`${command.walletAddress} passed payment [${payment}] process SilentPass!`))
 			const prosyData = command.requestData[0]
 			return socks5Connectv2(prosyData, socket, command.walletAddress)
@@ -888,7 +905,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
             }
 
 			const prosyData: VE_IPptpStream = command.requestData[0]
-
+            setToUssrPool(command.walletAddress)
 
 			if(prosyData?.type && /http/i.test(prosyData.type)) {
 				logger(`SaaS_Sock5 call socks5ConnectV3`)
@@ -907,7 +924,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return distorySocketPayment(socket)
 			}
 			
-
+            setToUssrPool(command.walletAddress)
             if (!command?.requestData?.length) {
                 logger(Colors.red(`SaaS_Sock5_v2 ERROR ==========> command.requestData is null`))
                 return distorySocket(socket)
@@ -920,7 +937,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
                 return distorySocket(socket)
             }
             let connectClass: socks5ConnectV2|null = null
-
+            
             const peer = peerPool.get(command.Securitykey)
 
             if (!peer) {
