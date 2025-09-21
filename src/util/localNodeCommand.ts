@@ -2082,7 +2082,7 @@ const moveData = (block: number) => new Promise(executor => {
 
 	moveDataProcess = false
 	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
-    logger(inspect(userWallets, false, 3, true))
+    logger(inspect(gossipStatus, false, 3, true))
     executor(true)
 })
 
