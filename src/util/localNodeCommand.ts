@@ -2066,6 +2066,7 @@ const moveData = (block: number) => new Promise(executor => {
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 	previousGossipStatus.userWallets = userWallets
+
 	gossipStatus = {
 		epoch: block,
 		totalConnectNode: 0,
@@ -2082,7 +2083,7 @@ const moveData = (block: number) => new Promise(executor => {
 
 	moveDataProcess = false
 	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
-    logger(inspect(gossipStatus, false, 3, true))
+    logger(inspect(previousGossipStatus, false, 3, true))
     executor(true)
 })
 
