@@ -215,7 +215,7 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
     socket.setNoDelay(true)
     socket.setKeepAlive(true, 30_000)
 
-    logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${socket.remoteAddress}`)
+    logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${socket.remoteAddressShow}`)
 
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {
