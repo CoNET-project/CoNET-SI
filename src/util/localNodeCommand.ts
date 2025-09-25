@@ -1425,7 +1425,7 @@ const safeClose = (s: Socket) => {
      if (s.destroyed) return
      s.end() // 发送 FIN
     // 如果对端不响应，50ms 后强制销毁1
-     s.setTimeout?.(50, () => { if (!s.destroyed) s.destroy() })
+    s.setTimeout?.(10, () => { if (!s.destroyed) s.destroy() })
    } catch {}
 }
 
