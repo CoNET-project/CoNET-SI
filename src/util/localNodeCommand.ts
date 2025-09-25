@@ -1420,7 +1420,7 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     })
 }
 
-export function safeClose(s: Socket, idleMs = 200, hardCapMs = 0): void {
+export function safeClose(s: Socket, idleMs = 200, hardCapMs = 10_000): void {
   try {
     if (!s || s.destroyed) return
 
