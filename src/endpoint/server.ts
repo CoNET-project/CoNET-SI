@@ -211,7 +211,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
     const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
     socket.remoteAddressShow = ip
 
-    socket.setTimeout(120_000, () => { if (!socket.destroyed) socket.destroy() })
+    socket.setTimeout(60_000, () => { if (!socket.destroyed) socket.destroy() })
     socket.setNoDelay(true)
     socket.setKeepAlive(true, 30_000)
 

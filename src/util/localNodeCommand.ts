@@ -1388,6 +1388,7 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     ].join('\r\n')
 
     const conn = createConnection(port, ipAddr, () => {
+        logger(Colors.red(`socketForwardV2 [V2-HTTP] Forward to node ${ipAddr}:${port} `))
         conn.setNoDelay(true)
         sourceSocket.setNoDelay?.(true)
         
@@ -1413,7 +1414,6 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
         safeClose(sourceSocket)
     })
 
-    
 
     sourceSocket.on('close', () => {
         safeClose(conn)
@@ -1573,17 +1573,12 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 	const conn = createConnection ( port, ipAddr, () => {
 
-		logger (Colors.blue (`Fardward packet to node ${ ipAddr }:${port} success !`))
+		logger (Colors.blue (`socketForward packet to node ${ ipAddr }:${port} success !`))
 		
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
-        conn.setTimeout(120_000, () => { if (!conn.destroyed) conn.destroy() })
-
-        sourceSocket.on ('end', () => {
-			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			safeClose(conn)
-		})
+        conn.setTimeout(60_000, () => { if (!conn.destroyed) conn.destroy() })
 
 
         // 首包可能较大，处理写背压，避免被内核缓冲憋住
@@ -1604,8 +1599,6 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 	})
 
-    
-
 	
 	conn.on ('error', err => {
 		logger (Colors.red(`Fardward node ${ ipAddr }:${port} on error [${err.message}] STOP connect \n`) )
@@ -1616,6 +1609,13 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 		logger(Colors.magenta(`Fardward node ${ ipAddr }:${port} on Close!`))
 		safeClose(sourceSocket)
 	})
+
+    sourceSocket.once ('end', () => {
+        logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
+        safeClose(conn)
+    })
+
+
 }
 
 export const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[]) => {
