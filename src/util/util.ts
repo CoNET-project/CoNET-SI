@@ -134,7 +134,10 @@ const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
             logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
             nodes = [...nodes, ..._nodes]
 		} catch (ex) {
-			loop = false
+			setTimeout(async () => {
+                executor(await _getAllNodes())
+                logger(`_getAllNodes catch ERROR! try again!`)
+            }, 5000)
 		}
 
 	} while (loop)
