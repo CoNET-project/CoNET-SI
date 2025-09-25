@@ -117,6 +117,32 @@ let getAllNodesProcess = false
 let Guardian_Nodes: nodeInfo[] = []
 
 
+const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
+
+	let i = 0
+	let nodes: any [] = []
+	let loop = true
+	const length = 100
+	do {
+		try {
+			const _nodes: any[] = await GuardianNodesMainnet.getAllNodes(i, length)
+			
+			if (_nodes.length < length || !_nodes) {
+				loop = false
+			}
+			i += length
+            logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
+            nodes = [...nodes, ..._nodes]
+		} catch (ex) {
+			loop = false
+		}
+
+	} while (loop)
+
+	return executor(nodes)
+	
+})
+
 export const getAllNodes = () => new Promise(async resolve=> {
 	
 	if (getAllNodesProcess) {
@@ -125,9 +151,8 @@ export const getAllNodes = () => new Promise(async resolve=> {
 
 	getAllNodesProcess = true
 	const tempGuardian_Nodes: nodeInfo[] = [] 
-	const _nodes1 = await GuardianNodesMainnet.getAllNodes(0, 400)
-    const _nodes2 = await GuardianNodesMainnet.getAllNodes(400, 800)
-    const _node = [..._nodes1, ..._nodes2]
+
+    const _node = await _getAllNodes()
 	for (let i = 0; i < _node.length; i ++) {
 		const node = _node[i]
 		const id = parseInt(node[0].toString())
@@ -331,8 +356,8 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 
 const test = async () => {
 	await getAllNodes()
-	const kkk = await getRoute('F81BF37456250CCF')
-	logger(kkk)
+	// const kkk = await getRoute('F81BF37456250CCF')
+	// logger(kkk)
 
 }
-// test()
+test()
