@@ -220,7 +220,6 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk])
-
         
         const peek = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii')
         const separator = '\r\n\r\n'

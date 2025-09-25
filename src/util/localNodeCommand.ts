@@ -1955,14 +1955,14 @@ const blockProcess = async (block: number ) => {
         return
     }
     runningBlockProcess = true
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
+    //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
     
     await nodeRestartEvent(block)
     await checkNodeUpdate(block)
     
     if (block % 2) {
         runningBlockProcess = false
-        return logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
+        return //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
     }
 
     
