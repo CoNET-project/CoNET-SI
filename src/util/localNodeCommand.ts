@@ -1420,13 +1420,71 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     })
 }
 
-const safeClose = (s: Socket) => {
-    try {
-     if (s.destroyed) return
-     s.end() // 发送 FIN
-    // 如果对端不响应，50ms 后强制销毁1
-    s.setTimeout?.(10, () => { if (!s.destroyed) s.destroy() })
-   } catch {}
+export function safeClose(s: Socket, idleMs = 200, hardCapMs = 0): void {
+  try {
+    if (!s || s.destroyed) return
+
+    // 半关闭本端写，仍允许对端继续下行
+    s.end()
+
+    let timer: NodeJS.Timeout | null = null
+    let hardCapTimer: NodeJS.Timeout | null = null
+    let lastActivity = Date.now()
+
+    const schedule = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        const idle = Date.now() - lastActivity
+        if (idle >= idleMs) {
+          cleanup()
+          if (!s.destroyed) s.destroy()
+        } else {
+          // 极少数情况下（系统暂停/抖动）兜底再排一次
+          schedule()
+        }
+      }, idleMs)
+      // 避免 Node 进程因计时器常驻：不阻止进程退出（Node ≥ v11 有 unref）
+      ;(timer as any).unref?.()
+    }
+
+    const onData = (_chunk: Buffer) => {
+      // 只要看到下行数据，就刷新活动时间并顺延销毁
+      lastActivity = Date.now()
+      schedule()
+    }
+
+    const onEndOrError = () => {
+      // 对端明确结束或出错，直接销毁
+      cleanup()
+      if (!s.destroyed) s.destroy()
+    }
+
+    const cleanup = () => {
+      if (timer) { clearTimeout(timer); timer = null }
+      if (hardCapTimer) { clearTimeout(hardCapTimer); hardCapTimer = null }
+      s.off('data', onData)
+      s.off('error', onEndOrError)
+      s.off('end', onEndOrError)
+      s.off('close', cleanup)
+    }
+
+    s.on('data', onData)
+    s.once('error', onEndOrError)
+    s.once('end', onEndOrError)
+    s.once('close', cleanup)
+
+    // 启动第一次空闲计时
+    schedule()
+
+    // 可选：给一个总硬上限（例如 10s），到点必然销毁，防止极端长尾
+    if (hardCapMs > 0) {
+      hardCapTimer = setTimeout(() => {
+        cleanup()
+        if (!s.destroyed) s.destroy()
+      }, hardCapMs)
+      ;(hardCapTimer as any).unref?.()
+    }
+  } catch {}
 }
 
 const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
