@@ -2175,7 +2175,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 		return logger(Colors.red(`stratlivenessV2 currentRate is NULL error STOP!`))
 	}
 
-	logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
+	//logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 	// logger(inspect(rate, false, 3, true))
 
 	// clusterNodes = await getApiNodes()

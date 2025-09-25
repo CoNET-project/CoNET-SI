@@ -203,7 +203,7 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
 	socket.write(response)
 }
 
-const socketData = (socket: Socket, server: conet_si_server) => {
+const socketData = async (socket: Socket, serverClass: conet_si_server, server: Server) => {
     let buffer = Buffer.alloc(0); // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
     let handledOptions = false; // 状态标记，标识是否处理过OPTIONS
 
@@ -214,6 +214,8 @@ const socketData = (socket: Socket, server: conet_si_server) => {
     socket.setTimeout(60_000, () => { if (!socket.destroyed) socket.destroy() })
     socket.setNoDelay(true)
     socket.setKeepAlive(true, 30_000)
+
+    logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${socket.remoteAddress}`)
 
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {
@@ -241,7 +243,7 @@ const socketData = (socket: Socket, server: conet_si_server) => {
         if (headStr.length > 0 && (headStr.startsWith('POST') || headStr.startsWith('GET'))) {
             socket.removeAllListeners('data')
             // 直接把当前 Buffer 交给 getDataPOST（它会继续按 Buffer 读取）
-            return getDataPOST(socket, server, buffer)
+            return getDataPOST(socket, serverClass, buffer)
         }
        
         return distorySocket(socket)
@@ -329,7 +331,7 @@ class conet_si_server {
 		
 		const server = createServer( async socket => {
             const start = Date.now()
-            logger(`startServer total connect =**************************  ${await totalCOnnect(server)} `)
+            
             socket.setNoDelay(true)
             
 			socket.on('error', (err: any) => {
@@ -350,7 +352,7 @@ class conet_si_server {
 				logger(`startServer socket.on('end') total connect = ************************** ${await totalCOnnect(server)} keep time = ${duration}`)
 			})
 
-			return socketData (socket, this)
+			return socketData (socket, this, server)
 
 		})
 
@@ -379,7 +381,7 @@ class conet_si_server {
 
 		
 		const server = createServerSSL (options, async socket => {
-            logger(`createServerSSL total connect =  **************************  ${await totalCOnnect(server)} `)
+            
             const start = Date.now()
             socket.setNoDelay(true)
 			socket.on('error', (err: any) => {
@@ -402,7 +404,7 @@ class conet_si_server {
 				
 			})
             
-			return socketData( socket, this)
+			return socketData( socket, this, server)
 		})
 
 		server.listen(443, () => {
