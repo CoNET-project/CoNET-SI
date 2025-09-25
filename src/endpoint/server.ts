@@ -211,6 +211,9 @@ const socketData = (socket: Socket, server: conet_si_server) => {
     const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
     socket.remoteAddressShow = ip
 
+    socket.setTimeout(120_000, () => { if (!socket.destroyed) socket.destroy() })
+    socket.setNoDelay(true)
+    socket.setKeepAlive(true, 30_000)
 
     // 使用 .on 来持续监听数据，而不是 .once
     socket.on('data', (chunk: Buffer) => {

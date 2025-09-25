@@ -1159,24 +1159,21 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 	} catch (ex: any) {
 		logger(inspect(prosyData, false, 3, true))
 		logger(`socks5Connect ${resoestSocket.remoteAddressShow} Error! ${ex.message}`)
-		return distorySocket(resoestSocket)
+		return safeClose(resoestSocket)
 	}
 
 
-	try {
+
 		const socket = createConnection ( port, host, () => {
             logger(`socks5Connect ${resoestSocket.remoteAddressShow} ==> ${host}:${port} Success!`)
+            socket.setTimeout(120_000, () => { if (!socket.destroyed) socket.destroy() })
             socket.setNoDelay(true)
-            resoestSocket.setNoDelay?.(true)
-
             socket.setKeepAlive(true, 30_000)
-            resoestSocket.setKeepAlive?.(true, 30_000)
 
 			socket.pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
             resoestSocket.pipe(socket, { end: false }).on('error', err => { /* log */ })
 
-			socket.on('end', () => resoestSocket.end())
-            resoestSocket.on('end', () => socket.end())
+            
 
 			const data = Buffer.from(prosyData.buffer, 'base64')
             if (data && data.length) {
@@ -1191,13 +1188,12 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 			resoestSocket.resume()
 		})
 	
-		socket.once('end', () => { resoestSocket.end().destroy(); });
-        socket.on('error', err => { resoestSocket.end().destroy(); /* log */ });
-        resoestSocket.on('error', err => { resoestSocket.end().destroy(); /* log */ });
-	} catch (ex) {
-		logger(`createConnection On catch ${wallet}`, ex)
-		resoestSocket.end()
-	}
+		socket.once('end', () => safeClose(resoestSocket))
+        socket.on('error', err => safeClose(resoestSocket))
+
+        resoestSocket.on('error', () => safeClose(socket))
+        resoestSocket.on('end', () => safeClose(socket))
+
 
 }
 
@@ -1394,44 +1390,44 @@ const socketForwardV2 = (ipAddr: string, port: number, sourceSocket: Socket, enc
     const conn = createConnection(port, ipAddr, () => {
         conn.setNoDelay(true)
         sourceSocket.setNoDelay?.(true)
+        
+        conn.setTimeout(120_000, () => { if (!conn.destroyed) conn.destroy() })
+
 
         if (!conn.write(rawHttpRequest)) {
             sourceSocket.pause()
             conn.once('drain', () => sourceSocket.resume())
         }
-        
+
+            // 直接流式转发，低延迟、低内存
+        conn.pipe(sourceSocket).on('error', () => { /* no-op */ })
+        sourceSocket.pipe(conn).on('error', () => { /* no-op */ })
     })
 
-    // Buffer the entire response from Node 2
-    const responseChunks: Buffer[] = [];
-    conn.on('data', (chunk) => {
-        responseChunks.push(chunk);
-    });
 
-    conn.on('end', () => {
-        logger(Colors.green(`[V2-HTTP] Received full response from Node 2. Forwarding to client.`));
-        if (!sourceSocket.destroyed) {
-                const fullResponse = Buffer.concat(responseChunks)
-                sourceSocket.write(fullResponse)
-                sourceSocket.end()
-            }
-            
-        
-    })
+
+    conn.once('end', () => { safeClose(sourceSocket) })
 
     conn.on('error', (err) => {
         logger(Colors.red(`[V2-HTTP] Forward to node ${ipAddr}:${port} error: ${err.message}`));
-        if (!sourceSocket.destroyed) {
-            sourceSocket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n');
-        }
-    });
+        safeClose(sourceSocket)
+    })
+
+    
 
     sourceSocket.on('close', () => {
-        conn.destroy();
-    });
-};
+        safeClose(conn)
+    })
+}
 
-
+const safeClose = (s: Socket) => {
+    try {
+     if (s.destroyed) return
+     s.end() // 发送 FIN
+    // 如果对端不响应，15s 后强制销毁
+     s.setTimeout?.(15_000, () => { if (!s.destroyed) s.destroy() })
+   } catch {}
+}
 
 const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
 	
@@ -1573,6 +1569,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string) => {
 
 	const rawHttpRequest = otherRequestForNet(JSON.stringify({data}), ipAddr, port)
+    
 
 	const conn = createConnection ( port, ipAddr, () => {
 
@@ -1581,17 +1578,13 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
-        sourceSocket.setKeepAlive?.(true, 30_000)
-        sourceSocket.setNoDelay?.(true)
+        conn.setTimeout(120_000, () => { if (!conn.destroyed) conn.destroy() })
 
-		sourceSocket.on ('end', () => {
+        sourceSocket.on ('end', () => {
 			logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-			conn.end()
+			safeClose(conn)
 		})
 
-        conn.on('end', () => {
-            sourceSocket.end()
-        })
 
         // 首包可能较大，处理写背压，避免被内核缓冲憋住
         if (!conn.write(rawHttpRequest)) {
@@ -1607,17 +1600,21 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 			logger(`socketForward sourceSocket.pipe(conn) on error`, err)
 		})
 
+        sourceSocket.resume()
+
 	})
+
+    
 
 	
 	conn.on ('error', err => {
 		logger (Colors.red(`Fardward node ${ ipAddr }:${port} on error [${err.message}] STOP connect \n`) )
-		sourceSocket.destroy()
+		safeClose(sourceSocket)
 	})
 
 	conn.once ('close', () => {
 		logger(Colors.magenta(`Fardward node ${ ipAddr }:${port} on Close!`))
-		sourceSocket.destroy()
+		safeClose(sourceSocket)
 	})
 }
 
@@ -1631,10 +1628,18 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
 		return response200Html(socket, JSON.stringify({}))
 	}
+
 	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route}`))
 
-	const hasConnectionClose = headers.some(h => h.toLowerCase().trim() === 'connection: close')
-	if (hasConnectionClose) {
+	const hasConnectionClose = headers.some(h => {
+        const [k, v] = h.split(':', 2)
+        if (!k) return false
+        const isConn = k.toLowerCase().trim() === 'connection'
+        // 兼容 "close" 出现在多值/不同大小写/有空格的情况
+        return isConn && /(^|[\s,])close($|[\s,])/i.test((v ?? '').toLowerCase())
+    })
+	
+    if (hasConnectionClose) {
 		logger(`forwardEncryptedSocket connection: close ===> socketForwardV2!`)
 		return socketForwardV2( _route, 80, socket, encryptedText)
 	}
