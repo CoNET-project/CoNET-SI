@@ -7,7 +7,7 @@ import { distorySocket } from './htmlResponse'
 import { Transform, TransformCallback } from 'stream'
 import { getHostIPv4Cached } from './globalDnsCache'
 
-class BandwidthCount extends Transform {
+export class BandwidthCount extends Transform {
     private count = 0
     private startTime = 0
     private endTime = 0

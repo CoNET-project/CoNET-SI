@@ -17,7 +17,7 @@ import type {IncomingMessage, RequestOptions as RequestOptionsHttp} from 'node:h
 import {Transform} from 'node:stream'
 import type { KeyID as typeOpenPGPKeyID } from 'openpgp'
 import type {Key, PrivateKey, Message, MaybeStream, DecryptMessageResult, WebStream } from 'openpgp'
-import { Wallet } from 'ethers'
+import { uuidV4, Wallet } from 'ethers'
 import { exec } from 'node:child_process'
 import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
@@ -31,7 +31,7 @@ import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
 import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes,  } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
-
+import {v4} from 'uuid'
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
 import nodeRestartABI from './nodeRestartABI.json'
@@ -1161,7 +1161,9 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 		logger(`socks5Connect ${resoestSocket.remoteAddressShow} Error! ${ex.message}`)
 		return safeClose(resoestSocket)
 	}
-
+    const uuid = v4()
+    const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
+    const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
 
 
 		const socket = createConnection ( port, host, () => {
@@ -1170,8 +1172,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
             socket.setNoDelay(true)
             socket.setKeepAlive(true, 30_000)
 
-			socket.pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
-            resoestSocket.pipe(socket, { end: false }).on('error', err => { /* log */ })
+			socket.pipe(downloadCount).pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
+            resoestSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { /* log */ })
 
             
 
