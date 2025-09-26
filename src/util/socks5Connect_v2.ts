@@ -160,7 +160,7 @@ export class socks5Connect_v2 {
             resSocket.setKeepAlive?.(true, 30_000)
             resSocket.setNoDelay?.(true)
 
-            this.targetSocket.pipe(this.downloadCount).pipe(resSocket, { end: false }).on('error', err => {
+            this.targetSocket.pipe(resSocket, { end: false }).on('error', err => {
                 this.cleanup(err)
             }).on('end', () => {
                 this.cleanup(new Error(`downStreem on END!`))
@@ -220,7 +220,7 @@ export class socks5Connect_v2 {
                 this.reqSocket = reqSocket
                 this.ready = true
 
-                reqSocket.pipe(this.uploadCount).pipe(socket, { end: false }).on('error', err => { 
+                reqSocket.pipe(socket, { end: false }).on('error', err => { 
                     logger(`socks5Connect_v2 ==========> ${this.info} reqSocket.pipe(uploadCount).pipe(socket) on error `, err)
                     this.cleanup(err)
                 }).on('end', () => {
