@@ -36,7 +36,7 @@ import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
 import nodeRestartABI from './nodeRestartABI.json'
 import { mapLimit } from 'async'
-
+import {BandwidthCount} from './socks5Connect_v2'
 
 
 
@@ -1110,29 +1110,7 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	return response200Html(socket, JSON.stringify(validatorData))
 }
 
-class BandwidthCount extends Transform {
-	private count = 0
-	constructor(private tab: string){
-		super({
-            readableHighWaterMark: 1024,
-            writableHighWaterMark: 1024
-        })
-	}
-	public _transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
-		this.count += chunk.length
-        logger(`${this.tab} BandwidthCount ${ this.count} bytes`)
-		this.push(chunk)
-        callback()
-	}
-	public _final(callback: (error?: Error | null | undefined) => void): void {
-		callback()
-	}
 
-    public getTotalBytes() {
-        return this.count
-    }
-
-}
 
 const getHostIpv4: (host: string) => Promise<string> = (host: string) => new Promise(resolve => {
 	return resolve4(host, (err, ipv4s) => {
