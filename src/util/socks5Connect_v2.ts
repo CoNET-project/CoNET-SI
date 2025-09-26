@@ -25,9 +25,8 @@ class BandwidthCount extends Transform {
             this.startTime = Date.now()
         }
         this.count += chunk.length
-        logger(`${this.tab} start at ${this.startTime} BandwidthCount ${this.count} bytes`)
-        this.push(chunk)
-        callback()
+        //logger(`${this.tab} start at ${this.startTime} BandwidthCount ${this.count} bytes`)
+        callback(null,chunk)
     }
 
     public _final(callback: (error?: Error | null | undefined) => void): void {
