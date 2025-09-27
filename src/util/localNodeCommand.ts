@@ -23,7 +23,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
@@ -1583,7 +1583,8 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 	// }
 
     if (!wallet) {
-        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route ******************************`)
+        reScanAllWallets()
+        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!! ******************************`)
     }
 
 	return socketForward( _route, 80, socket, encryptedText, wallet)

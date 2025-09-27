@@ -147,6 +147,39 @@ const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
 	
 })
 
+let reScanAllWalletsProcess = false
+export const reScanAllWallets = async () => {
+    if (!routerInfo.size) {
+        return logger(`reScanAllWallets Error! no DATA in routerInfo `)
+    }
+    if (reScanAllWalletsProcess) {
+        return
+    }
+
+    reScanAllWalletsProcess = true
+    const wallets = await getAllNodeWallets()
+
+    if (!wallets) {
+        reScanAllWalletsProcess = false
+        return logger(`reScanAllWallets Error! getAllNodeWallets got NULL!`)
+    }
+
+
+    routerInfo.forEach((val, key) => {
+        
+        const index = wallets.findIndex(n => n.ipAddr === val.ipaddress)
+        if ( index< 0) {
+            logger(`reScanAllWallets Error! ********************* NODE ${val.ipaddress} have no wallet to find in API server! **************`)
+            return
+        }
+        val.wallet = wallets[index].wallet
+        routerInfo.set(key, val)
+    })
+    reScanAllWalletsProcess = false
+    logger(`r********************* reScanAllWallets  SUCCESS!   **************`)
+
+
+}
 
 export const getAllNodes = () => new Promise(async resolve=> {
 	
