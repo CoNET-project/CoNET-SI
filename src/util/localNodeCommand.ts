@@ -1150,8 +1150,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
             socket.setNoDelay(true)
             socket.setKeepAlive(true, 30_000)
 
-			socket.pipe(downloadCount).pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
-            resoestSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { /* log */ })
+			socket.pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
+            resoestSocket.pipe(socket, { end: false }).on('error', err => { /* log */ })
 
             
 
