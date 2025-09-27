@@ -2239,7 +2239,8 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 			nodeWallets: previousGossipStatus.nodeWallets,
 			minerResponseHash: '',
 			userWallets: previousGossipStatus.userWallets,
-			totalUsers: rate?.totalUsrs
+			totalUsers: rate?.totalUsrs,
+            transfer: previousGossipStatus.transfer
 		}
 
 		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
