@@ -3,6 +3,7 @@ import {inspect} from 'node:util'
 import cCNTPABI from './cCNTP.json'
 import { logger } from './logger'
 import Colors from 'colors/safe'
+import {httpsPostToUrl, getAllNodeWallets} from './localNodeCommand'
 
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
@@ -26,6 +27,8 @@ const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
+
+
 
 
 let GlobalIpAddress = ''
@@ -125,19 +128,17 @@ const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
 	const length = 100
 	do {
 		try {
+            logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
 			const _nodes: any[] = await GuardianNodesMainnet.getAllNodes(i, length)
 			
 			if (_nodes.length < length || !_nodes) {
 				loop = false
 			}
 			i += length
-            logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
+            
             nodes = [...nodes, ..._nodes]
 		} catch (ex) {
-			setTimeout(async () => {
-                executor(await _getAllNodes())
-                logger(`_getAllNodes catch ERROR! try again!`)
-            }, 5000)
+			await new Promise(executor=> setTimeout(() => executor(true), 2000))
 		}
 
 	} while (loop)
@@ -146,11 +147,17 @@ const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
 	
 })
 
+
 export const getAllNodes = () => new Promise(async resolve=> {
 	
 	if (getAllNodesProcess) {
 		return resolve (true)
 	}
+
+    const wallets = await getAllNodeWallets()
+    if (!wallets) {
+        logger(`getAllNodes Error: getAllNodeWallets NULL!!`)
+    }
 
 	getAllNodesProcess = true
 	const tempGuardian_Nodes: nodeInfo[] = [] 
@@ -163,6 +170,14 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		const domain: string = node[2]
 		const ipAddr: string = node[3]
 		const region: string = node[4]
+        let wallet = ''
+        if (wallets) {
+            const index = wallets.findIndex(n => n.ipAddr === ipAddr)
+            if (index > -1) {
+                wallet = wallets[index].wallet
+            }
+        }
+       
 		const itemNode: nodeInfo = {
 			ipaddress: ipAddr,
 			pgpArmored: pgpString,
@@ -170,7 +185,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
 			nftNumber: id,
 			regionName: region,
 			pgpKeyID: domain,
-			wallet: ''
+			wallet
 		}
 		
 		routerInfo.set(domain, itemNode)
@@ -238,15 +253,15 @@ let localWallet: ethers.Wallet
 
 
 
-export const getRoute = async (keyID: string) => {
+export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
 
 	const node = routerInfo.get(keyID.toUpperCase())
 	if (!node) {
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
-		return null
+		return []
 	}
 
-	return node.ipaddress
+	return [node.ipaddress, node.wallet]
 }
 
 
@@ -358,9 +373,11 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 
 
 const test = async () => {
+    
 	await getAllNodes()
 	// const kkk = await getRoute('F81BF37456250CCF')
 	// logger(kkk)
+    
 
 }
 // test()

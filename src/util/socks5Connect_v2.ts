@@ -13,7 +13,7 @@ export class BandwidthCount extends Transform {
     private endTime = 0
     private printed = false
 
-    constructor(private tab: string){
+    constructor(private tab: string, private walllet: string){
         super({
             readableHighWaterMark: 64 * 1024,
             writableHighWaterMark: 64 * 1024
@@ -130,8 +130,8 @@ export class socks5Connect_v2 {
     constructor(private uuid: string, private prosyData: VE_IPptpStream, private reqSocket: Socket, private wallet: string) {
         this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${prosyData.host}:${prosyData.port}`
         logger(`socks5Connect_v2 ==========> ${this.info} CONNECT Start.....`)
-        this.uploadCount = new BandwidthCount(`[${this.uuid}] ==> UPLOAD`)
-        this.downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
+        this.uploadCount = new BandwidthCount(`[${this.uuid}] ==> UPLOAD`, wallet)
+        this.downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`, wallet)
         this.socks5ConnectFirstConnect(prosyData, reqSocket, wallet, uuid)
 
     }
@@ -160,7 +160,7 @@ export class socks5Connect_v2 {
             resSocket.setKeepAlive?.(true, 30_000)
             resSocket.setNoDelay?.(true)
 
-            this.targetSocket.pipe(resSocket).on('error', err => {
+            this.targetSocket.pipe(this.downloadCount).pipe(resSocket).on('error', err => {
                 this.cleanup(err)
             }).on('end', () => {
                 this.cleanup(new Error(`downStreem on END!`))
@@ -220,7 +220,7 @@ export class socks5Connect_v2 {
                 this.reqSocket = reqSocket
                 this.ready = true
 
-                reqSocket.pipe(socket).on('error', err => { 
+                reqSocket.pipe(this.uploadCount).pipe(socket).on('error', err => { 
                     logger(`socks5Connect_v2 ==========> ${this.info} reqSocket.pipe(uploadCount).pipe(socket) on error `, err)
                     this.cleanup(err)
                 }).on('end', () => {

@@ -1140,8 +1140,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 		return safeClose(resoestSocket)
 	}
     const uuid = wallet
-    const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
-    const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
+    const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`, wallet)
+    const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`, wallet)
 
 
 		const socket = createConnection ( port, host, () => {
@@ -1150,8 +1150,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
             socket.setNoDelay(true)
             socket.setKeepAlive(true, 30_000)
 
-			socket.pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
-            resoestSocket.pipe(socket, { end: false }).on('error', err => { /* log */ })
+			socket.pipe(downloadCount).pipe(resoestSocket, { end: false }).on('error', err => { /* log */ })
+            resoestSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { /* log */ })
 
             
 
@@ -1207,8 +1207,8 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
             resSocket.setKeepAlive?.(true, 30_000)
             reqSocket.setKeepAlive?.(true, 30_000)
 
-            const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`)
-            const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`)
+            const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`, wallet)
+            const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`, wallet)
 
 			socket.pipe(downloadCount).pipe(resSocket, { end: false }).on('error', err => {
                 logger(`socks5Connect_v2 ==========> ${uuid} socket.pipe(downloadCount).pipe(resSocket) on error `, err)
@@ -1570,7 +1570,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
-		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers)
+		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet)
 	}
 
 	let content
@@ -1604,11 +1604,14 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	
 }
 
-const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string) => {
+
+const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string, wallet: string|undefined) => {
 
 	const rawHttpRequest = otherRequestForNet(JSON.stringify({data}), ipAddr, port)
-    
-
+    const infoUp = `socketForward to node=> ${ipAddr}`
+    const infoDown = `socketForward to node <= ${ipAddr}`
+    const upload = new BandwidthCount(infoUp, wallet||'')
+    const download = new BandwidthCount(infoDown, wallet||'')
 	const conn = createConnection ( port, ipAddr, () => {
 
 		logger (Colors.blue (`socketForward packet to node ${ ipAddr }:${port} success !`))
@@ -1625,11 +1628,11 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
             conn.once('drain', () => sourceSocket.resume())
         }
 
-		conn.pipe (sourceSocket, { end: false }).on('error', err => {
+		conn.pipe(download).pipe (sourceSocket, { end: false }).on('error', err => {
 			logger(`socketForward conn.pipe (sourceSocket) on error`, err)
 		})
 
-		sourceSocket.pipe(conn, { end: false }).on('error', err => {
+		sourceSocket.pipe(upload).pipe(conn, { end: false }).on('error', err => {
 			logger(`socketForward sourceSocket.pipe(conn) on error`, err)
 		})
 
@@ -1656,11 +1659,11 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 }
 
-export const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[]) => {
+export const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[], nodeWallet: ethers.Wallet|null) => {
 
 
 	//			forward encrypted text
-	const _route = await getRoute (gpgPublicKeyID)
+	const [_route, wallet] = await getRoute (gpgPublicKeyID)
 
 	if ( !_route ) {
 		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
@@ -1681,7 +1684,8 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 		logger(`forwardEncryptedSocket connection: close ===> socketForwardV2!`)
 		return socketForwardV2( _route, 80, socket, encryptedText)
 	}
-	return socketForward( _route, 80, socket, encryptedText)
+
+	return socketForward( _route, 80, socket, encryptedText, wallet)
 }
 
 export const checkSign = (message: string, signMess: string) => {
@@ -2143,7 +2147,23 @@ interface rate {
 	epoch: number
 }
 
-const httpsPostToUrl = (url: string, body: string) => new Promise(resolve =>{
+
+export const getAllNodeWallets = async (): Promise<{ipAddr: string, wallet: string}[]|null> => {
+
+    const wallets = await httpsPostToUrl(rateUrl, '')
+    try {
+        const allWallets = JSON.parse(wallets)
+        const nodeWallets = allWallets?.nodeWallets
+        return nodeWallets
+
+    } catch (ex) {
+        logger(`getAllNodeWallets GOT JSON ERROR!`)
+    }
+    return null
+}
+
+
+export const httpsPostToUrl = (url: string, body: string):Promise<string> => new Promise(resolve =>{
 	const _url = new URL (url)
 	const option: RequestOptions = {
 		host: _url.host,
@@ -2157,20 +2177,21 @@ const httpsPostToUrl = (url: string, body: string) => new Promise(resolve =>{
 	}
 	const waitingTimeout = setTimeout(() => {
 		logger(Colors.red(`httpsPostToUrl on('Timeout') [${url} ${JSON.parse(body)}!`))
-		return resolve (false)
+		return resolve ('')
 	}, 60 * 1000)
 
 	const kkk = requestHttps(option, res => {
 		clearTimeout(waitingTimeout)
-		setTimeout(() => {
-			resolve (true)
-		}, 1000)
+		let data = ''
+        res.on('data', _data => {
+            data += _data.toString()
+        })
 		
 		res.once('end', () => {
 			if (res.statusCode !==200) {
 				return logger(`httpsPostToUrl ${url} statusCode = [${res.statusCode}] != 200 error!`)
 			}
-
+            resolve(data)
 		})
 		
 	})
@@ -2182,6 +2203,8 @@ const httpsPostToUrl = (url: string, body: string) => new Promise(resolve =>{
 	kkk.end(body)
 
 })
+
+
 
 export const getFaucet = async (wallet: Wallet) => {
 

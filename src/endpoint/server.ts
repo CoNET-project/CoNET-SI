@@ -44,29 +44,31 @@ const getLengthHander = (headers: string[]) => {
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 
-const responseRootHomePage = (socket: Socket|TLSSocket) => {
-
-
-	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
-	//	@ts-ignore
-	const ret = `HTTP/1.1 200 OK\r\n` +
+const responseHttpBody = (socket: Socket|TLSSocket, body: string) => {
+    const ret = `HTTP/1.1 200 OK\r\n` +
 	`Server: nginx/1.24.0 (Ubuntu)\r\n` +
 	//@ts-ignore
 	`Date: ${new Date().toGMTString()}\r\n` +
 	`Content-Type: text/html\r\n` +
-	`Content-Length: ${homepage.length}\r\n`+
+	`Content-Length: ${body.length}\r\n`+
 	`Connection: keep-alive\r\n` +
 	'access-control-allow-origin: *\r\n' +
-	`Accept-Ranges: bytes\r\n\r\n` + homepage
-	
-	if (socket.writable) {
+	`Accept-Ranges: bytes\r\n\r\n` + body + '\r\n'
+
+    if (socket.writable) {
 		socket.write(ret, err => {
 			socket.end(() => {
-				logger(Colors.blue(`responseRootHomePage PIPE End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length}`))
+				logger(Colors.blue(`responseRootHomePage PIPE End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${body.length}`))
 			})
 			
 		})
 	}
+}
+
+const responseRootHomePage = (socket: Socket|TLSSocket) => {
+
+	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
+    return responseHttpBody(socket, homepage)
 	
 }
 
@@ -130,6 +132,10 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
 
     if (/^\/jup_ag/i.test(path)) {
         return forwardTojup_ag(socket, bodyStr, headerLines)
+    }
+
+    if (/^\/nodeWallet/i.test(path)) {
+        return conet_si_server.getWallet(socket)
     }
 
     if (/^\/silentpass\-rpc/i.test(path)) {
@@ -415,6 +421,10 @@ class conet_si_server {
 		})
 
 	}
+
+    public getWallet = (socket: Socket) => {
+        return responseHttpBody(socket, this.nodeWallet ? this.nodeWallet.address: 'not ready')
+    }
 }
 
 export default conet_si_server
