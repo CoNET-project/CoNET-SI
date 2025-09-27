@@ -1466,7 +1466,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
 	
 	if (customerKeyID !== pgpPublicKeyID) {
-		logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
+		// logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
 		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet)
 	}
 
@@ -1567,7 +1567,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 		return response200Html(socket, JSON.stringify({}))
 	}
 
-	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route}`))
+	//logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID}:${wallet} to node ${_route}`))
 
 	// const hasConnectionClose = headers.some(h => {
     //     const [k, v] = h.split(':', 2)
@@ -1583,7 +1583,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 	// }
 
     if (!wallet) {
-        logger(`**************** forwardEncryptedSocket Error!    no wallet for _route ******************************`)
+        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route ******************************`)
     }
 
 	return socketForward( _route, 80, socket, encryptedText, wallet)
