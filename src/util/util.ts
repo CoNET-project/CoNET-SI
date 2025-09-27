@@ -260,7 +260,7 @@ export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
 		return []
 	}
-
+    
 	return [node.ipaddress, node.wallet]
 }
 

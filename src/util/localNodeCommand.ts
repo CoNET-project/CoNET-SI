@@ -1177,84 +1177,6 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 
 }
 
-const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wallet: string, resSocket: Socket, uuid: string) => {
-
-	let host: string, port: number, ipStyle: boolean
-	try {
-		port = prosyData.port
-		host = prosyData.host || ''
-		ipStyle = IP.isV4Format(host)
-		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
-		if ( port < 1 || port > 65535 || ! host) {
-			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
-		}
-		
-	} catch (ex: any) {
-		logger(inspect(prosyData, false, 3, true))
-		logger(`socks5Connect_v2 req = ${reqSocket.remoteAddressShow} res = ${resSocket.remoteAddressShow} Error! ${ex.message}`)
-        distorySocket(reqSocket)
-		return distorySocket(resSocket)
-	}
-
-
-	try {
-		const socket = createConnection ( port, host, () => {
-            logger(`socks5Connect_v2 ==========> req = ${reqSocket.remoteAddressShow} res = ${resSocket.remoteAddressShow} ==> ${host}:${port} [${uuid}] Success!`)
-            socket.setNoDelay(true)
-            resSocket.setNoDelay?.(true)
-            reqSocket.setNoDelay?.(true)
-            socket.setKeepAlive(true, 30_000)
-            resSocket.setKeepAlive?.(true, 30_000)
-            reqSocket.setKeepAlive?.(true, 30_000)
-
-            const uploadCount = new BandwidthCount(`[${uuid}] ==> UPLOAD`, wallet)
-            const downloadCount = new BandwidthCount(`[${uuid}] <== DOWNLOAD`, wallet)
-
-			socket.pipe(downloadCount).pipe(resSocket, { end: false }).on('error', err => {
-                logger(`socks5Connect_v2 ==========> ${uuid} socket.pipe(downloadCount).pipe(resSocket) on error `, err)
-            }).on('end', () => {
-                logger(`socks5Connect_v2 ==========> ${uuid} upload pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
-                uploadCount.end()
-                downloadCount.end()
-                resSocket.end()
-                socket.end()
-            })
-            reqSocket.pipe(uploadCount).pipe(socket, { end: false }).on('error', err => { 
-                logger(`socks5Connect_v2 ==========> ${uuid} reqSocket.pipe(uploadCount).pipe(socket) on error `, err)
-            }).on('end', () => {
-                logger(`socks5Connect_v2 ==========> ${uuid} download pipe on end, total upload ${uploadCount.getTotalBytes()} bytes download ${downloadCount.getTotalBytes()} bytes`)
-                reqSocket.end()
-                socket.end()
-            })
-
-
-			const data = Buffer.from(prosyData.buffer, 'base64')
-            if (data && data.length) {
-                if (!socket.write(data)) {
-                    // 发生背压：暂停入口到上游的泵，待 drain 再恢复
-                    reqSocket.pause()
-                    socket.once('drain', () => reqSocket.resume())
-                }
-            }
-			
-			
-			reqSocket.resume()
-            resSocket.resume()
-            
-		})
-	
-		socket.once('end', () => { reqSocket.end(); resSocket.end()})
-        socket.on('error', err => { })
-        resSocket.on('error', err => { resSocket.end() /* log */ })
-        reqSocket.on('error', err => { reqSocket.end() /* log */ })
-	} catch (ex) {
-		logger(`socks5Connect_v2 ==========> On catch ${wallet}`, ex)
-		resSocket.end()
-        reqSocket.end()
-	}
-
-}
-
 
 
 const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
@@ -1647,18 +1569,22 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
 	logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID} to node ${_route}`))
 
-	const hasConnectionClose = headers.some(h => {
-        const [k, v] = h.split(':', 2)
-        if (!k) return false
-        const isConn = k.toLowerCase().trim() === 'connection'
-        // 兼容 "close" 出现在多值/不同大小写/有空格的情况
-        return isConn && /(^|[\s,])close($|[\s,])/i.test((v ?? '').toLowerCase())
-    })
+	// const hasConnectionClose = headers.some(h => {
+    //     const [k, v] = h.split(':', 2)
+    //     if (!k) return false
+    //     const isConn = k.toLowerCase().trim() === 'connection'
+    //     // 兼容 "close" 出现在多值/不同大小写/有空格的情况
+    //     return isConn && /(^|[\s,])close($|[\s,])/i.test((v ?? '').toLowerCase())
+    // })
 	
-    if (hasConnectionClose) {
-		logger(`forwardEncryptedSocket connection: close ===> socketForwardV2!`)
-		return socketForwardV2( _route, 80, socket, encryptedText)
-	}
+    // if (hasConnectionClose) {
+	// 	logger(`forwardEncryptedSocket connection: close ===> socketForwardV2!`)
+	// 	return socketForwardV2( _route, 80, socket, encryptedText)
+	// }
+
+    if (!wallet) {
+        logger(`**************** forwardEncryptedSocket Error!    no wallet for _route ******************************`)
+    }
 
 	return socketForward( _route, 80, socket, encryptedText, wallet)
 }
