@@ -160,7 +160,7 @@ export const getAllNodes = () => new Promise(async resolve=> {
     }
 
 	getAllNodesProcess = true
-	const tempGuardian_Nodes: nodeInfo[] = [] 
+
 
     const _node = await _getAllNodes()
 	for (let i = 0; i < _node.length; i ++) {
@@ -189,12 +189,15 @@ export const getAllNodes = () => new Promise(async resolve=> {
 		}
 		
 		routerInfo.set(domain, itemNode)
-		tempGuardian_Nodes.push(itemNode)
+        const index = Guardian_Nodes.findIndex(n => n.ipaddress === ipAddr)
+        if (index) {
+            Guardian_Nodes.splice(index, 1)
+        }
+		Guardian_Nodes.push(itemNode)
   	}
 	
 	getAllNodesProcess = false
 
-	Guardian_Nodes = tempGuardian_Nodes
     logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
 	resolve(true)
 })
