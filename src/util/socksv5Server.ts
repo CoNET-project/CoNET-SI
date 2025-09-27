@@ -296,7 +296,7 @@ function mapErrToRep(err: any): number {
 const port = parseInt(process.env.PORT || process.argv[2] || '1080', 10)
 let nextId = 1
 
-const server = net.createServer({ allowHalfOpen: true }, sock => {
+const server = net.createServer( sock => {
 	const id = nextId++
 	console.log(`[${id}] client connected from ${sock.remoteAddress}:${sock.remotePort}`)
 	new ClientSession(sock, id)
