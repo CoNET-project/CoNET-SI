@@ -1257,24 +1257,6 @@ const socks5Connect_v2 = async (prosyData: VE_IPptpStream, reqSocket: Socket, wa
 
 
 
-class transferCount extends Transform {
-	public data  = ''
-	constructor(private upload: boolean, private info: ITypeTransferCount) {
-		super()
-	}
-
-	_transform(chunk: Buffer, encoding: BufferEncoding, callback: TransformCallback): void {
-		if (this.upload) {
-			this.info.upload += chunk.length
-		} else {
-			this.data += chunk.toString()
-			this.info.download += chunk.length
-		}
-		hexDebug(chunk)
-		callback(null, chunk)
-	}
-}
-
 const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket, wallet: string) => {
 	let host: string, port: number, ipStyle: boolean
 	try {
@@ -1296,16 +1278,9 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 	const _remotrIP_1 = _remotrIP.split(':')
 	let nodeIpaddress = _remotrIP_1[_remotrIP_1.length-1]
 
-	const infoData: ITypeTransferCount = {
-		hostInfo: host,
-		startTime: new Date().getTime(),
-		download: 0,
-		upload: 0,
-		nodeIpaddress,
-		endTime: 0
-	}
-	const upload = new transferCount (true, infoData)
-	const download = new transferCount (false, infoData)
+	
+	const upload = new BandwidthCount (`socks5Connectv2 ${wallet} => ${host}:${port}`, wallet)
+	const download = new BandwidthCount (`socks5Connectv2 ${wallet} <= ${host}:${port}`, wallet)
 	try {
 		logger(`socks5Connectv2 ====> ${host}:${port} `)
 		const socket = createConnection ( port, host, () => {
@@ -2057,16 +2032,18 @@ interface IGossipStatus {
 	nodeWallets: string[]
 	userWallets: string []
 	totalUsers: number
+    transfer: {wallet: string, bytes: number}[]
 }
 
-export let gossipStatus: IGossipStatus = {
+let gossipStatus: IGossipStatus = {
 	totalConnectNode: 0,
 	epoch: 0,
 	nodesWallets: new Map(),
 	totalMiners: 0,
 	nodeWallets: [],
 	userWallets: [],
-	totalUsers: 0
+	totalUsers: 0,
+    transfer: []
 }
 
 let previousGossipStatus = gossipStatus
@@ -2090,7 +2067,7 @@ interface nodeResponse {
 }
 
 let moveDataProcess = false
-
+export const transferCount: Map<string, number> = new Map()
 const moveData = (block: number) => new Promise(executor => {
 	if (moveDataProcess) {
 		return executor(true)
@@ -2107,22 +2084,22 @@ const moveData = (block: number) => new Promise(executor => {
 	logger(Colors.magenta(`moveData doing ${block} validatorPool.get (${_wallets.length}) `))
 	const nodeWallets = _wallets
 	const userWallets = [...validatorUserPool.keys()]
+
+    const transfer: {wallet: string, bytes: number}[] = []
+    transferCount.forEach((val, key) => {
+        transfer.push({wallet: key, bytes: val})
+        transferCount.delete(key)
+    })
+
 	// logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
 	previousGossipStatus.nodeWallets = nodeWallets
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
 	previousGossipStatus.userWallets = userWallets
+    previousGossipStatus.transfer = transfer
 
-	gossipStatus = {
-		epoch: block,
-		totalConnectNode: 0,
-		nodesWallets: new Map(),
-		totalMiners: 0,
-		nodeWallets: [],
-		userWallets: [],
-		totalUsers: 0
-	}
+
 
 	userWallets.forEach(n => {
 		putUserMiningToPaymendUser(n)

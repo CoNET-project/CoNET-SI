@@ -6,6 +6,8 @@ import { inspect } from 'util'
 import { distorySocket } from './htmlResponse'
 import { Transform, TransformCallback } from 'stream'
 import { getHostIPv4Cached } from './globalDnsCache'
+import {transferCount} from './localNodeCommand'
+
 
 export class BandwidthCount extends Transform {
     private count = 0
@@ -76,6 +78,10 @@ export class BandwidthCount extends Transform {
             `duration ${durationSec.toFixed(3)}s, ` +
             `avg ${avgHumanBytes}/s (${avgMbps} Mbps)`
         )
+        const wallet = this.walllet.toLowerCase()
+        const count = transferCount.get (wallet)||0
+        const total = count + this.count
+        transferCount.set(wallet, total)
     }
 
     private static formatBytes(n: number): string {
