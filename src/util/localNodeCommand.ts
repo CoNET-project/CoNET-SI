@@ -1584,7 +1584,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
     if (!wallet) {
         reScanAllWallets()
-        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!! ******************************`)
+        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!!******************************`)
     }
 
 	return socketForward( _route, 80, socket, encryptedText, wallet)
