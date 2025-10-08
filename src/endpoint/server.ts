@@ -319,7 +319,7 @@ class conet_si_server {
 		const wallet: Wallet = this.initData.keyObj
 		this.nodeWallet = wallet
 
-        logger(this.initData.pgpKey.privateKey)
+        console.log(JSON.stringify(this.initData.pgpKey.privateKey))
 
 		const ssl = await testCertificateFiles ()
 		if (ssl) {

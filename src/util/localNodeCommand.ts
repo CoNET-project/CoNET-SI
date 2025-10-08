@@ -1477,8 +1477,8 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		content = JSON.parse(Buffer.from(decryptedObj.data.toString(),'base64').toString())
 	} catch (ex: any) {
 		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
-        logger(pgpData)
-        logger()
+        console.log(JSON.stringify(pgpData))
+        
 		return distorySocket(socket)
 	}
 
