@@ -1475,10 +1475,8 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	try {
 		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
 		content = JSON.parse(Buffer.from(decryptedObj.data.toString(),'base64').toString())
-		
-		content.pgpSign
-	} catch (ex) {
-		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}`))
+	} catch (ex: any) {
+		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
 		return distorySocket(socket)
 	}
 
