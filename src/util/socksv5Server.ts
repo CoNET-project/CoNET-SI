@@ -309,3 +309,6 @@ server.on('error', err => {
 server.listen(port, () => {
 	console.log(`SOCKS5 server listening on 0.0.0.0:${port}`)
 })
+
+
+//      curl --socks5 127.0.0.1:1080 https://example.com

@@ -11,6 +11,7 @@ import Https from 'node:https'
 import Http from 'node:http'
 import WebSocket from 'ws'
 import Crypto from 'node:crypto'
+import {v4} from 'uuid'
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
@@ -350,6 +351,110 @@ export const forwardToSolanaRpc = (
 
         req.end()
     }
+}
+
+const baseRPC = 'chain-proxy.wallet.coinbase.com'
+const headers: Record<string, string> = {
+	accept: 'application/json',
+	'content-type': 'application/json',
+	'accept-encoding': 'gzip, deflate, br, zstd',
+	'accept-language': 'en-US,en;q=0.9,ja;q=0.8,zh-CN;q=0.7,zh-TW;q=0.6,zh;q=0.5',
+	'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+	'x-app-version': '3.133.0',
+	'x-cb-device-id': v4(),
+	'x-cb-is-logged-in': 'true',
+	'x-cb-pagekey': 'send',
+	'x-cb-platform': 'extension',
+	'x-cb-project-name': 'wallet_extension',
+	'x-cb-session-uuid': v4(),
+	'x-cb-version-name': '3.133.0',
+	'x-platform-name': 'extension',
+	'x-release-stage': 'production',
+	'x-wallet-user-id': '98630690',
+	// 如需身份态就带上 cookie（注意隐私与时效）
+	cookie: `cb_dm=${v4()};`,
+	// 若需要伪装扩展来源（可能仍被服务端策略拦截）
+	origin: 'chrome-extension://hnfanknocfeofbddgcijnmhnfnkdnaad',
+}
+
+
+export const forwardToBaseRpc = (
+    socket: Net.Socket,
+    body: string,
+    requestHanders: string[]
+) => {
+            // 解析请求行和请求头
+    const requestLine = requestHanders[0].split(' ')
+    const method = requestLine[0]
+
+    // 检查是否是 WebSocket 升级请求
+	//@ts-ignore
+
+	const isWebSocketUpgradeindex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
+    
+	logger(inspect(requestHanders, false, 3, true))
+	console.log('\n\n\n')
+
+    const options: Https.RequestOptions = {
+        hostname: baseRPC,
+        port: 443,
+        path:'/?targetName=base',
+        method,
+        headers: {
+            ...headers,
+            Host: baseRPC
+        }
+    }
+
+    const req = Https.request(options, res => {
+		// 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
+		// 构造状态行
+		const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
+		socket.write(statusLine + '\r\n');
+		// logger(statusLine)
+		// 构造并写入过滤后的响应头
+		for (let i = 0; i < res.rawHeaders.length; i += 2) {
+			const key = res.rawHeaders[i];
+			const value = res.rawHeaders[i + 1];
+			// 过滤掉可能包含客户端限制的头 (例如 CORS, Date, Allow)
+			if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
+				socket.write(`${key}: ${value}\r\n`);
+			}
+		}
+		
+		// 添加自定义的、更宽松的CORS头
+		socket.write('Access-Control-Allow-Origin: *\r\n')
+		socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
+		socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
+
+		socket.write('\r\n');
+
+		// 使用 pipe 将响应体直接流式传输给客户端
+		res.pipe(socket);
+
+		res.on('error', err => {
+			logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
+			if (socket.writable) {
+				socket.destroy()
+			}
+		})
+	})
+
+	req.on('error', err => {
+		logger(Colors.red(`[HTTP] 转发请求错误: ${err.message}`))
+		if (socket.writable) {
+			socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+		}
+	});
+
+	// 如果有请求体 (例如 POST)，则写入请求体
+	if (body) {
+		req.write(body)
+	}
+
+	req.end()
+
+
 }
 
 const host_jup_ag = 'lite-api.jup.ag'
@@ -773,5 +878,5 @@ const startServer = (port: number, publicKey: string) => {
 
 // logger(inspect(getHeaderJSON(k.split('\r\n').slice(1)), false, 3, true))
 
-startServer(4000, 'pppp')
+// startServer(4000, 'pppp')
 

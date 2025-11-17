@@ -148,6 +148,7 @@ const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
 })
 
 let reScanAllWalletsProcess = false
+
 export const reScanAllWallets = async () => {
     if (!routerInfo.size) {
         return logger(`reScanAllWallets Error! no DATA in routerInfo `)
