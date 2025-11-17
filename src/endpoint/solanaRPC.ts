@@ -387,82 +387,110 @@ import("uuid").then(mod => {
 
 
 export const forwardToBaseRpc = (
-    socket: Net.Socket,
-    body: string,
-    requestHanders: string[]
+  socket: Net.Socket,
+  body: string,
+  requestHanders: string[]
 ) => {
-            // 解析请求行和请求头
-    const requestLine = requestHanders[0].split(' ')
-    const method = requestLine[0]
+  // 解析请求行和请求头
+  const requestLine = requestHanders[0].split(' ')
+  const method = requestLine[0] || 'POST'
 
-    // 检查是否是 WebSocket 升级请求
-	//@ts-ignore
+  // 检查是否有 WebSocket 升级（这里先只做检测，后面可以单独实现 ws 转发）
+  const isWebSocketUpgradeIndex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
 
-	const isWebSocketUpgradeindex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
-    
-	logger(inspect(requestHanders, false, 3, true))
-	console.log('forwardToBaseRpc \n\n\n')
+  logger(inspect(requestHanders, false, 3, true))
+  console.log('forwardToBaseRpc \n\n\n')
 
-    const options: Https.RequestOptions = {
-        hostname: baseRPC,
-        port: 443,
-        path:'/?targetName=base',
-        method,
-        headers: {
-            ...baseHeaders,
-            Host: baseRPC
-        }
+  // 从原始 header 行解析出键值对
+  const forwardedHeaders: Record<string, string> = {}
+
+  for (let i = 1; i < requestHanders.length; i++) {
+    const line = requestHanders[i]
+    const idx = line.indexOf(':')
+    if (idx === -1) continue
+
+    const key = line.slice(0, idx).trim()
+    const value = line.slice(idx + 1).trim()
+    if (!key) continue
+
+    // 丢掉 hop-by-hop / 不能直接转发的 header
+    if (/^(host|connection|upgrade|sec-websocket|keep-alive|proxy-connection|transfer-encoding)$/i.test(key)) {
+      continue
     }
 
-    const req = Https.request(options, res => {
-		// 将上游服务器的响应头和响应体转发给客户端，同时剥离限制性头
-		// 构造状态行
-		const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`;
-		socket.write(statusLine + '\r\n');
-		// logger(statusLine)
-		// 构造并写入过滤后的响应头
-		for (let i = 0; i < res.rawHeaders.length; i += 2) {
-			const key = res.rawHeaders[i];
-			const value = res.rawHeaders[i + 1];
-			// 过滤掉可能包含客户端限制的头 (例如 CORS, Date, Allow)
-			if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
-				socket.write(`${key}: ${value}\r\n`);
-			}
-		}
-		
-		// 添加自定义的、更宽松的CORS头
-		socket.write('Access-Control-Allow-Origin: *\r\n')
-		socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
-		socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
+    forwardedHeaders[key] = value
+  }
 
-		socket.write('\r\n');
+  // 如果有 body（通常是 POST JSON-RPC），补 Content-Length
+  if (body && !forwardedHeaders['Content-Length']) {
+    forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
+  }
 
-		// 使用 pipe 将响应体直接流式传输给客户端
-		res.pipe(socket);
+  logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
-		res.on('error', err => {
-			logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
-			if (socket.writable) {
-				socket.destroy()
-			}
-		})
-	})
+  const options: Https.RequestOptions = {
+    hostname: baseRPC,          // 确保 baseRPC 是纯域名，不要带 https://
+    port: 443,
+    path: '/?targetName=base',  // 你要固定打这个入口
+    method,
+    headers: {
+      ...forwardedHeaders,      // 先带上客户端的有效头
+      ...baseHeaders,           // 再叠加你自定义的（如果有）
+      Host: baseRPC             // 最后强制 Host 指向真实的 RPC 域名
+    }
+  }
 
-	req.on('error', err => {
-		logger(Colors.red(`forwardToBaseRpc [HTTP] 转发请求错误: ${err.message}`))
-		if (socket.writable) {
-			socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
-		}
-	});
+  // 暂时只处理 HTTP，不处理 WebSocket
+  if (isWebSocketUpgradeIndex >= 0) {
+    logger(Colors.yellow('[HTTP] 收到 WebSocket 升级请求，目前尚未实现 ws 转发'))
+    // 你可以这里直接返回 501，或者后面再实现 ws 代理逻辑
+  }
 
-	// 如果有请求体 (例如 POST)，则写入请求体
-	if (body) {
-		req.write(body)
-	}
+  const req = Https.request(options, res => {
+    // 状态行
+    const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`
+    socket.write(statusLine + '\r\n')
 
-	req.end()
+    // 写回过滤后的响应头
+    for (let i = 0; i < res.rawHeaders.length; i += 2) {
+      const key = res.rawHeaders[i]
+      const value = res.rawHeaders[i + 1]
+      if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
+        socket.write(`${key}: ${value}\r\n`)
+      }
+    }
 
+    // 覆盖/追加宽松的 CORS
+    socket.write('Access-Control-Allow-Origin: *\r\n')
+    socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
+    socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
 
+    socket.write('\r\n')
+
+    // 把上游 body 直接丢给客户端
+    res.pipe(socket)
+
+    res.on('error', err => {
+      logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
+      if (socket.writable) {
+        socket.destroy()
+      }
+    })
+  })
+
+  req.on('error', err => {
+    logger(Colors.red(`forwardToBaseRpc [HTTP] 转发请求错误: ${err.message}`))
+    if (socket.writable) {
+      socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
+    }
+  })
+
+  // 写请求体
+  if (body && method !== 'GET' && method !== 'HEAD') {
+    req.write(body)
+  }
+
+  req.end()
 }
 
 const host_jup_ag = 'lite-api.jup.ag'
