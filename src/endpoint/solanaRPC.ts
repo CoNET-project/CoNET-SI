@@ -11,7 +11,7 @@ import Https from 'node:https'
 import Http from 'node:http'
 import WebSocket from 'ws'
 import Crypto from 'node:crypto'
-import {v4} from 'uuid'
+
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
@@ -354,28 +354,36 @@ export const forwardToSolanaRpc = (
 }
 
 const baseRPC = 'chain-proxy.wallet.coinbase.com'
-const headers: Record<string, string> = {
-	accept: 'application/json',
-	'content-type': 'application/json',
-	'accept-encoding': 'gzip, deflate, br, zstd',
-	'accept-language': 'en-US,en;q=0.9,ja;q=0.8,zh-CN;q=0.7,zh-TW;q=0.6,zh;q=0.5',
-	'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
-	'x-app-version': '3.133.0',
-	'x-cb-device-id': v4(),
-	'x-cb-is-logged-in': 'true',
-	'x-cb-pagekey': 'send',
-	'x-cb-platform': 'extension',
-	'x-cb-project-name': 'wallet_extension',
-	'x-cb-session-uuid': v4(),
-	'x-cb-version-name': '3.133.0',
-	'x-platform-name': 'extension',
-	'x-release-stage': 'production',
-	'x-wallet-user-id': '98630690',
-	// 如需身份态就带上 cookie（注意隐私与时效）
-	cookie: `cb_dm=${v4()};`,
-	// 若需要伪装扩展来源（可能仍被服务端策略拦截）
-	origin: 'chrome-extension://hnfanknocfeofbddgcijnmhnfnkdnaad',
-}
+let uuidv4
+let baseHeaders: Record<string, string>
+import("uuid").then(mod => {
+    uuidv4 = mod.v4
+
+    baseHeaders = {
+        accept: 'application/json',
+        'content-type': 'application/json',
+        'accept-encoding': 'gzip, deflate, br, zstd',
+        'accept-language': 'en-US,en;q=0.9,ja;q=0.8,zh-CN;q=0.7,zh-TW;q=0.6,zh;q=0.5',
+        'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36',
+        'x-app-version': '3.133.0',
+        'x-cb-device-id': uuidv4(),
+        'x-cb-is-logged-in': 'true',
+        'x-cb-pagekey': 'send',
+        'x-cb-platform': 'extension',
+        'x-cb-project-name': 'wallet_extension',
+        'x-cb-session-uuid': uuidv4(),
+        'x-cb-version-name': '3.133.0',
+        'x-platform-name': 'extension',
+        'x-release-stage': 'production',
+        'x-wallet-user-id': '98630690',
+        // 如需身份态就带上 cookie（注意隐私与时效）
+        cookie: `cb_dm=${uuidv4()};...`,
+        // 若需要伪装扩展来源（可能仍被服务端策略拦截）
+        origin: 'chrome-extension://hnfanknocfeofbddgcijnmhnfnkdnaad',
+    }
+})
+
+
 
 
 export const forwardToBaseRpc = (
@@ -401,7 +409,7 @@ export const forwardToBaseRpc = (
         path:'/?targetName=base',
         method,
         headers: {
-            ...headers,
+            ...baseHeaders,
             Host: baseRPC
         }
     }
