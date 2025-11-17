@@ -401,7 +401,7 @@ export const forwardToBaseRpc = (
 	const isWebSocketUpgradeindex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
     
 	logger(inspect(requestHanders, false, 3, true))
-	console.log('\n\n\n')
+	console.log('forwardToBaseRpc \n\n\n')
 
     const options: Https.RequestOptions = {
         hostname: baseRPC,
@@ -449,7 +449,7 @@ export const forwardToBaseRpc = (
 	})
 
 	req.on('error', err => {
-		logger(Colors.red(`[HTTP] 转发请求错误: ${err.message}`))
+		logger(Colors.red(`forwardToBaseRpc [HTTP] 转发请求错误: ${err.message}`))
 		if (socket.writable) {
 			socket.end('HTTP/1.1 502 Bad Gateway\r\n\r\n')
 		}
