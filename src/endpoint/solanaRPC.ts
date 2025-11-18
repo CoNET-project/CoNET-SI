@@ -419,10 +419,11 @@ export const forwardToBaseRpc = (
     
 //   }
 
-  // 如果有 body（通常是 POST JSON-RPC），补 Content-Length
-//   if (body && !forwardedHeaders['Content-Length']) {
-//     forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
-//   }
+  //如果有 body（通常是 POST JSON-RPC），补 Content-Length
+  const forwardedHeaders: Record<string, string> = {}
+    
+    forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
+  
 
 //   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
@@ -432,6 +433,7 @@ export const forwardToBaseRpc = (
     path: '/?targetName=base',  // 你要固定打这个入口
     method,
     headers: {      // 先带上客户端的有效头
+        ...forwardedHeaders,
       ...baseHeaders,           // 再叠加你自定义的（如果有）
       Host: baseRPC             // 最后强制 Host 指向真实的 RPC 域名
     }
