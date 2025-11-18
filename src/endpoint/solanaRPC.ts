@@ -354,6 +354,7 @@ export const forwardToSolanaRpc = (
 }
 
 const baseRPC = 'chain-proxy.wallet.coinbase.com'
+const baseRPC1 = '1rpc.io'
 let uuidv4
 let baseHeaders: Record<string, string>
 import("uuid").then(mod => {
@@ -428,14 +429,14 @@ export const forwardToBaseRpc = (
 //   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
   const options: Https.RequestOptions = {
-    hostname: baseRPC,          // 确保 baseRPC 是纯域名，不要带 https://
+    hostname: baseRPC1,          // 确保 baseRPC 是纯域名，不要带 https://
     port: 443,
-    path: '/?targetName=base',  // 你要固定打这个入口
+    path: '/base',  // 你要固定打这个入口
     method,
     headers: {      // 先带上客户端的有效头
         ...forwardedHeaders,
       ...baseHeaders,           // 再叠加你自定义的（如果有）
-      Host: baseRPC             // 最后强制 Host 指向真实的 RPC 域名
+      Host: baseRPC1             // 最后强制 Host 指向真实的 RPC 域名
     }
   }
 
