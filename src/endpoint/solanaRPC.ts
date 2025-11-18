@@ -352,7 +352,20 @@ export const forwardToSolanaRpc = (
         req.end()
     }
 }
-
+/**
+ * 
+ curl -v -X POST https://1rpc.io/base \
+  -H "Content-Type: application/json" \
+  --data '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "eth_call",
+    "params": [{
+      "to": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "data": "0x70a08231000000000000000000000000c8f855ff966f6be05cd659a5c5c7495a66c5c015"
+    }, "latest"]
+  }'
+ */
 const baseRPC = 'chain-proxy.wallet.coinbase.com'
 const baseRPC1 = '1rpc.io'
 let uuidv4
@@ -424,7 +437,9 @@ export const forwardToBaseRpc = (
   const forwardedHeaders: Record<string, string> = {}
     
     forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
-  
+    forwardedHeaders['Content-Type'] = 'application/json'
+    forwardedHeaders['Accept'] = '*/*'
+
 
 //   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
@@ -432,10 +447,10 @@ export const forwardToBaseRpc = (
     hostname: baseRPC1,          // 确保 baseRPC 是纯域名，不要带 https://
     port: 443,
     path: '/base',  // 你要固定打这个入口
-    method,
+    method: 'POST',
     headers: {      // 先带上客户端的有效头
         ...forwardedHeaders,
-      ...baseHeaders,           // 再叠加你自定义的（如果有）
+      
       Host: baseRPC1             // 最后强制 Host 指向真实的 RPC 域名
     }
   }
