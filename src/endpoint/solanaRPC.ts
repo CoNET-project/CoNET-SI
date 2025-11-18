@@ -402,39 +402,36 @@ export const forwardToBaseRpc = (
   console.log('forwardToBaseRpc \n\n\n')
 
   // 从原始 header 行解析出键值对
-  const forwardedHeaders: Record<string, string> = {}
 
-  for (let i = 1; i < requestHanders.length; i++) {
-    const line = requestHanders[i]
-    const idx = line.indexOf(':')
-    if (idx === -1) continue
 
-    const key = line.slice(0, idx).trim()
-    const value = line.slice(idx + 1).trim()
-    if (!key) continue
+//   for (let i = 1; i < requestHanders.length; i++) {
+//     const line = requestHanders[i]
+//     const idx = line.indexOf(':')
+//     if (idx === -1) continue
 
-    // 丢掉 hop-by-hop / 不能直接转发的 header
-    if (/^(host|connection|upgrade|sec-websocket|keep-alive|proxy-connection|transfer-encoding)$/i.test(key)) {
-      continue
-    }
+//     const key = line.slice(0, idx).trim()
+//     const value = line.slice(idx + 1).trim()
+//     if (!key) continue
 
-    forwardedHeaders[key] = value
-  }
+//     // 丢掉 hop-by-hop / 不能直接转发的 header
+  
+
+    
+//   }
 
   // 如果有 body（通常是 POST JSON-RPC），补 Content-Length
-  if (body && !forwardedHeaders['Content-Length']) {
-    forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
-  }
+//   if (body && !forwardedHeaders['Content-Length']) {
+//     forwardedHeaders['Content-Length'] = Buffer.byteLength(body, 'utf8').toString()
+//   }
 
-  logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
+//   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
   const options: Https.RequestOptions = {
     hostname: baseRPC,          // 确保 baseRPC 是纯域名，不要带 https://
     port: 443,
     path: '/?targetName=base',  // 你要固定打这个入口
     method,
-    headers: {
-      ...forwardedHeaders,      // 先带上客户端的有效头
+    headers: {      // 先带上客户端的有效头
       ...baseHeaders,           // 再叠加你自定义的（如果有）
       Host: baseRPC             // 最后强制 Host 指向真实的 RPC 域名
     }
