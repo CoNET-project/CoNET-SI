@@ -171,7 +171,12 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
             return distorySocket(socket)
         }
 		//console.log(`postOpenpgpRouteSocket from ${socket.remoteAddress}\n`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
-        return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
+        if (conet_si_server.nodeWallet) {
+            return postOpenpgpRouteSocket(socket, headerLines, body.data, conet_si_server.initData.pgpKeyObj.privateKeyObj, conet_si_server.publicKeyID, conet_si_server.nodeWallet)
+        }
+
+        logger(`getDataPOST Error! conet_si_server.nodeWallet is NULL!`)
+        
     }
 
     // 对于其他方法 (PUT, DELETE, etc.) 或无法识别的请求，关闭连接

@@ -293,8 +293,9 @@ export const aesGcmDecrypt= async (ciphertext: string, password: string) => {
 const clientRoute: Map<string, nodeInfo> = new Map()
 
 const pgp_managerSCPool: ethers.Contract[] = []
-
+let nodePrivatekey: string
 export const initPGPRouteManager = (privateKey: string) => {
+    nodePrivatekey = privateKey
     const wallet = new ethers.Wallet(privateKey, CONETP_mainnet_rovider)
     const conet_PGP_manager_SC = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, wallet)
     pgp_managerSCPool.push(conet_PGP_manager_SC)
@@ -340,6 +341,32 @@ const clientStatusPool: {
     status: boolean
 }[]  = []
 
+export const isMyRoute = async (userAddress: string, nodeAddress: string): Promise<boolean> => {
+  try {
+    if (!ethers.isAddress(userAddress)) return false
+
+   const wallet = new ethers.Wallet(nodePrivatekey, CONETP_mainnet_rovider)
+   
+
+    const SC = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, wallet)
+
+    // 1️⃣ node 是否是已注册节点
+    const nodeHash: string = await SC.nodeWallet2KeyHash(nodeAddress)
+    if (!nodeHash || nodeHash === ethers.ZeroHash) return false
+
+    const nodeExists: boolean = await SC.nodeKeyExists(nodeHash)
+    if (!nodeExists) return false
+
+    // 2️⃣ 用户当前 route 是否指向该 node
+    const userRouteHash: string = await SC.userRouteHash(userAddress)
+    if (!userRouteHash || userRouteHash === ethers.ZeroHash) return false
+
+    return userRouteHash.toLowerCase() === nodeHash.toLowerCase()
+  } catch (e) {
+    return false
+  }
+}
+
 
 const statusProcess = async () => {
     const obj = clientStatusPool.shift()
@@ -366,6 +393,9 @@ const statusProcess = async () => {
 }
 
 export const setClientOnline = (wallet: string, status: boolean) => {
+
+
+
     clientStatusPool.push({
         wallet,
         status
