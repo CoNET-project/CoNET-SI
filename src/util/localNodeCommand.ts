@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes,  } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 
 import P from 'phin'
@@ -872,7 +872,7 @@ const setToUssrPool = (_wallet: string) => {
     validatorUserPool.set (wallet, _timeout)
 }
 
-export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null) => {
+export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet|null, clientKeyID: string) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
 		case 'SilentPass': {
@@ -976,7 +976,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 
 		case 'mining': {		
-			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket)
+			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, clientKeyID)
 		}
 
 		case 'mining_validator': {
@@ -1497,7 +1497,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		return distorySocket(socket)
 	}
 	
-	return localNodeCommandSocket(socket, headers, command, wallet )
+	return localNodeCommandSocket(socket, headers, command, wallet, customerKeyID )
 	
 }
 
@@ -1664,20 +1664,26 @@ interface livenessListeningPoolObj {
 //			getIpAddressFromForwardHeader(req.header(''))
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
+const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
 
-const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet| null, res: TLSSocket|Socket) => {
+const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet| null, res: TLSSocket|Socket, clientKeyID: string) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
 			_obj.res.end().destroy()
 		}
 	}
+
+    const keyID = clientKeyID.toUpperCase()
+
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
 	}
 	
 	livenessListeningPool.set (wallet, obj)
+    livenessListeningPGPKeyIDPool.set(keyID, obj)
 
+    setClientOnline(wallet, true)
 	const returnData = {
 		ipaddress,
 		epoch: CurrentEpoch,
@@ -1696,11 +1702,15 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
 		livenessListeningPool.delete(wallet)
+        livenessListeningPGPKeyIDPool.delete(keyID)
+        setClientOnline(wallet, false)
 	})
 
 	res.once('close', () => {
 		//logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
 		livenessListeningPool.delete(wallet)
+        livenessListeningPGPKeyIDPool.delete(keyID)
+        setClientOnline(wallet, false)
 	})
 
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
@@ -1774,6 +1784,8 @@ const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string,
 	return resolve (true)
 })
 
+
+
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
 	//logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${res.remoteAddress}`))
 	// logger(inspect(returnData, false, 3, true))
@@ -1791,6 +1803,7 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 		
 	}
 	livenessListeningPool.delete(wallet)
+
 	logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 	return resolve (true)
 })

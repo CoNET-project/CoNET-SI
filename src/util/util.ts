@@ -19,6 +19,9 @@ import passport_distributor_ABI from './passport_distributor-ABI.json'
 import duplicateFactoryABI from './duplicateFactoryABI.json'
 import newNodeInfoABI from './newNodeInfoABI.json'
 
+import CoNET_PGP_ABI from './ABI/conetPgp.json'
+
+
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
 export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
@@ -28,7 +31,8 @@ const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
 
-
+const conet_PGP_address = '0x84de3EA6446489E6a267B0AAD2fAe1462564C32E'
+const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)
 
 
 let GlobalIpAddress = ''
@@ -71,6 +75,8 @@ const _checkNFT = (nft: any[], fromAddr: string) => {
 }
 const duplicateFactory_addr = '0x87A70eD480a2b904c607Ee68e6C3f8c54D58FB08'
 const duplicateFactory_readOnly = new ethers.Contract(duplicateFactory_addr, duplicateFactoryABI, CONETP_mainnet_rovider)
+
+
 
 
 export const checkPayment = async(fromAddr: string) => {
@@ -281,21 +287,104 @@ export const aesGcmDecrypt= async (ciphertext: string, password: string) => {
 	}
 }
 
-const iface = new ethers.Interface(cCNTPABI)
-
-let currentEpoch: number
-let lastrate: number
-let localPublicKeyID = ''
-let localWallet: ethers.Wallet
 
 
+//          Client route to Node
+const clientRoute: Map<string, nodeInfo> = new Map()
 
+const pgp_managerSCPool: ethers.Contract[] = []
+
+export const initPGPRouteManager = (privateKey: string) => {
+    const wallet = new ethers.Wallet(privateKey, CONETP_mainnet_rovider)
+    const conet_PGP_manager_SC = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, wallet)
+    pgp_managerSCPool.push(conet_PGP_manager_SC)
+}
+
+const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|null> => {
+    try {
+        const client = clientRoute.get(keyFormat)
+        if (!client) {
+            if (pgp_managerSCPool.length) {
+                try {
+                    const route = await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(keyFormat)
+                    if (!route) {
+                        return null
+                    }
+                    const node = routerInfo.get(route)
+                    if (node) {
+                        clientRoute.set(keyFormat, node)
+                        return node
+                    }
+                    
+                } catch (ex: any) {
+                    
+                }
+
+            } else {
+                logger(`getRouteFromPGP pgp_managerSCPool NULL Error!`)
+            }
+            
+        }
+        
+    } catch (ex: any) {
+        logger(`getRouteFromPGP Error`, ex.message)
+        
+    }
+    return null
+    
+}
+
+
+const clientStatusPool: {
+    wallet: string
+    status: boolean
+}[]  = []
+
+
+const statusProcess = async () => {
+    const obj = clientStatusPool.shift()
+    if (!obj) return
+
+    const SC = pgp_managerSCPool.shift()
+    if (!SC) {
+        clientStatusPool.unshift(obj)
+        return setTimeout(() => statusProcess(), 1000)
+    }
+
+
+    try {
+        const tx = await SC.setUserOnlineOnMe(obj.wallet, obj.status)
+        await tx.wait()
+        logger(`statusProcess success ${obj.wallet} ===> ${obj.status}`)
+    } catch (ex: any) {
+        logger(`statusProcess Error!`, ex.message)
+    }
+
+    pgp_managerSCPool.push(SC)
+    setTimeout(() => statusProcess(), 1000)
+
+}
+
+export const setClientOnline = (wallet: string, status: boolean) => {
+    clientStatusPool.push({
+        wallet,
+        status
+    })
+    statusProcess()
+}
+
+//      get client route
 export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
-
-	const node = routerInfo.get(keyID.toUpperCase())
+    const keyFormat = keyID.toUpperCase()
+	const node = routerInfo.get(keyFormat)
 	if (!node) {
+        const client = await getRouteFromPGP(keyFormat)
+        if (!client) {
+            return []
+        }
+        
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
-		return []
+		return [client.ipaddress, client.wallet]
 	}
     
 	return [node.ipaddress, node.wallet]
@@ -389,6 +478,9 @@ export const getGuardianNodeWallet: (node: nodeInfo, _localWallet: ethers.Wallet
 	})
 })
 
+let localWallet: ethers.Wallet
+let localPublicKeyID: string
+
 export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 	localPublicKeyID = keyID
 	const ip = getServerIPV4Address ( false )
@@ -397,7 +489,6 @@ export const startUp = async (nodePrivate: ethers.Wallet, keyID: string) => {
 	}
 	localWallet = nodePrivate
 }
-
 
 export const getNodeWallet = (nodeIpaddress: string) => {
 	const index = gossipNodes.findIndex(n => n.ipaddress === nodeIpaddress)

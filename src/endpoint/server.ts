@@ -10,6 +10,7 @@ import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
+import {initPGPRouteManager} from '../util/util'
 import {forwardToSolanaRpc, forwardToSilentpass, forwardTojup_ag, forwardToHome, forwardToBaseRpc } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -329,7 +330,7 @@ class conet_si_server {
 		if (ssl) {
 			this.startSslServer ()
 		}
-
+        initPGPRouteManager(wallet.signingKey.privateKey)
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 	}
