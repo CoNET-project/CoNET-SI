@@ -1569,13 +1569,15 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
     if (_route === nodeIpAddr) {
         logger(`forwardEncryptedSocket to MySelf!!`)
-        const client = livenessListeningPool.get(gpgPublicKeyID)
+        const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
+
+        
         if (client) {
-            livenessListeningPool.delete(gpgPublicKeyID)
+            livenessListeningPool.delete(client.wallet)
         }
         
         const waitRunningBlockProcess = async () => {
-            while (runningBlockProcess) {
+            while (stratlivenessV2Process) {
                 await new Promise(resolve => setTimeout(resolve, 1000))
             }
         }
@@ -1585,7 +1587,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         await forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, socket)
 
         if (client) {
-            livenessListeningPool.set(gpgPublicKeyID, client)
+            livenessListeningPool.set(client.wallet, client)
         }
         
         return 
