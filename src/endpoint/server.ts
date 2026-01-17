@@ -195,28 +195,22 @@ const originWhitelist = [
 ]
 
 const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
-	const originHeader = requestHeaders.find(h => h.toLowerCase().startsWith('origin:'));
-	const rawOrigin = originHeader ? originHeader.slice(originHeader.indexOf(':') + 1).trim() : '*'
+    const response = [
+        'HTTP/1.1 204 No Content',
+        'Access-Control-Allow-Origin: *',
+        'Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH',
+        // ✅ 建议把 Authorization 也加上（以后省事）
+        'Access-Control-Allow-Headers: *',
+        // 兼容性更稳：不要用 * 的话就列全
+        // 'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type, Authorization',
+        'Access-Control-Max-Age: 86400',
+        'Content-Length: 0',
+        'Connection: keep-alive',
+        '',
+        ''
+    ].join('\r\n')
 
-	// 检查 origin 是否在白名单中
-	const isAllowed = originWhitelist.some(pattern => pattern.test(rawOrigin));
-	const allowOrigin = isAllowed ? rawOrigin : 'null'; // or set to '*' only if no credentials used
-
-	console.log(`[CORS] OPTIONS request from Origin: ${rawOrigin} => allowed: ${isAllowed}`)
-
-	const response = [
-		'HTTP/1.1 204 No Content',
-		`Access-Control-Allow-Origin: ${allowOrigin}`,
-		'Access-Control-Allow-Methods: POST, GET, OPTIONS, PUT, DELETE, PATCH',
-		'Access-Control-Allow-Headers: solana-client, DNT, X-CustomHeader, Keep-Alive, User-Agent, X-Requested-With, If-Modified-Since, Cache-Control, Content-Type',
-		'Access-Control-Max-Age: 86400',
-		'Content-Length: 0',
-		'Connection: keep-alive',
-		'',
-		''
-	].join('\r\n')
-	console.log(response)
-	socket.write(response)
+    socket.write(response)
 }
 
 const socketData = async (socket: Socket, serverClass: conet_si_server, server: Server) => {
@@ -234,7 +228,7 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
     logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${socket.remoteAddressShow}`)
 
     // 使用 .on 来持续监听数据，而不是 .once
-    socket.on('data', (chunk: Buffer) => {
+    socket.on ('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk])
         
         const peek = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii')
@@ -242,14 +236,20 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
 
         if (!handledOptions && peek.startsWith('OPTIONS')) {
             const end = peek.indexOf(separator)
-            if (end !== -1) {
-                const requestText = peek.substring(0, end)
-                const lines = requestText.split('\r\n').filter(Boolean)
-                responseOPTIONS(socket, lines)
-                // 真正从 Buffer 中剥离已处理部分
-                buffer = buffer.subarray(end + separator.length)
-                handledOptions = true
+
+            // 头还没收全：继续等待下一包（但本轮必须 return，别往下走）
+            if (end === -1) {
+                return
             }
+
+            // 头收全：正常回 OPTIONS
+            const requestText = peek.substring(0, end)
+            const lines = requestText.split('\r\n').filter(Boolean)
+            responseOPTIONS(socket, lines)
+
+            buffer = buffer.subarray(end + separator.length)
+            handledOptions = true
+            return
         }
 
         // 识别 POST/GET 起始

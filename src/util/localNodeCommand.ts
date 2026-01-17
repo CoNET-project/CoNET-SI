@@ -1489,7 +1489,6 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	}
 
 
-
 	const command = checkSign (content.message, content.signMessage)
 
 	if (!command) {
@@ -1736,6 +1735,17 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		nodeWallet: nodeWallet?.address?.toLowerCase(),
 		hash: await nodeWallet?.signMessage(CurrentEpoch.toString())
 	}
+
+    const sseHeaders =
+        `HTTP/1.1 200 OK\r\n` +
+        // @ts-ignore
+        `Date: ${new Date().toGMTString()}\r\n` +
+        `Content-Type: text/event-stream; charset=utf-8\r\n` +
+        `Cache-Control: no-cache, no-transform\r\n` +
+        `Connection: keep-alive\r\n` +
+        `X-Accel-Buffering: no\r\n` +                 // nginx: 禁止缓冲
+        `Access-Control-Allow-Origin: *\r\n` +
+        `\r\n`
 
 	// @ts-ignore
 	const responseData = typeof res.getTLSTicket !== 'function'
