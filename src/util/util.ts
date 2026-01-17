@@ -3,8 +3,8 @@ import {inspect} from 'node:util'
 import cCNTPABI from './cCNTP.json'
 import { logger } from './logger'
 import Colors from 'colors/safe'
-import {httpsPostToUrl, getAllNodeWallets} from './localNodeCommand'
-
+import {getAllNodeWallets} from './localNodeCommand'
+import type { Socket } from 'node:net'
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import type {RequestOptions} from 'node:http'
@@ -18,8 +18,11 @@ import { throws } from 'node:assert'
 import passport_distributor_ABI from './passport_distributor-ABI.json'
 import duplicateFactoryABI from './duplicateFactoryABI.json'
 import newNodeInfoABI from './newNodeInfoABI.json'
-
+import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
 import CoNET_PGP_ABI from './ABI/conetPgp.json'
+import path from 'node:path'
+import os from 'node:os'
+import fs from 'node:fs'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
@@ -75,8 +78,6 @@ const _checkNFT = (nft: any[], fromAddr: string) => {
 }
 const duplicateFactory_addr = '0x87A70eD480a2b904c607Ee68e6C3f8c54D58FB08'
 const duplicateFactory_readOnly = new ethers.Contract(duplicateFactory_addr, duplicateFactoryABI, CONETP_mainnet_rovider)
-
-
 
 
 export const checkPayment = async(fromAddr: string) => {
@@ -301,7 +302,7 @@ export const initPGPRouteManager = (privateKey: string) => {
     pgp_managerSCPool.push(conet_PGP_manager_SC)
 }
 
-const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|null> => {
+const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
     try {
         const client = clientRoute.get(keyFormat)
         if (!client) {
@@ -309,9 +310,11 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|null> => {
                 try {
                     const route = await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(keyFormat)
                     if (!route) {
-                        return null
+                        return false
                     }
-                    const node = routerInfo.get(route)
+
+                    //      keyID ==> node
+                    const node = routerInfo.get(route.toUpperCase())
                     if (node) {
                         clientRoute.set(keyFormat, node)
                         return node
@@ -331,7 +334,7 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|null> => {
         logger(`getRouteFromPGP Error`, ex.message)
         
     }
-    return null
+    return false
     
 }
 
@@ -343,27 +346,27 @@ const clientStatusPool: {
 
 export const isMyRoute = async (userAddress: string, nodeAddress: string): Promise<boolean> => {
   try {
-    if (!ethers.isAddress(userAddress)) return false
+        if (!ethers.isAddress(userAddress)) return false
 
-   const wallet = new ethers.Wallet(nodePrivatekey, CONETP_mainnet_rovider)
-   
+    const wallet = new ethers.Wallet(nodePrivatekey, CONETP_mainnet_rovider)
+    
 
-    const SC = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, wallet)
+        const SC = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, wallet)
 
-    // 1️⃣ node 是否是已注册节点
-    const nodeHash: string = await SC.nodeWallet2KeyHash(nodeAddress)
-    if (!nodeHash || nodeHash === ethers.ZeroHash) return false
+        // 1️⃣ node 是否是已注册节点
+        const nodeHash: string = await SC.nodeWallet2KeyHash(nodeAddress)
+        if (!nodeHash || nodeHash === ethers.ZeroHash) return false
 
-    const nodeExists: boolean = await SC.nodeKeyExists(nodeHash)
-    if (!nodeExists) return false
+        const nodeExists: boolean = await SC.nodeKeyExists(nodeHash)
+        if (!nodeExists) return false
 
-    // 2️⃣ 用户当前 route 是否指向该 node
-    const userRouteHash: string = await SC.userRouteHash(userAddress)
-    if (!userRouteHash || userRouteHash === ethers.ZeroHash) return false
+        // 2️⃣ 用户当前 route 是否指向该 node
+        const userRouteHash: string = await SC.userRouteHash(userAddress)
+        if (!userRouteHash || userRouteHash === ethers.ZeroHash) return false
 
-    return userRouteHash.toLowerCase() === nodeHash.toLowerCase()
+        return userRouteHash.toLowerCase() === nodeHash.toLowerCase()
   } catch (e) {
-    return false
+        return false
   }
 }
 
@@ -394,12 +397,11 @@ const statusProcess = async () => {
 
 export const setClientOnline = (wallet: string, status: boolean) => {
 
-
-
     clientStatusPool.push({
         wallet,
         status
     })
+    
     statusProcess()
 }
 
@@ -412,12 +414,130 @@ export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
         if (!client) {
             return []
         }
+       
         
 		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
 		return [client.ipaddress, client.wallet]
 	}
     
 	return [node.ipaddress, node.wallet]
+}
+
+export const tryGetLocal = (clentKeyID: string): string[] => {
+    if (!clentKeyID) return []
+
+    const homeDir = os.homedir()
+    const baseDir = path.join(homeDir, '.data')
+
+    if (!fs.existsSync(baseDir)) {
+        return []
+    }
+
+    const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
+    const filePath = path.join(baseDir, `${safeKey}.json`)
+
+    if (!fs.existsSync(filePath)) {
+        return []
+    }
+
+    let result: string[] = []
+
+    try {
+        const raw = fs.readFileSync(filePath, 'utf8')
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+        result = parsed.filter(v => typeof v === 'string')
+        }
+    } catch {
+        // ignore parse errors
+    } finally {
+        // ✅ 关键：无论成功与否，读取后立即删除
+        try {
+        fs.unlinkSync(filePath)
+        } catch {
+        // ignore delete errors
+        }
+    }
+
+    return result
+}
+
+
+const saveLocal = (pgpMessage: string, clentKeyID: string) => {
+    if (!pgpMessage || !clentKeyID) return
+
+    // 跨 OS 的 home 目录
+    const homeDir = os.homedir()
+
+    // ~/.data
+    const baseDir = path.join(homeDir, '.data')
+
+    // 如果目录不存在，先创建
+    if (!fs.existsSync(baseDir)) {
+        fs.mkdirSync(baseDir, { recursive: true })
+    }
+
+    // 按 key 分文件
+    const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
+    const filePath = path.join(baseDir, `${safeKey}.json`)
+
+    let list: string[] = []
+
+    // 如果文件存在，读取已有数组
+    if (fs.existsSync(filePath)) {
+        try {
+            const raw = fs.readFileSync(filePath, 'utf8')
+            const parsed = JSON.parse(raw)
+            if (Array.isArray(parsed)) {
+                list = parsed
+            }
+        } catch {
+        // 文件损坏 / 非 JSON → 重置
+            list = []
+        }
+    }
+
+    // 追加 pgpMessage
+    list.push(pgpMessage)
+
+    // 写回文件
+    fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
+}
+
+export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined, socket: Socket) => {
+    const clientWallet = await getClientWalletAddress(clentKeyID) 
+    if (!clientWallet) {
+        distorySocketPayment(socket)
+        logger(`forWardPGPMessageToClient ERROR! no clentKeyID ${clentKeyID} to Wallet in smart contract!`)
+        return true
+    }
+
+    response200Html(socket, JSON.stringify({}))
+
+    if (!clent) {
+        logger(`forWardPGPMessageToClient clentKeyID ${clentKeyID} off line! save to local `)
+        await saveLocal (pgpMessage, clentKeyID)
+        return true
+    }
+
+    const res = clent.res
+
+    if (res.writable && !res.closed) {
+		res.write( pgpMessage, (err: any) => {
+			if (err) {
+				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
+				
+			} else {
+				//logger(Colors.grey(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
+			}
+			
+			
+		})
+		
+	}
+
+    return true
+
 }
 
 
@@ -528,6 +648,27 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 	
 }
 
+
+const getClientWalletAddress = async (
+    pgpKeyID: string
+): Promise<string | null> => {
+    try {
+        if (!pgpKeyID || typeof pgpKeyID !== "string") return null
+
+
+        const wallet: string = await PGP_manager_readonly.getUserByPgpKeyID(pgpKeyID)
+
+        // 合约语义：address(0) = 不存在
+        if (!wallet || wallet === ethers.ZeroAddress) {
+            return null
+        }
+
+        return wallet.toLowerCase()
+    } catch (err) {
+        console.error("getClientWalletAddress failed:", err)
+        return null
+    }
+}
 
 
 const test = async () => {

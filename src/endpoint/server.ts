@@ -267,7 +267,6 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
 
 }
 
-
 const totalCOnnect = (server: Server ): Promise<number> => new Promise( executor => {
     server.getConnections((err, count) => {
         if (err) {

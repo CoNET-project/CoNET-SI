@@ -29,13 +29,13 @@ import IP from 'ip'
 import {TLSSocket} from 'node:tls'
 import {resolve4} from 'node:dns'
 import {access, constants} from 'node:fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, tryGetLocal } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
-
+import { once } from 'events'
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
 import nodeRestartABI from './nodeRestartABI.json'
-import { mapLimit } from 'async'
+import { mapLimit, until } from 'async'
 import {BandwidthCount} from './socks5Connect_v2'
 
 
@@ -1562,10 +1562,36 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 	//			forward encrypted text
 	const [_route, wallet] = await getRoute (gpgPublicKeyID)
 
+
 	if ( !_route ) {
 		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
 		return response200Html(socket, JSON.stringify({}))
 	}
+
+    if (_route === nodeIpAddr) {
+        logger(`forwardEncryptedSocket to MySelf!!`)
+        const client = livenessListeningPool.get(gpgPublicKeyID)
+        if (client) {
+            livenessListeningPool.delete(gpgPublicKeyID)
+        }
+        
+        const waitRunningBlockProcess = async () => {
+            while (runningBlockProcess) {
+                await new Promise(resolve => setTimeout(resolve, 1000))
+            }
+        }
+
+        await waitRunningBlockProcess()
+
+        await forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, socket)
+
+        if (client) {
+            livenessListeningPool.set(gpgPublicKeyID, client)
+        }
+        
+        return 
+    }
+   
 
 	//logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID}:${wallet} to node ${_route}`))
 
@@ -1584,8 +1610,11 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
     if (!wallet) {
         reScanAllWallets()
-        logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!!******************************`)
+        return logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!!******************************`)
     }
+
+    
+
 
 	return socketForward( _route, 80, socket, encryptedText, wallet)
 }
@@ -1656,15 +1685,27 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 	}
 })
 
-interface livenessListeningPoolObj {
-	res: Socket|TLSSocket
-	ipaddress: string
-	wallet: string
-}
+
 //			getIpAddressFromForwardHeader(req.header(''))
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
+
+async function writeLinesWithBackpressure(
+    res: TLSSocket|Socket,
+    lines: string[]
+) {
+    for (const line of lines) {
+        // 如果客户端断开，立即停止
+        if (res.destroyed || res.writableEnded) return
+
+        const ok = res.write(line + '\r\n\r\n')
+        if (!ok) {
+        // ✅ 背压：等待缓冲区排空
+        await once(res, 'drain')
+        }
+    }
+}
 
 const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket, clientKeyID: string) => {
 	const _obj = livenessListeningPool.get (wallet)
@@ -1680,13 +1721,13 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		ipaddress, wallet, res
 	}
 	
-	livenessListeningPool.set (wallet, obj)
-    livenessListeningPGPKeyIDPool.set(keyID, obj)
+	
 
     const isMyClient = await isMyRoute(wallet, nodeWallet?.address)
     if (isMyClient) {
         setClientOnline(wallet, true)
     }
+
     
 	const returnData = {
 		ipaddress,
@@ -1725,7 +1766,16 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
 
-	return testMinerCOnnecting (res, responseData, wallet, ipaddress)
+	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
+    const data = await tryGetLocal(keyID)
+    if (data.length) {
+        await writeLinesWithBackpressure(res, data)
+    }
+    
+    if (res.destroyed || res.writableEnded) return 
+    
+    livenessListeningPool.set (wallet, obj)
+    livenessListeningPGPKeyIDPool.set(keyID, obj)
 }
 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
@@ -1800,7 +1850,7 @@ const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: str
 	//logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${res.remoteAddress}`))
 	// logger(inspect(returnData, false, 3, true))
 	if (res.writable && !res.closed) {
-		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
+		return res.write( (typeof returnData === 'string' ? returnData : JSON.stringify(returnData)) + '\r\n\r\n', async err => {
 			if (err) {
 				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 				livenessListeningPool.delete(wallet)

@@ -214,3 +214,9 @@ type ITypeTransferCount = {
 	nodeIpaddress: string
 	ssl?: boolean
 }
+
+interface livenessListeningPoolObj {
+	res: Socket|TLSSocket
+	ipaddress: string
+	wallet: string
+}
