@@ -1801,6 +1801,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     
     livenessListeningPool.set (wallet, obj)
     if (keyID) {
+        logger(`Client ${wallet} has PGPKey ID ${keyID} for this Node add to online Pool!`)
         livenessListeningPGPKeyIDPool.set(keyID, obj)
     }
     
