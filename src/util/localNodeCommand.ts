@@ -1573,7 +1573,10 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         
         if (client) {
+            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has client ${client.wallet}`)
             livenessListeningPool.delete(client.wallet)
+        } else {
+            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
         }
         
         const waitRunningBlockProcess = async () => {
