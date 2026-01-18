@@ -543,7 +543,7 @@ export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: 
         await saveLocal (pgpMessage, clentKeyID)
         return true
     }
-    const data = JSON.stringify({data: pgpMessage})
+    const data = JSON.stringify({data: pgpMessage})+'\r\n\r\n'
     const res = clent.res
 
     if (res.writable && !res.closed) {
