@@ -23,7 +23,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
@@ -872,7 +872,7 @@ const setToUssrPool = (_wallet: string) => {
     validatorUserPool.set (wallet, _timeout)
 }
 
-export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet, clientKeyID: string) => {
+export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
 		case 'SilentPass': {
@@ -976,7 +976,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 
 		case 'mining': {		
-			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, clientKeyID)
+			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket)
 		}
 
 		case 'mining_validator': {
@@ -1496,7 +1496,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 		return distorySocket(socket)
 	}
 	
-	return localNodeCommandSocket(socket, headers, command, wallet, customerKeyID )
+	return localNodeCommandSocket(socket, headers, command, wallet )
 	
 }
 
@@ -1711,7 +1711,11 @@ async function writeLinesWithBackpressure(
     }
 }
 
-const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket, clientKeyID: string) => {
+const getKeyIDFromWallet = () => {
+    forWardPGPMessageToClient
+}
+
+const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket) => {
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		if (_obj.res.writable && typeof _obj.res.end === 'function') {
@@ -1719,7 +1723,9 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		}
 	}
 
-    const keyID = clientKeyID.toUpperCase()
+    
+    const keyID = await getWalletFromKeyID(wallet)
+
 
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
@@ -1762,7 +1768,9 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	res.once('error', err => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
 		livenessListeningPool.delete(wallet)
-        livenessListeningPGPKeyIDPool.delete(keyID)
+        if (keyID) {
+            livenessListeningPGPKeyIDPool.delete(keyID)
+        }
         if (isMyClient) {
             setClientOnline(wallet, false)
         }
@@ -1772,7 +1780,9 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	res.once('close', () => {
 		//logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
 		livenessListeningPool.delete(wallet)
-        livenessListeningPGPKeyIDPool.delete(keyID)
+        if (keyID) {
+            livenessListeningPGPKeyIDPool.delete(keyID)
+        }
 
         if (isMyClient) {
             setClientOnline(wallet, false)
@@ -1790,7 +1800,10 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     if (res.destroyed || res.writableEnded) return 
     
     livenessListeningPool.set (wallet, obj)
-    livenessListeningPGPKeyIDPool.set(keyID, obj)
+    if (keyID) {
+        livenessListeningPGPKeyIDPool.set(keyID, obj)
+    }
+    
 }
 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()

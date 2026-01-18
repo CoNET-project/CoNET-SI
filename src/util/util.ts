@@ -302,6 +302,24 @@ export const initPGPRouteManager = (privateKey: string) => {
     pgp_managerSCPool.push(conet_PGP_manager_SC)
 }
 
+
+export const getWalletFromKeyID = async (wallet: string) => {
+    try{
+        const [userPgpKeyID,
+            userPublicKeyArmored,
+            routePgpKeyID,
+            routePublicKeyArmored,
+            routeOnline] = await PGP_manager_readonly.searchKey(wallet)
+        if (!userPgpKeyID || userPgpKeyID.length === 0) {
+            return null
+        }
+        return userPgpKeyID
+    } catch(ex: any) {
+        logger(`getWalletFromKeyID Error ${ex.message}`)
+    }
+    return null
+}
+
 const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
     logger(` await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(${keyFormat})`)
     try {
