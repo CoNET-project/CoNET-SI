@@ -303,6 +303,7 @@ export const initPGPRouteManager = (privateKey: string) => {
 }
 
 const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
+    logger(` await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(${keyFormat})`)
     try {
         const client = clientRoute.get(keyFormat)
         if (!client) {
@@ -323,7 +324,7 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
                     }
                     
                 } catch (ex: any) {
-                    
+                    logger(`await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(keyFormat) Error`, ex.message)
                 }
 
             } else {
