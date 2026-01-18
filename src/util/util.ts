@@ -543,11 +543,11 @@ export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: 
         await saveLocal (pgpMessage, clentKeyID)
         return true
     }
-
+    const data = JSON.stringify({data: pgpMessage})
     const res = clent.res
 
     if (res.writable && !res.closed) {
-		res.write( pgpMessage, (err: any) => {
+		res.write( data, (err: any) => {
 			if (err) {
 				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 				
