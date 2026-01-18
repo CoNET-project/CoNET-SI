@@ -349,6 +349,8 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
                 logger(`getRouteFromPGP pgp_managerSCPool NULL Error!`)
             }
             
+        } else {
+            return client
         }
         
     } catch (ex: any) {
