@@ -310,12 +310,14 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
                 try {
                     const route = await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(keyFormat)
                     if (!route) {
+                        logger(`PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(${keyFormat}) GOT !route `)
                         return false
                     }
 
                     //      keyID ==> node
                     const node = routerInfo.get(route.toUpperCase())
                     if (node) {
+                        logger(`routerInfo.get(route.toUpperCase()=${route.toUpperCase()}) === ${node.ipaddress}`)
                         clientRoute.set(keyFormat, node)
                         return node
                     }
@@ -409,9 +411,12 @@ export const setClientOnline = (wallet: string, status: boolean) => {
 export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
     const keyFormat = keyID.toUpperCase()
 	const node = routerInfo.get(keyFormat)
+    logger(``)
 	if (!node) {
+        logger(`routerInfo.get ${keyFormat} NULL`)
         const client = await getRouteFromPGP(keyFormat)
         if (!client) {
+            logger(Colors.red(`getRoute has not !client`))
             return []
         }
        
