@@ -1709,9 +1709,11 @@ async function writeLinesWithBackpressure(
         if (res.destroyed || res.writableEnded) return
 
         const ok = res.write(line + '\r\n\r\n')
+        logger(`writeLinesWithBackpressure try send ${line}`)
         if (!ok) {
-        // ✅ 背压：等待缓冲区排空
-        await once(res, 'drain')
+            logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
+            // ✅ 背压：等待缓冲区排空
+            await once(res, 'drain')
         }
     }
 }
@@ -1807,7 +1809,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
         
         await writeLinesWithBackpressure(res, data)
     }
-    
+    logger(`======================================= User ${keyID} success all offline data!`)
     if (res.destroyed || res.writableEnded) return 
     
     livenessListeningPool.set (wallet, obj)
