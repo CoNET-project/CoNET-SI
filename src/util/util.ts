@@ -530,7 +530,7 @@ const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
 }
 
-export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined) => {
+export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined, callback: () => void) => {
     
 
     
@@ -550,13 +550,13 @@ export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: 
 			} else {
 				//logger(Colors.grey(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
 			}
-			
+			callback()
 			
 		})
 		
 	}
 
-    return true
+    
 
 }
 

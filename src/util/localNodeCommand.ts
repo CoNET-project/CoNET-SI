@@ -1589,13 +1589,13 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         await waitRunningBlockProcess()
 
-        await forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client)
+        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, () => {
+            if (client) {
+                livenessListeningPool.set(client.wallet, client)
+            }
+        })
 
-        if (client) {
-            livenessListeningPool.set(client.wallet, client)
-        }
         
-        return 
     }
    
 
