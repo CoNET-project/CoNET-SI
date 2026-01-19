@@ -530,16 +530,10 @@ const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
 }
 
-export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined, socket: Socket) => {
-    const clientWallet = await getClientWalletAddress(clentKeyID) 
-    if (!clientWallet) {
-        distorySocketPayment(socket)
-        logger(`forWardPGPMessageToClient ERROR! no clentKeyID ${clentKeyID} to Wallet in smart contract!`)
-        return true
-    }
+export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined) => {
+    
 
-    response200Html(socket, JSON.stringify({}))
-
+    
     if (!clent) {
         logger(`forWardPGPMessageToClient clentKeyID ${clentKeyID} off line! save to local `)
         await saveLocal (pgpMessage, clentKeyID)

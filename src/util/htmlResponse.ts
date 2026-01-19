@@ -16,9 +16,28 @@ export const distorySocket = (socket: Socket, header = '404 Not Found') => {
 }
 
 export const response200Html = (socket: Socket, responseData: string) => {
-    //	@ts-ignore
-	const time = new Date().toGMTString()
-    const response = `HTTP/1.1 200 OK\r\nServer: nginx/1.18.0\r\nDate: ${time}\r\nContent-Type: text/html\r\nContent-Length: ${responseData.length}\r\nConnection: keep-alive\r\n\r\n${responseData}\r\n`
+    const time = new Date().toUTCString()
+    const body = responseData
+    const length = Buffer.byteLength(body)
 
-    socket.end(response).destroy()
+    const response =
+        "HTTP/1.1 200 OK\r\n" +
+        "Server: nginx/1.18.0\r\n" +
+        `Date: ${time}\r\n` +
+        "Content-Type: text/html; charset=utf-8\r\n" +
+        `Content-Length: ${length}\r\n` +
+        "Connection: keep-alive\r\n" +
+
+        // ===== CORS =====
+        "Access-Control-Allow-Origin: *\r\n" +
+        "Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n" +
+        "Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, Accept, Origin\r\n" +
+        "Access-Control-Allow-Credentials: true\r\n" +
+        "Access-Control-Expose-Headers: Content-Length, Content-Type\r\n" +
+        "Access-Control-Max-Age: 86400\r\n" +
+
+        "\r\n" +
+        body
+
+    socket.end(response)
 }

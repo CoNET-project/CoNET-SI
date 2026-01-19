@@ -1568,6 +1568,8 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 	}
 
     if (_route === nodeIpAddr) {
+        response200Html(socket, '')
+
         logger(`forwardEncryptedSocket to MySelf!!`)
         const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
 
@@ -1587,7 +1589,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         await waitRunningBlockProcess()
 
-        await forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, socket)
+        await forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client)
 
         if (client) {
             livenessListeningPool.set(client.wallet, client)
