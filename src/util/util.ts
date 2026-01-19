@@ -489,7 +489,7 @@ export const tryGetLocal = (clentKeyID: string): string[] => {
 }
 
 
-const saveLocal = (pgpMessage: string, clentKeyID: string) => {
+export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     if (!pgpMessage || !clentKeyID) return
 
     // 跨 OS 的 home 目录

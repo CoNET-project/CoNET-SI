@@ -23,7 +23,7 @@ import { Writable } from 'node:stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'node:tls'
@@ -1579,6 +1579,9 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
             livenessListeningPool.delete(client.wallet)
         } else {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
+            
+            await saveLocal (encryptedText, gpgPublicKeyID)
+            return
         }
         
         const waitRunningBlockProcess = async () => {
