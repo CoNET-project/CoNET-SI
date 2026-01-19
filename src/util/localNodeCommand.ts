@@ -1797,8 +1797,14 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
 
 	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
+
+    logger(`======================================= try to get ${keyID}  offline datas`)
+
     const data = await tryGetLocal(keyID)
+   logger(`======================================= User ${keyID} has offline datas = ${data.length}`)
+
     if (data.length) {
+        
         await writeLinesWithBackpressure(res, data)
     }
     
