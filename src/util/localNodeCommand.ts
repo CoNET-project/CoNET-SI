@@ -1598,7 +1598,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
             }
         })
 
-        
+        return
     }
    
 
@@ -1707,8 +1707,8 @@ async function writeLinesWithBackpressure(
     for (const line of lines) {
         // 如果客户端断开，立即停止
         if (res.destroyed || res.writableEnded) return
-
-        const ok = res.write(line + '\r\n\r\n')
+        const data = JSON.stringify({data: line}) + '\r\n\r\n'
+        const ok = res.write(data)
         logger(`writeLinesWithBackpressure try send ${line}`)
         if (!ok) {
             logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
@@ -1718,9 +1718,6 @@ async function writeLinesWithBackpressure(
     }
 }
 
-const getKeyIDFromWallet = () => {
-    forWardPGPMessageToClient
-}
 
 const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket) => {
 	const _obj = livenessListeningPool.get (wallet)
