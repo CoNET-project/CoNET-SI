@@ -1797,7 +1797,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	})
 
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
-
+    //  first data
 	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
 
     logger(`======================================= try to get ${keyID}  offline datas`)
