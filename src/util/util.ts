@@ -528,6 +528,7 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
 
     // 写回文件
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
+    logger(`${clentKeyID} messge save to Local`)
 }
 
 export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined, callback: () => void) => {
