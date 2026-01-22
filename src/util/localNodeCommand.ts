@@ -1729,7 +1729,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 
     
     const keyID = await getWalletFromKeyID(wallet)
-
+    
 
 	const obj: livenessListeningPoolObj = {
 		ipaddress, wallet, res
@@ -1797,23 +1797,26 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     //  first data
 	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
 
-    logger(`======================================= try to get ${keyID}  offline datas`)
-
-    const data = await tryGetLocal(keyID)
-   logger(`======================================= User ${keyID} has offline datas = ${data.length}`)
-
-    if (data.length) {
-        
-        await writeLinesWithBackpressure(res, data)
-    }
-    logger(`======================================= User ${keyID} success all offline data!`)
-    if (res.destroyed || res.writableEnded) return 
-    
-    livenessListeningPool.set (wallet, obj)
+    logger(`======================================= User ${wallet} has PGP KeyID = ${keyID}`)
     if (keyID) {
+        logger(`======================================= try to get ${keyID}:${wallet}  offline datas`)
+
+        const data = await tryGetLocal(keyID)
+        logger(`======================================= User ${keyID}:${wallet} has offline datas = ${data.length}`)
+    
+        if (data.length) {
+        
+            await writeLinesWithBackpressure(res, data)
+        }
+        logger(`======================================= User ${keyID} success all offline data!`)
+        if (res.destroyed || res.writableEnded) return 
         logger(`Client ${wallet} has PGPKey ID ${keyID} for this Node add to online Pool!`)
         livenessListeningPGPKeyIDPool.set(keyID, obj)
+
     }
+   
+    livenessListeningPool.set (wallet, obj)
+
     
 }
 
