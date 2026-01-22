@@ -1800,7 +1800,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     logger(`======================================= User ${wallet} has PGP KeyID = ${keyID}`)
     if (keyID) {
         logger(`======================================= try to get ${keyID}:${wallet}  offline datas`)
-
+        
         const data = await tryGetLocal(keyID)
         logger(`======================================= User ${keyID}:${wallet} has offline datas = ${data.length}`)
     

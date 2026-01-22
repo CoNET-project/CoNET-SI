@@ -313,6 +313,9 @@ export const getWalletFromKeyID = async (wallet: string) => {
         if (!userPgpKeyID || userPgpKeyID.length === 0) {
             return null
         }
+
+
+        await getRouteFromPGP(userPgpKeyID)
         return userPgpKeyID
     } catch(ex: any) {
         logger(`getWalletFromKeyID Error ${ex.message}`)
@@ -322,6 +325,7 @@ export const getWalletFromKeyID = async (wallet: string) => {
 
 const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
     logger(` await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(${keyFormat})`)
+
     try {
         const client = clientRoute.get(keyFormat)
         if (!client) {
