@@ -1728,7 +1728,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 			_obj.res.end().destroy()
 		}
 	}
-
+    logger(`addIpaddressToLivenessListeningPool started for ${ipaddress}:${wallet} try process getWalletFromKeyID`)
     
     const keyID = await getWalletFromKeyID(wallet)
     
@@ -1737,10 +1737,11 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		ipaddress, wallet, res
 	}
 	
-	
+	logger(`addIpaddressToLivenessListeningPool isMyClient = await isMyRoute(wallet, nodeWallet?.address)`)
 
     const isMyClient = await isMyRoute(wallet, nodeWallet?.address)
     if (isMyClient) {
+        logger(`addIpaddressToLivenessListeningPool setClientOnline TRUE`)
         setClientOnline(wallet, true)
     }
 
@@ -1799,7 +1800,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     //  first data
 	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
 
-    logger(`======================================= User ${wallet} has PGP KeyID = ${keyID}`)
+    logger(`======================================= addIpaddressToLivenessListeningPool User ${wallet} has PGP KeyID = ${keyID} `)
     if (keyID) {
         logger(`======================================= try to get ${keyID}:${wallet}  offline datas`)
         
