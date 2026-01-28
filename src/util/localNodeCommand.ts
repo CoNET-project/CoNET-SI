@@ -1594,9 +1594,11 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (err) => {
             if (err && client) {
+                logger(`forWardPGPMessageToClient SUCCESS`, encryptedText)
                 livenessListeningPool.set(client.wallet, client)
                 return 
             }
+            logger(`forWardPGPMessageToClient online SAVE to LOCAL`, encryptedText)
             await saveLocal (encryptedText, gpgPublicKeyID)
         })
 

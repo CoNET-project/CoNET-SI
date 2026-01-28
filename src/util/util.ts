@@ -545,7 +545,7 @@ export const forWardPGPMessageToClient = (pgpMessage: string, clentKeyID: string
     if (res.writable && !res.closed) {
 		res.write( data, (err: any) => {
 			if (err) {
-				logger(Colors.red (`stratliveness write Error! ${clentKeyID} `))
+				logger(Colors.red (`stratliveness write Error! ${clentKeyID} `), )
 				return callback(false)
 			} 
             logger(Colors.red (`stratliveness write success! ${clentKeyID} `))
