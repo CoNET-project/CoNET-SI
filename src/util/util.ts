@@ -535,31 +535,27 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     logger(`${clentKeyID} messages ${list.length } save to Local`)
 }
 
-export const forWardPGPMessageToClient = async (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj|undefined, callback: () => void) => {
+export const forWardPGPMessageToClient = (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj, callback: (err: boolean) => void) => {
     
 
     
-    if (!clent) {
-        logger(`forWardPGPMessageToClient clentKeyID ${clentKeyID} off line! save to local `)
-        await saveLocal (pgpMessage, clentKeyID)
-        return true
-    }
     const data = JSON.stringify({data: pgpMessage})+'\r\n\r\n'
     const res = clent.res
 
     if (res.writable && !res.closed) {
 		res.write( data, (err: any) => {
 			if (err) {
-				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
-				
-			} else {
-				//logger(Colors.grey(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
-			}
-			callback()
+				logger(Colors.red (`stratliveness write Error! ${clentKeyID} `))
+				return callback(false)
+			} 
+            logger(Colors.red (`stratliveness write success! ${clentKeyID} `))
+			return callback(true)
 			
 		})
 		
-	}
+	} else {
+        return callback(false)
+    }
 
     
 

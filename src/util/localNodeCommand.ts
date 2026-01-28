@@ -1592,10 +1592,12 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         await waitRunningBlockProcess()
 
-        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, () => {
-            if (client) {
+        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (err) => {
+            if (err && client) {
                 livenessListeningPool.set(client.wallet, client)
+                return 
             }
+            await saveLocal (encryptedText, gpgPublicKeyID)
         })
 
         return
