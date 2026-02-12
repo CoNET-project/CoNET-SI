@@ -127,32 +127,39 @@ let getAllNodesProcess = false
 let Guardian_Nodes: nodeInfo[] = []
 
 
-const _getAllNodes = (): Promise<any[]> => new Promise ( async executor => {
+const _getAllNodes = async (): Promise<any[]> => {
 
-	let i = 0
-	let nodes: any [] = []
-	let loop = true
-	const length = 100
-	do {
-		try {
+    let i = 0
+    let nodes: any[] = []
+    const length = 100
+
+    while (true) {
+        try {
             logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
-			const _nodes: any[] = await GuardianNodesMainnet.getAllNodes(i, length)
-			
-			if (_nodes.length < length || !_nodes) {
-				loop = false
-			}
-			i += length
-            
-            nodes = [...nodes, ..._nodes]
-		} catch (ex) {
-			await new Promise(executor=> setTimeout(() => executor(true), 2000))
-		}
 
-	} while (loop)
+            const _nodes: any[] = await GuardianNodesMainnet.getAllNodes(i, length)
 
-	return executor(nodes)
-	
-})
+            // ✅ 没数据直接停止
+            if (!_nodes || _nodes.length === 0) {
+                break
+            }
+
+            nodes.push(..._nodes)
+
+            // ✅ 小于 length 说明已经到底
+            if (_nodes.length < length) {
+                break
+            }
+
+            i += length
+
+        } catch (ex) {
+            await new Promise(r => setTimeout(r, 2000))
+        }
+    }
+
+    return nodes
+}
 
 let reScanAllWalletsProcess = false
 
