@@ -136,7 +136,9 @@ const _getAllNodes = async (): Promise<any[]> => {
   const all: any[] = []
   const seen = new Set<string>()
   const MAX_LOOP = 1000
+  const MAX_CONSECUTIVE_FAIL = 5  // 连续失败后退出，避免无限重试
   let loop = 0
+  let consecutiveFail = 0
 
   while (loop++ < MAX_LOOP) {
     logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
@@ -144,11 +146,19 @@ const _getAllNodes = async (): Promise<any[]> => {
     let page: any[]
     try {
       page = await GuardianNodesMainnet.getAllNodes(i, length)
+      consecutiveFail = 0
     } catch (e) {
+      consecutiveFail++
+      logger(Colors.red(`_getAllNodes Error (${consecutiveFail}/${MAX_CONSECUTIVE_FAIL}): ${(e as any)?.message ?? e}`))
+      if (consecutiveFail >= MAX_CONSECUTIVE_FAIL) {
+        logger(Colors.red(`_getAllNodes abort after ${MAX_CONSECUTIVE_FAIL} consecutive failures`))
+        break
+      }
       await new Promise(r => setTimeout(r, 2000))
       continue
     }
 
+    logger(`_getAllNodes page received: length=${page?.length ?? 0}, i=${i}`)
     if (!page || page.length === 0) break
 
     let validCount = 0
@@ -169,6 +179,7 @@ const _getAllNodes = async (): Promise<any[]> => {
       added++
     }
 
+    logger(`_getAllNodes page processed: validCount=${validCount}, added=${added}, all.length=${all.length}`)
     if (validCount === 0) break
     if (added === 0) break  // 无新节点，避免重复数据死循环
 
