@@ -133,44 +133,47 @@ const _getAllNodes = async (): Promise<any[]> => {
   let i = 0
   const length = 100
 
-  const nodes: any[] = []
+  const all: any[] = []
   const seen = new Set<string>()
 
   while (true) {
     logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
 
-    let _nodes: any[] | undefined
+    let page: any[]
     try {
-      _nodes = await GuardianNodesMainnet.getAllNodes(i, length)
-    } catch (ex) {
+      page = await GuardianNodesMainnet.getAllNodes(i, length)
+    } catch (e) {
       await new Promise(r => setTimeout(r, 2000))
       continue
     }
 
-    if (!_nodes || _nodes.length === 0) break
+    if (!page || page.length === 0) break
 
-    // ✅ 关键：统计本页新增了多少“有效且未见过”的节点
     let added = 0
-    for (const n of _nodes) {
-      // 如果是 address 字符串
-      const key = (typeof n === 'string' ? n : (n?.addr ?? n?.node ?? '')).toString().toLowerCase()
 
-      if (!key || key === ZERO) continue
+    for (const n of page) {
+      // ethers 返回 tuple：可能是数组式 n[2]，也可能带字段名 n.keyID
+      const keyID = (n?.keyID ?? n?.[2] ?? "").toString().trim().toLowerCase()
+      const ip = (n?.ip ?? n?.[3] ?? "").toString().trim().toLowerCase()
+
+      // 没有 keyID 的也可以用 ip 顶一下（可选）
+      const key = keyID || ip
+      if (!key) continue
+
       if (seen.has(key)) continue
-
       seen.add(key)
-      nodes.push(n)
+
+      all.push(n)
       added++
     }
 
-    // ✅ 本页没有任何新增 => 到头/重复页/全是0地址 => 停止
+    // ✅ 关键：本页没有任何新增 => 已经到底 / 返回重复页 / 用默认值填满
     if (added === 0) break
 
-    // 继续下一页
     i += length
   }
 
-  return nodes
+  return all
 }
 
 let reScanAllWalletsProcess = false
