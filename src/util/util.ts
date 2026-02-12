@@ -26,13 +26,13 @@ import fs from 'node:fs'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
-export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
+export const CoNET_mainnet_RPC = 'https://mainnet-rpc1.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
-const GuardianNodeInfo_mainnet = '0x2DF3302d0c9aC19BE01Ee08ce3DDA841BdcF6F03'.toLowerCase()
+const GuardianNodeInfo_mainnet = '0xCd68C3FFFE403f9F26081807c77aB29a4DF6940D'.toLowerCase()
 
 const conet_PGP_address = '0x84de3EA6446489E6a267B0AAD2fAe1462564C32E'
 const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)
@@ -147,15 +147,22 @@ const _getAllNodes = async (): Promise<any[]> => {
     try {
       page = await GuardianNodesMainnet.getAllNodes(i, length)
       consecutiveFail = 0
-    } catch (e) {
-      consecutiveFail++
-      logger(Colors.red(`_getAllNodes Error (${consecutiveFail}/${MAX_CONSECUTIVE_FAIL}): ${(e as any)?.message ?? e}`))
-      if (consecutiveFail >= MAX_CONSECUTIVE_FAIL) {
-        logger(Colors.red(`_getAllNodes abort after ${MAX_CONSECUTIVE_FAIL} consecutive failures`))
-        break
+    } catch (e: any) {
+      // 合约返回 0x（空数据）时，ethers 无法解码，视为无节点
+      if (e?.code === 'BAD_DATA' && /value="0x"/.test(e?.message ?? '')) {
+        logger(`_getAllNodes: contract returned empty (0x), treat as no nodes`)
+        page = []
+        consecutiveFail = 0
+      } else {
+        consecutiveFail++
+        logger(Colors.red(`_getAllNodes Error (${consecutiveFail}/${MAX_CONSECUTIVE_FAIL}): ${e?.message ?? e}`))
+        if (consecutiveFail >= MAX_CONSECUTIVE_FAIL) {
+          logger(Colors.red(`_getAllNodes abort after ${MAX_CONSECUTIVE_FAIL} consecutive failures`))
+          break
+        }
+        await new Promise(r => setTimeout(r, 2000))
+        continue
       }
-      await new Promise(r => setTimeout(r, 2000))
-      continue
     }
 
     logger(`_getAllNodes page received: length=${page?.length ?? 0}, i=${i}`)
