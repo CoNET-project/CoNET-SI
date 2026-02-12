@@ -127,38 +127,50 @@ let getAllNodesProcess = false
 let Guardian_Nodes: nodeInfo[] = []
 
 
+const ZERO = '0x0000000000000000000000000000000000000000'
+
 const _getAllNodes = async (): Promise<any[]> => {
+  let i = 0
+  const length = 100
 
-    let i = 0
-    let nodes: any[] = []
-    const length = 100
+  const nodes: any[] = []
+  const seen = new Set<string>()
 
-    while (true) {
-        try {
-            logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
+  while (true) {
+    logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
 
-            const _nodes: any[] = await GuardianNodesMainnet.getAllNodes(i, length)
-
-            // ✅ 没数据直接停止
-            if (!_nodes || _nodes.length === 0) {
-                break
-            }
-
-            nodes.push(..._nodes)
-
-            // ✅ 小于 length 说明已经到底
-            if (_nodes.length < length) {
-                break
-            }
-
-            i += length
-
-        } catch (ex) {
-            await new Promise(r => setTimeout(r, 2000))
-        }
+    let _nodes: any[] | undefined
+    try {
+      _nodes = await GuardianNodesMainnet.getAllNodes(i, length)
+    } catch (ex) {
+      await new Promise(r => setTimeout(r, 2000))
+      continue
     }
 
-    return nodes
+    if (!_nodes || _nodes.length === 0) break
+
+    // ✅ 关键：统计本页新增了多少“有效且未见过”的节点
+    let added = 0
+    for (const n of _nodes) {
+      // 如果是 address 字符串
+      const key = (typeof n === 'string' ? n : (n?.addr ?? n?.node ?? '')).toString().toLowerCase()
+
+      if (!key || key === ZERO) continue
+      if (seen.has(key)) continue
+
+      seen.add(key)
+      nodes.push(n)
+      added++
+    }
+
+    // ✅ 本页没有任何新增 => 到头/重复页/全是0地址 => 停止
+    if (added === 0) break
+
+    // 继续下一页
+    i += length
+  }
+
+  return nodes
 }
 
 let reScanAllWalletsProcess = false
