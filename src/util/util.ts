@@ -135,8 +135,10 @@ const _getAllNodes = async (): Promise<any[]> => {
 
   const all: any[] = []
   const seen = new Set<string>()
+  const MAX_LOOP = 1000
+  let loop = 0
 
-  while (true) {
+  while (loop++ < MAX_LOOP) {
     logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
 
     let page: any[]
@@ -149,26 +151,26 @@ const _getAllNodes = async (): Promise<any[]> => {
 
     if (!page || page.length === 0) break
 
+    let validCount = 0
     let added = 0
 
     for (const n of page) {
-      // ethers 返回 tuple：可能是数组式 n[2]，也可能带字段名 n.keyID
       const keyID = (n?.keyID ?? n?.[2] ?? "").toString().trim().toLowerCase()
       const ip = (n?.ip ?? n?.[3] ?? "").toString().trim().toLowerCase()
 
-      // 没有 keyID 的也可以用 ip 顶一下（可选）
+      if (!keyID && !ip) continue
+      validCount++
+
       const key = keyID || ip
-      if (!key) continue
-
       if (seen.has(key)) continue
-      seen.add(key)
 
+      seen.add(key)
       all.push(n)
       added++
     }
 
-    // ✅ 关键：本页没有任何新增 => 已经到底 / 返回重复页 / 用默认值填满
-    if (added === 0) break
+    if (validCount === 0) break
+    if (page.length < length) break
 
     i += length
   }
