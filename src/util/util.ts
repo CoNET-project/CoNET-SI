@@ -170,9 +170,10 @@ const _getAllNodes = async (): Promise<any[]> => {
     }
 
     if (validCount === 0) break
-    if (page.length < length) break
+    if (added === 0) break  // 无新节点，避免重复数据死循环
 
-    i += length
+    // 按实际返回数量推进（合约可能每批最多返回 < length 条，不可依赖 page.length < length 判断末尾）
+    i += page.length
   }
 
   return all
@@ -213,59 +214,69 @@ export const reScanAllWallets = async () => {
 
 }
 
-export const getAllNodes = () => new Promise(async resolve=> {
-	
-	if (getAllNodesProcess) {
-		return resolve (true)
-	}
+export const getAllNodes = async (): Promise<boolean> => {
+  if (getAllNodesProcess) return true
 
+  getAllNodesProcess = true
+  try {
     const wallets = await getAllNodeWallets()
-    if (!wallets) {
-        logger(`getAllNodes Error: getAllNodeWallets NULL!!`)
+    if (!wallets) logger(`getAllNodes Error: getAllNodeWallets NULL!!`)
+
+    const nodes = await _getAllNodes()
+
+    // 先用 Map 去重（按 ipaddress）
+    const merged = new Map<string, nodeInfo>()
+
+    // 先把现有的放进去（保留已有）
+    for (const n of Guardian_Nodes) merged.set(n.ipaddress, n)
+
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i]
+      const id = Number(node[0].toString())
+
+      const pgpString = Buffer.from(node[1], "base64").toString()
+      const domain: string = node[2] ?? ""
+      const ipAddr: string = node[3] ?? ""
+      const region: string = node[4] ?? ""
+
+      if (!ipAddr) continue
+
+      let wallet = ""
+      if (wallets?.length) {
+        const hit = wallets.find(n => n.ipAddr === ipAddr)
+        if (hit) wallet = hit.wallet
+      }
+
+      const itemNode: nodeInfo = {
+        ipaddress: ipAddr,
+        pgpArmored: pgpString,
+        domain,
+        nftNumber: id,
+        regionName: region,
+        pgpKeyID: domain,
+        wallet
+      }
+
+      // 更新 routerInfo（按 domain）
+      if (domain) routerInfo.set(domain, itemNode)
+
+      // 更新 merged（按 ip 去重）
+      merged.set(ipAddr, itemNode)
     }
 
-	getAllNodesProcess = true
-
-
-    const _node = await _getAllNodes()
-	for (let i = 0; i < _node.length; i ++) {
-		const node = _node[i]
-		const id = parseInt(node[0].toString())
-		const pgpString: string = Buffer.from( node[1], 'base64').toString()
-		const domain: string = node[2]
-		const ipAddr: string = node[3]
-		const region: string = node[4]
-        let wallet = ''
-        if (wallets) {
-            const index = wallets.findIndex(n => n.ipAddr === ipAddr)
-            if (index > -1) {
-                wallet = wallets[index].wallet
-            }
-        }
-       
-		const itemNode: nodeInfo = {
-			ipaddress: ipAddr,
-			pgpArmored: pgpString,
-			domain: domain,
-			nftNumber: id,
-			regionName: region,
-			pgpKeyID: domain,
-			wallet
-		}
-		
-		routerInfo.set(domain, itemNode)
-        const index = Guardian_Nodes.findIndex(n => n.ipaddress === ipAddr)
-        if (index) {
-            Guardian_Nodes.splice(index, 1)
-        }
-		Guardian_Nodes.push(itemNode)
-  	}
-	
-	getAllNodesProcess = false
+    // 一次性替换，避免 splice/push 的各种坑
+    Guardian_Nodes.length = 0
+    Guardian_Nodes.push(...merged.values())
 
     logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
-	resolve(true)
-})
+    return true
+  } catch (e) {
+    logger(Colors.red(`getAllNodes Error: ${(e as any)?.message ?? e}`))
+    return false
+  } finally {
+    getAllNodesProcess = false
+  }
+}
 
 
 export const aesGcmEncrypt = async (plaintext: string, password: string) => {
