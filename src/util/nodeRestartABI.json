@@ -43,7 +43,7 @@
 	},
 	{
 		"inputs": [],
-		"name": "retsratBlockNumber",
+		"name": "restartBlockNumber",
 		"outputs": [
 			{
 				"internalType": "uint256",
