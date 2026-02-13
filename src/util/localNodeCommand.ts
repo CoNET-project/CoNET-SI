@@ -1996,7 +1996,7 @@ const nodeRestartEvent = (block: number) => new Promise (async resolve=> {
 	searchEpochEventProcess = true
 
 	await Promise.all([
-		checkCurrentRate(block),
+		// checkCurrentRate(block),
 		getRestart(block)
 	])
 
