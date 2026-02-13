@@ -1957,9 +1957,7 @@ let serttData: ICoNET_NodeSetup|null
 
 
 const getRestart = async (block: number) => {
-	if (block % 10 !== 0 ) {
-		return
-	}
+	
 	try {
 		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.retsratBlockNumber())
 		logger(`getRestart restartBlockNumber = ${restartBlockNumber} erttData.restartBlockNumber = ${serttData?.restartBlockNumber} ==========================================`)
