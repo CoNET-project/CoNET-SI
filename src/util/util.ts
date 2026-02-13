@@ -34,7 +34,7 @@ const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 const GuardianNodeInfo_mainnet = '0xCd68C3FFFE403f9F26081807c77aB29a4DF6940D'.toLowerCase()
 
-const conet_PGP_address = '0xB8065dBea9E50c24574280F8E8245fba90Eba782'
+const conet_PGP_address = '0x13A96Bcd6aB010619d1004A1Cb4f5FE149e0F4c4'
 const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)
 
 
