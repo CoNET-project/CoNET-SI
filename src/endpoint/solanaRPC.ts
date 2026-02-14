@@ -465,20 +465,13 @@ export const forwardToBaseRpc = (
     res.on('end', () => {
       if (!socket.writable) return
       const bodyBuf = Buffer.concat(chunks)
-      // 构造 SilentPassUI 可接受的响应：使用 Content-Length，避免 chunked 导致 ERR_INCOMPLETE_CHUNKED_ENCODING
-      const headers: string[] = []
-      for (let i = 0; i < res.rawHeaders.length; i += 2) {
-        const key = res.rawHeaders[i]
-        const value = res.rawHeaders[i + 1]
-        if (!/^(Access-Control-|Date|Allow|Transfer-Encoding|Content-Length|Connection)/i.test(key)) {
-          headers.push(`${key}: ${value}`)
-        }
-      }
-      headers.push('Content-Length: ' + bodyBuf.length)
-      headers.push('Connection: close')
-      headers.push('Access-Control-Allow-Origin: *')
-      headers.push('Access-Control-Allow-Methods: GET, POST, OPTIONS')
-      headers.push('Access-Control-Allow-Headers: Content-Type, Authorization')
+      // 仅使用极简头数据，不转发任何上游头，避免泄露转发者/上游隐私
+      const headers = [
+        'Content-Type: application/json',
+        'Content-Length: ' + bodyBuf.length,
+        'Connection: close',
+        'Access-Control-Allow-Origin: *',
+      ]
       const statusLine = `HTTP/1.1 ${res.statusCode} ${res.statusMessage}`
       socket.write(statusLine + '\r\n' + headers.join('\r\n') + '\r\n\r\n')
       socket.write(bodyBuf)
