@@ -460,34 +460,33 @@ export const forwardToBaseRpc = (
   }
 
   const req = Https.request(options, res => {
-    // 状态行
-    const statusLine = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}`
-    socket.write(statusLine + '\r\n')
-
-    // 写回过滤后的响应头
-    for (let i = 0; i < res.rawHeaders.length; i += 2) {
-      const key = res.rawHeaders[i]
-      const value = res.rawHeaders[i + 1]
-      if (!/^(Access-Control-|Date|Allow)/i.test(key)) {
-        socket.write(`${key}: ${value}\r\n`)
+    const chunks: Buffer[] = []
+    res.on('data', (c: Buffer) => chunks.push(c))
+    res.on('end', () => {
+      if (!socket.writable) return
+      const bodyBuf = Buffer.concat(chunks)
+      // 构造 SilentPassUI 可接受的响应：使用 Content-Length，避免 chunked 导致 ERR_INCOMPLETE_CHUNKED_ENCODING
+      const headers: string[] = []
+      for (let i = 0; i < res.rawHeaders.length; i += 2) {
+        const key = res.rawHeaders[i]
+        const value = res.rawHeaders[i + 1]
+        if (!/^(Access-Control-|Date|Allow|Transfer-Encoding|Content-Length|Connection)/i.test(key)) {
+          headers.push(`${key}: ${value}`)
+        }
       }
-    }
-
-    // 覆盖/追加宽松的 CORS
-    socket.write('Access-Control-Allow-Origin: *\r\n')
-    socket.write('Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n')
-    socket.write('Access-Control-Allow-Headers: Content-Type, Authorization\r\n')
-
-    socket.write('\r\n')
-
-    // 把上游 body 直接丢给客户端
-    res.pipe(socket)
-
+      headers.push('Content-Length: ' + bodyBuf.length)
+      headers.push('Connection: close')
+      headers.push('Access-Control-Allow-Origin: *')
+      headers.push('Access-Control-Allow-Methods: GET, POST, OPTIONS')
+      headers.push('Access-Control-Allow-Headers: Content-Type, Authorization')
+      const statusLine = `HTTP/1.1 ${res.statusCode} ${res.statusMessage}`
+      socket.write(statusLine + '\r\n' + headers.join('\r\n') + '\r\n\r\n')
+      socket.write(bodyBuf)
+      socket.end()
+    })
     res.on('error', err => {
       logger(Colors.red(`[HTTP] 上游响应错误: ${err.message}`))
-      if (socket.writable) {
-        socket.destroy()
-      }
+      if (socket.writable) socket.destroy()
     })
   })
 
