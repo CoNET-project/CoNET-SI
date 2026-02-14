@@ -412,8 +412,7 @@ export const forwardToBaseRpc = (
   // 检查是否有 WebSocket 升级（这里先只做检测，后面可以单独实现 ws 转发）
   const isWebSocketUpgradeIndex = requestHanders.findIndex(n => /Upgrade:/i.test(n))
 
-  logger(inspect(requestHanders, false, 3, true))
-  console.log('forwardToBaseRpc \n\n\n')
+  // logger(inspect(requestHanders, false, 3, true))
 
   // 从原始 header 行解析出键值对
 
@@ -444,14 +443,13 @@ export const forwardToBaseRpc = (
 //   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
   const options: Https.RequestOptions = {
-    hostname: baseRPC1,          // 确保 baseRPC 是纯域名，不要带 https://
+    hostname: baseRPC1,
     port: 443,
-    path: '/base',  // 你要固定打这个入口
+    path: '/base',
     method: 'POST',
-    headers: {      // 先带上客户端的有效头
-        ...forwardedHeaders,
-      
-      Host: baseRPC1             // 最后强制 Host 指向真实的 RPC 域名
+    headers: {
+      ...forwardedHeaders,
+      Host: baseRPC1
     }
   }
 
