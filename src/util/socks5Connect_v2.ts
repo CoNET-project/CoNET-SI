@@ -1,4 +1,4 @@
-import { createConnection, Socket } from 'net'
+import { createConnection, Socket } from 'node:net'
 import IP from 'ip'
 import nodeJs_DNS from 'node:dns'
 import { logger } from './logger'

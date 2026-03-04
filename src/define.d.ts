@@ -63,6 +63,12 @@ declare module 'net' {
   }
 }
 
+declare module 'node:net' {
+  interface Socket {
+    remoteAddressShow?: string
+  }
+}
+
 interface ICoNET_DL_POST_health_SI extends ICoNET_Router_Base {
 	nft_tokenid: string
 	platform_verison: string

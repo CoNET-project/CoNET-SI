@@ -5,6 +5,8 @@ import Cluster from 'node:cluster'
 import {Socket, createServer, Server} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
+import { startBaseVoteListen } from '../vote/baseVote'
+import { startConetVoteForERC20Deposited, startConetVoteForBUnitPurchased } from '../vote/conetVote'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -337,6 +339,15 @@ class conet_si_server {
         initPGPRouteManager(wallet.signingKey.privateKey)
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
+
+		// ERC20Deposited -> ConetTreasury vote；BUnitPurchased -> voteAirdropBUnit
+		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS
+		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS
+		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
+			startBaseVoteListen(baseTreasuryAddr, process.env.BASE_RPC ?? undefined)
+			startConetVoteForERC20Deposited(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
+			startConetVoteForBUnitPurchased(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
+		}
 	}
 
 	constructor () {

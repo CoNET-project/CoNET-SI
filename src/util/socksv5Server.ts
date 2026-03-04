@@ -108,7 +108,7 @@ class ClientSession {
 		this.client.setKeepAlive(true)
 		this.client.setTimeout(90_000)
 
-		this.client.on('data', d => this.onData(d))
+		this.client.on('data', d => this.onData(Buffer.isBuffer(d) ? d : Buffer.from(d)))
 		this.client.on('error', err => this.endBoth(`client_error ${err.message}`))
 		this.client.on('timeout', () => this.endBoth('client_timeout'))
 		this.client.on('close', () => this.endBoth('client_close'))
