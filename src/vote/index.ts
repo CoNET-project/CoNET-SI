@@ -1,6 +1,6 @@
 import { ethers, Wallet } from 'ethers'
 
-const BASE_RPC_DEFAULT = process.env.BASE_RPC || 'wss://base-rpc.conet.network/ws'
+const BASE_RPC_DEFAULT = process.env.BASE_RPC || 'https://1rpc.io/base'
 const CONET_RPC_DEFAULT = process.env.CONET_RPC || 'https://mainnet-rpc1.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
 
