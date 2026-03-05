@@ -331,6 +331,7 @@ class conet_si_server {
 		saveSetup ( this.initData, true )
 		const wallet: Wallet = this.initData.keyObj
 		this.nodeWallet = wallet
+		logger(Colors.green(`Wallet address: ${wallet.address}`))
 
         console.log(JSON.stringify(this.initData.pgpKey.privateKey))
 
@@ -398,9 +399,9 @@ class conet_si_server {
 
 		server.listen ( this.initData?.ipV4Port, () => {
 			logger(Colors.blue(`__dirname = ${__dirname}`))
-			
+			logger(Colors.green(`Wallet address: ${this.nodeWallet?.address ?? 'not ready'}`))
 			return console.table([
-                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } doamin name = ${this.publicKeyID}.conet.network` }
+                { 'CoNET SI node': `version ${version} startup success Url http://localhost:${ this.PORT } domain name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet?.address ?? 'not ready'}` }
 				
             ])
 		})
@@ -444,10 +445,9 @@ class conet_si_server {
 		})
 
 		server.listen(443, () => {
-		
-			
+			logger(Colors.green(`Wallet address: ${this.nodeWallet?.address ?? 'not ready'}`))
 			return console.table([
-                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 doamin name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet?.address}` }
+                { 'CoNET SI SSL server started': `version ${version} startup success Url http://localhost:443 domain name = ${this.publicKeyID}.conet.network wallet = ${this.nodeWallet?.address ?? 'not ready'}` }
             ])
 		})
 
