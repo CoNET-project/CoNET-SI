@@ -72,7 +72,8 @@
 		"copyfiles": "^2.4.1"
 	},
 	"resolutions": {
-		"@types/node": "^20.11.0"
+		"@types/node": "^20.11.0",
+		"@ethereumjs/util": "9.0.3"
 	},
 	"main": "dist/endpoint/server",
 	"types": "dist/endpoint/server"
