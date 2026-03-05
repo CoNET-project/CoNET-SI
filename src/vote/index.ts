@@ -22,8 +22,9 @@ function debug(msg: string, data?: object) {
 }
 
 /**
- * Check if wallet is miner of both BaseTreasury and ConetTreasury.
- * If both, start listening to BaseTreasury events. On BUnitPurchased, vote via ConetTreasury.
+ * Check if wallet is miner of ConetTreasury.
+ * If so, start listening to BaseTreasury events. On BUnitPurchased, vote via ConetTreasury.
+ * BaseTreasury miner status is not required.
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
@@ -41,24 +42,17 @@ export async function startBaseVoteListen(
   const baseTreasury = new ethers.Contract(baseTreasuryAddr, BASE_TREASURY_ABI, baseProvider)
   const conetTreasury = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetProvider)
 
-  const [isBaseMiner, isConetMiner] = await Promise.all([
-    baseTreasury.isMiner(wallet.address),
-    conetTreasury.isMiner(wallet.address),
-  ])
+  const isConetMiner = await conetTreasury.isMiner(wallet.address)
 
   debug('Miner check', {
     wallet: wallet.address,
     baseTreasury: baseTreasuryAddr,
     conetTreasury: conetTreasuryAddr,
-    isBaseMiner,
     isConetMiner,
   })
 
-  if (!isBaseMiner || !isConetMiner) {
-    debug('Not miner of both treasuries, skipping BaseTreasury event listener', {
-      isBaseMiner,
-      isConetMiner,
-    })
+  if (!isConetMiner) {
+    debug('Not ConetTreasury miner, skipping BaseTreasury event listener', { isConetMiner })
     return
   }
 
