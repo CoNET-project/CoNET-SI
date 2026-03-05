@@ -5,8 +5,8 @@ import Cluster from 'node:cluster'
 import {Socket, createServer, Server} from 'node:net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
-import { startBaseVoteListen } from '../vote/baseVote'
-import { startConetVoteForERC20Deposited, startConetVoteForBUnitPurchased } from '../vote/conetVote'
+import { startBaseVoteListen } from '../vote'
+import { startConetVoteForERC20Deposited } from '../vote/conetVote'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'node:tls'
@@ -340,13 +340,20 @@ class conet_si_server {
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 
-		// ERC20Deposited -> ConetTreasury vote；BUnitPurchased -> voteAirdropBUnit
-		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS
-		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS
+		// BaseTreasury events: miner check + listen (ETHDeposited, ERC20Deposited, BUnitPurchased)
+		// BUnitPurchased -> ConetTreasury.voteAirdropBUnitFromBase with high gas
+		// 地址来自 deployments/conet-addresses.json，见 env.example
+		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
+		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || '0x8C1E53955bFD235Cb2b1bFB223918697497582c0'
 		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
-			startBaseVoteListen(baseTreasuryAddr, process.env.BASE_RPC ?? undefined)
+			startBaseVoteListen(
+				this.nodeWallet,
+				baseTreasuryAddr,
+				conetTreasuryAddr,
+				process.env.BASE_RPC ?? undefined,
+				process.env.CONET_RPC ?? undefined
+			)
 			startConetVoteForERC20Deposited(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
-			startConetVoteForBUnitPurchased(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
 		}
 	}
 
