@@ -1,34 +1,34 @@
-import type { Socket } from 'node:net'
-import {createConnection} from 'node:net'
+import type { Socket } from 'net'
+import {createConnection} from 'net'
 import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
 import {logger, hexDebug} from './logger'
-import Crypto from 'node:crypto'
+import crypto from 'crypto'
 import Colors from 'colors/safe'
-import {inspect} from 'node:util'
+import {inspect} from 'util'
 import { generateKey, readKey, readPrivateKey, decryptKey, createCleartextMessage, sign as pgpSign, readMessage, decrypt, encrypt, createMessage, enums } from "openpgp"
 import { publicKeyByPrivateKey, encryptWithPublicKey, cipher, hash, hex, publicKey, createIdentity, recover, util, sign } from 'eth-crypto'
-import {join} from 'node:path'
-import { homedir, networkInterfaces, cpus } from 'node:os'
-import { createHash, webcrypto } from 'node:crypto'
-import { stat, mkdir, writeFile, linkSync } from 'node:fs'
-import { get, request as requestHttps, RequestOptions } from 'node:https'
-import { request as requestHttp} from 'node:http'
-import type {IncomingMessage, RequestOptions as RequestOptionsHttp} from 'node:http'
-import {Transform} from 'node:stream'
+import {join} from 'path'
+import { homedir, networkInterfaces, cpus } from 'os'
+import { createHash, webcrypto } from 'crypto'
+import { stat, mkdir, writeFile, linkSync } from 'fs'
+import { get, request as requestHttps, RequestOptions } from 'https'
+import { request as requestHttp} from 'http'
+import type {IncomingMessage, RequestOptions as RequestOptionsHttp} from 'http'
+import {Transform} from 'stream'
 import type { KeyID as typeOpenPGPKeyID } from 'openpgp'
 import type {Key, PrivateKey, Message, MaybeStream, DecryptMessageResult, WebStream } from 'openpgp'
 import { uuidV4, Wallet } from 'ethers'
-import { exec } from 'node:child_process'
-import { Writable } from 'node:stream'
+import { exec } from 'child_process'
+import { Writable } from 'stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
 import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
-import {TLSSocket} from 'node:tls'
-import {resolve4} from 'node:dns'
-import {access, constants} from 'node:fs/promises'
+import {TLSSocket} from 'tls'
+import {resolve4} from 'dns'
+import {access, constants} from 'fs/promises'
 import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, tryGetLocal } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
@@ -215,17 +215,18 @@ export const waitKeyInput: (query: string, password: boolean ) => Promise<string
 	const mutableStdout = <Writable & {muted: boolean} > new Writable ({
 		write: ( chunk, encoding, next ) => {
 			if (! mutableStdout.muted ) {
-				process.stdout.write (chunk, encoding)
+				(process.stdout as any).write(chunk, encoding)
 			}
 			return next()
 		}
 	})
 	
-	const rl = createInterface ({
-		input: process.stdin,
-        output: mutableStdout,
-		terminal: true
-	})
+	const rl = createInterface(
+		process.stdin as unknown as NodeJS.ReadableStream,
+		mutableStdout as unknown as NodeJS.WritableStream,
+		undefined,
+		true
+	)
 
 	return new Promise ( resolve => {
 		rl.question ( Colors.green( query ), ans => {
@@ -790,7 +791,7 @@ const connectWithHttp = (requestOrgnal1: RequestOrgnal, clientRes: Socket, passw
  * @param wallet The wallet address for logging.
  */
 const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket, wallet: string) => {
-    const session_id = Crypto.randomBytes(4).toString('hex');
+    const session_id = crypto.randomBytes(4).toString('hex');
     logger(Colors.cyan(`[V2] [${session_id}] New PURE HTTP session for [${wallet}]`));
 
     let host: string;
@@ -1708,26 +1709,29 @@ async function writeLinesWithBackpressure(
     res: TLSSocket|Socket,
     lines: string[]
 ) {
+    const s = res as Socket
     for (const line of lines) {
         // 如果客户端断开，立即停止
-        if (res.destroyed || res.writableEnded) return
+        if (s.destroyed || (s as any).writableEnded) return
         const data = JSON.stringify({data: line}) + '\r\n\r\n'
-        const ok = res.write(data)
+        const ok = s.write(data)
         logger(`writeLinesWithBackpressure try send ${line}`)
         if (!ok) {
             logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
             // ✅ 背压：等待缓冲区排空
-            await once(res, 'drain')
+            await once(s, 'drain')
         }
     }
 }
 
 
 const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket) => {
+	const s = res as Socket
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
-		if (_obj.res.writable && typeof _obj.res.end === 'function') {
-			_obj.res.end().destroy()
+		const o = _obj.res as Socket
+		if (o.writable && typeof o.end === 'function') {
+			;(o as any).end().destroy()
 		}
 	}
     logger(`addIpaddressToLivenessListeningPool started for ${ipaddress}:${wallet} try process getWalletFromKeyID`)
@@ -1768,13 +1772,13 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
         `\r\n`
 
 	// @ts-ignore
-	const responseData = typeof res.getTLSTicket !== 'function'
+	const responseData = typeof (res as any).getTLSTicket !== 'function'
 	//@ts-ignore
 		? `HTTP/1.1 200 OK\r\nDate: ${ new Date ().toGMTString()}\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n${JSON.stringify(returnData)}\r\n\r\n` 
 		: JSON.stringify(returnData)
 
 
-	res.once('error', err => {
+	s.once('error', (err: Error) => {
 		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
 		livenessListeningPool.delete(wallet)
         if (keyID) {
@@ -1786,7 +1790,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
         
 	})
 
-	res.once('close', () => {
+	s.once('close', () => {
 		//logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
 		livenessListeningPool.delete(wallet)
         if (keyID) {
@@ -1800,7 +1804,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
     //  first data
-	await testMinerCOnnecting (res, responseData, wallet, ipaddress)
+	await testMinerCOnnecting (s, responseData, wallet, ipaddress)
 
     logger(`======================================= addIpaddressToLivenessListeningPool User ${wallet} has PGP KeyID = ${keyID} `)
     if (keyID) {
@@ -1814,7 +1818,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
             await writeLinesWithBackpressure(res, data)
         }
         logger(`======================================= User ${keyID} success all offline data!`)
-        if (res.destroyed || res.writableEnded) return 
+        if ((res as Socket).destroyed || (res as any).writableEnded) return 
         logger(`Client ${wallet} has PGPKey ID ${keyID} for this Node add to online Pool!`)
         livenessListeningPGPKeyIDPool.set(keyID, obj)
 
@@ -1871,10 +1875,11 @@ const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
 // }
 
 const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
-	logger(Colors.blue(`gossipCnnecting SENT DATA to ${res.remoteAddress}`))
+	const s = res as Socket
+	logger(Colors.blue(`gossipCnnecting SENT DATA to ${s.remoteAddress}`))
 	logger(inspect(returnData, false, 3, true))
-	if (res.writable && !res.closed) {
-		return res.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', async err => {
+	if (s.writable && !(s as any).closed) {
+		return s.write( typeof returnData === 'string' ? returnData : JSON.stringify(returnData)+'\r\n\r\n', (err?: Error | null) => {
 			if (err) {
 				logger(Colors.grey (`gossipCnnecting write Error! delete ${wallet}:${ipaddress} from gossipListeningPool [${gossipListeningPool.size}]`))
 				gossipListeningPool.delete(wallet)
@@ -1894,10 +1899,11 @@ const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string,
 
 
 const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
-	//logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${res.remoteAddress}`))
+	const s = res as Socket
+	//logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${s.remoteAddress}`))
 	// logger(inspect(returnData, false, 3, true))
-	if (res.writable && !res.closed) {
-		return res.write( (typeof returnData === 'string' ? returnData : JSON.stringify(returnData)) + '\r\n\r\n', async err => {
+	if (s.writable && !(s as any).closed) {
+		return s.write( (typeof returnData === 'string' ? returnData : JSON.stringify(returnData)) + '\r\n\r\n', (err?: Error | null) => {
 			if (err) {
 				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
 				livenessListeningPool.delete(wallet)

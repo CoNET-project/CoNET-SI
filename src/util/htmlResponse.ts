@@ -1,4 +1,4 @@
-import type {Socket} from 'node:net'
+import type {Socket} from 'net'
 import { logger } from './logger'
 
 export const distorySocketPayment = (socket: Socket) => {

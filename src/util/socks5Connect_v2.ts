@@ -1,6 +1,6 @@
-import { createConnection, Socket } from 'node:net'
+import { createConnection, Socket } from 'net'
 import IP from 'ip'
-import nodeJs_DNS from 'node:dns'
+import nodeJs_DNS from 'dns'
 import { logger } from './logger'
 import { inspect } from 'util'
 import { distorySocket } from './htmlResponse'

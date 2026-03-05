@@ -1,6 +1,6 @@
 // socks5.ts
 
-import * as net from 'node:net'
+import * as net from 'net'
 type SockState = 'handshake' | 'request' | 'proxy'
 
 const SOCKS_VERSION = 0x05

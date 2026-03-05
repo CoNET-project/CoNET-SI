@@ -1,15 +1,15 @@
 
-import { join } from 'node:path'
-import { inspect, } from 'node:util'
-import Cluster from 'node:cluster'
-import {Socket, createServer, Server} from 'node:net'
+import { join } from 'path'
+import { inspect, } from 'util'
+import Cluster from 'cluster'
+import {Socket, createServer, Server} from 'net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
 import { startBaseVoteListen } from '../vote'
 import { startConetVoteForERC20Deposited } from '../vote/conetVote'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
-import {createServer as createServerSSL, TLSSocket} from 'node:tls'
+import {createServer as createServerSSL, TLSSocket} from 'tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
 import {initPGPRouteManager} from '../util/util'
@@ -48,6 +48,7 @@ const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
 
 const responseHttpBody = (socket: Socket|TLSSocket, body: string) => {
+    const s = socket as Socket
     const ret = `HTTP/1.1 200 OK\r\n` +
 	`Server: nginx/1.24.0 (Ubuntu)\r\n` +
 	//@ts-ignore
@@ -58,10 +59,10 @@ const responseHttpBody = (socket: Socket|TLSSocket, body: string) => {
 	'access-control-allow-origin: *\r\n' +
 	`Accept-Ranges: bytes\r\n\r\n` + body + '\r\n'
 
-    if (socket.writable) {
-		socket.write(ret, err => {
-			socket.end(() => {
-				logger(Colors.blue(`responseRootHomePage PIPE End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${body.length}`))
+    if (s.writable) {
+		s.write(ret, (err?: Error | null) => {
+			s.end(() => {
+				logger(Colors.blue(`responseRootHomePage PIPE End() ${s?.remoteAddress} socket.writable = ${s.writable} homepage length =${body.length}`))
 			})
 			
 		})
@@ -215,22 +216,23 @@ const responseOPTIONS = (socket: Socket, requestHeaders: string[]) => {
     socket.write(response)
 }
 
-const socketData = async (socket: Socket, serverClass: conet_si_server, server: Server) => {
+const socketData = async (socket: Socket | TLSSocket, serverClass: conet_si_server, server: Server) => {
+    const s = socket as Socket
     let buffer = Buffer.alloc(0); // 在监听器外部定义一个缓冲区，用于拼接不完整的数据包
     let handledOptions = false; // 状态标记，标识是否处理过OPTIONS
 
-    const remoteAddress = socket.remoteAddress?.split(':')
+    const remoteAddress = s.remoteAddress?.split(':')
     const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
-    socket.remoteAddressShow = ip
+    s.remoteAddressShow = ip
 
-    socket.setTimeout(60_000, () => { if (!socket.destroyed) socket.destroy() })
-    socket.setNoDelay(true)
-    socket.setKeepAlive(true, 30_000)
+    s.setTimeout(60_000, () => { if (!s.destroyed) s.destroy() })
+    s.setNoDelay(true)
+    s.setKeepAlive(true, 30_000)
 
-    logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${socket.remoteAddressShow}`)
+    logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${s.remoteAddressShow}`)
 
     // 使用 .on 来持续监听数据，而不是 .once
-    socket.on ('data', (chunk: Buffer) => {
+    s.on ('data', (chunk: Buffer) => {
         buffer = Buffer.concat([buffer, chunk])
         
         const peek = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii')
@@ -247,7 +249,7 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
             // 头收全：正常回 OPTIONS
             const requestText = peek.substring(0, end)
             const lines = requestText.split('\r\n').filter(Boolean)
-            responseOPTIONS(socket, lines)
+            responseOPTIONS(s, lines)
 
             buffer = buffer.subarray(end + separator.length)
             handledOptions = true
@@ -258,12 +260,12 @@ const socketData = async (socket: Socket, serverClass: conet_si_server, server: 
         const headStr = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii').trim()
         
         if (headStr.length > 0 && (headStr.startsWith('POST') || headStr.startsWith('GET'))) {
-            socket.removeAllListeners('data')
+            s.removeAllListeners('data')
             // 直接把当前 Buffer 交给 getDataPOST（它会继续按 Buffer 读取）
-            return getDataPOST(socket, serverClass, buffer)
+            return getDataPOST(s, serverClass, buffer)
         }
        
-        return distorySocket(socket)
+        return distorySocket(s)
     })
 
 
@@ -415,30 +417,30 @@ class conet_si_server {
 
 		
 		const server = createServerSSL (options, async socket => {
-            
+            const s = socket as unknown as Socket
             const start = Date.now()
-            socket.setNoDelay(true)
-			socket.on('error', (err: any) => {
+            s.setNoDelay(true)
+			s.on('error', (err: Error & { code?: string }) => {
 				// 專門處理 ECONNRESET 錯誤
 				if (err.code === 'ECONNRESET') {
 					// 這種錯誤很常見，通常表示客戶端非正常關閉了連線。
-					console.warn(`[${socket.remoteAddressShow}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
+					console.warn(`[${s.remoteAddressShow}] 發生 ECONNRESET 錯誤，客戶端可能已強制關閉。這是可預期的。`);
                     
 				} else {
 					// 其他類型的錯誤
-					console.error(`[${socket.remoteAddressShow}] 發生未預期的 socket 錯誤:`, err)
+					console.error(`[${s.remoteAddressShow}] 發生未預期的 socket 錯誤:`, err)
 				}
 				
 				// 不需要手動銷毀 socket，因為發生錯誤後，'close' 事件會自動被觸發。
 			})
 
-			socket.on('end', async () => {
+			s.on('end', async () => {
                 const duration = Date.now() - start
 				logger(`createServerSSL socket.on('end') total connect = ************************** ${await totalCOnnect(server)} keep time = ${duration}`)
 				
 			})
             
-			return socketData( socket, this, server)
+			return socketData(s, this, server)
 		})
 
 		server.listen(443, () => {

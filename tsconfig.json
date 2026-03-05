@@ -9,7 +9,7 @@
 		"skipLibCheck": true,
 		"resolveJsonModule": true,
 		"types": ["node"],
-		"lib": ["ES2022"],
+		"lib": ["ES2022"]
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts", "src/**/*.d.ts"]
 }

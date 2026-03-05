@@ -1,14 +1,14 @@
-import Net from 'node:net'
-import { inspect, } from 'node:util'
+import Net from 'net'
+import { inspect, } from 'util'
 import {logger} from '../util/logger'
-import Tls from 'node:tls'
+import Tls from 'tls'
 import Colors from 'colors/safe'
 import  { distorySocket } from '../util/htmlResponse'
-import Http2 from 'node:http2'
-import {readFileSync} from 'node:fs'
-import { join } from 'node:path'
-import Https from 'node:https'
-import Http from 'node:http'
+import Http2 from 'http2'
+import {readFileSync} from 'fs'
+import { join } from 'path'
+import Https from 'https'
+import Http from 'http'
 
 //		curl -v -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' https://api.mainnet-beta.solana.com
 //		curl -v --http0.9 -H -s -X POST -H "Content-Type: application/json" -d '{"jsonrpc": "2.0","id": 1,"method": "getBalance","params": ["mDisFS7gA9Ro8QZ9tmHhKa961Z48hHRv2jXqc231uTF"]}' http://9977e9a45187dd80.conet.network/solana-rpc
@@ -61,6 +61,7 @@ const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 }
 
 const responseRootHomePage = (socket: Net.Socket| Tls.TLSSocket) => {
+	const s = socket as Net.Socket
 	const homepage = readFileSync(indexHtmlFileName, 'utf-8') + '\r\n\r\n'
 	//	@ts-ignore
 	const ret = `HTTP/1.1 200 OK\r\n` +
@@ -72,10 +73,10 @@ const responseRootHomePage = (socket: Net.Socket| Tls.TLSSocket) => {
 	'access-control-allow-origin: *\r\n' +
 	`Accept-Ranges: bytes\r\n\r\n` + homepage
 	
-	if (socket.writable) {
-		socket.write(ret, err => {
-			socket.end(() => {
-				logger(Colors.blue(`responseRootHomePage PIPE End() ${socket?.remoteAddress} socket.writable = ${socket.writable} homepage length =${homepage.length}`))
+	if (s.writable) {
+		s.write(ret, (err?: Error | null) => {
+			s.end(() => {
+				logger(Colors.blue(`responseRootHomePage PIPE End() ${s?.remoteAddress} socket.writable = ${s.writable} homepage length =${homepage.length}`))
 			})
 			
 		})
@@ -301,12 +302,13 @@ export const forwardToSolanaRpc = (
 	if (isUpgradeRequest) {
 		// For WebSockets, we need to handle the 'upgrade' event specifically.
 		proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+			const ps = proxySocket as Net.Socket
 			logger("Received 'upgrade' response from Solana RPC host.")
 
 			// Configure the proxy socket for long-lived connection
-			proxySocket.setTimeout(0)
-			proxySocket.setNoDelay(true)
-			proxySocket.setKeepAlive(true, 0)
+			ps.setTimeout(0)
+			ps.setNoDelay(true)
+			ps.setKeepAlive(true, 0)
 
 			// Forward the 101 Switching Protocols response to the client
 			const responseHeaders = [
@@ -320,19 +322,19 @@ export const forwardToSolanaRpc = (
 			logger("Sent 101 Switching Protocols to client.")
 
 			// Establish the bidirectional pipe
-			proxySocket.pipe(clientSocket).pipe(proxySocket)
+			ps.pipe(clientSocket).pipe(ps)
 
 			// Handle any data that came with the upgrade request
 			if (proxyHead && proxyHead.length) {
-				proxySocket.write(proxyHead);
+				ps.write(proxyHead);
 			}
 			
 			// Handle cleanup for the proxy socket
-			proxySocket.on('error', (err) => {
+			ps.on('error', (err: Error) => {
 				logger("Error on proxy WebSocket:", err.message)
 				cleanup();
 			});
-			proxySocket.on('close', () => {
+			ps.on('close', () => {
 				logger("Proxy WebSocket closed.")
 				cleanup()
 			})
@@ -462,22 +464,23 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 	})
 
 	req.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+		const ps = proxySocket as Net.Socket
 		logger(`req.on('upgrade')`)
 		logger(inspect(proxyRes.headers, false, 3, true))
-		proxySocket.on('error', err => {
+		ps.on('error', (err: Error) => {
 			logger(Colors.red(`proxySocket.on('error')`), err.message)
 		})
 
-		proxySocket.on('end', function () {
+		ps.on('end', function () {
 			logger(Colors.red(`proxySocket.on('end')`))
 		})
 
-		proxySocket.setTimeout(0)
-		proxySocket.setNoDelay(true)
-		proxySocket.setKeepAlive(true, 0)
+		ps.setTimeout(0)
+		ps.setNoDelay(true)
+		ps.setKeepAlive(true, 0)
 
 		if (proxyHead && proxyHead.length) {
-			proxySocket.unshift(proxyHead)
+			ps.unshift(proxyHead)
 		}
 		logger(inspect(proxyRes.headers, false, 3, true))
 		const socketHandle = createHttpHeader('HTTP/1.1 101 Switching Protocols', proxyRes.headers)
@@ -486,7 +489,7 @@ export const forwardToSilentpass = (socket: Net.Socket, body: string, requestHan
 
 		socket.write(socketHandle)
 		
-		proxySocket.pipe(socket).pipe(proxySocket)
+		ps.pipe(socket).pipe(ps)
 
 	})
 
