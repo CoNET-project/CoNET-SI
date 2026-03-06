@@ -118,11 +118,8 @@ export async function startBaseVoteListen(
   try {
     lastBlock = BigInt(await baseProvider.getBlockNumber())
   } catch (err: unknown) {
-    debug('Poller setup: Base getBlockNumber failed', {
-      baseRpcUrl,
-      protocol: baseRpcProtocol,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const errMsg = err instanceof Error ? err.message : String(err)
+    debug(`Poller setup: Base getBlockNumber failed baseRpcUrl=${baseRpcUrl} protocol=${baseRpcProtocol} error=${errMsg}`)
     return
   }
   debug('Poller setup: got initial block', { block: lastBlock.toString() })
