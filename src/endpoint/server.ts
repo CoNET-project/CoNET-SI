@@ -349,6 +349,7 @@ class conet_si_server {
 		// 优先 BASE_RPC_HTTP（1rpc.io 等仅 HTTP 的 RPC），否则用 BASE_RPC（wss 会在 vote 内转为 https）
 		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
 		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || '0xA7fb50fE8e09E17E74081014d49f4E80729cCA48'
+		logger(Colors.cyan(`[vote] Starting BaseTreasury vote listen: baseTreasury=${baseTreasuryAddr} conetTreasury=${conetTreasuryAddr}`))
 		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
 			startBaseVoteListen(
 				this.nodeWallet,
@@ -358,6 +359,8 @@ class conet_si_server {
 				process.env.CONET_RPC ?? undefined
 			)
 			startConetVoteForERC20Deposited(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
+		} else {
+			logger(Colors.yellow(`[vote] Skipped startBaseVoteListen: baseTreasuryAddr=${!!baseTreasuryAddr} conetTreasuryAddr=${!!conetTreasuryAddr} nodeWallet=${!!this.nodeWallet}`))
 		}
 	}
 

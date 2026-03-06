@@ -25,9 +25,10 @@ const CONET_TREASURY_ABI = [
   'function voteAirdropBUnitFromBase(bytes32 txHash, address user, uint256 usdcAmount) external',
 ] as const
 
+const VOTE_TAG = 'vote'
 function debug(msg: string, data?: object) {
   const ts = new Date().toISOString()
-  console.log(`[${ts}] [vote] ${msg}`, data ? JSON.stringify(data, null, 2) : '')
+  console.log(`[${ts}] [${VOTE_TAG}] ${msg}`, data ? JSON.stringify(data, null, 2) : '')
 }
 
 /**
@@ -49,6 +50,8 @@ async function getBUnitPurchasedLogs(
   return logs
 }
 
+const EXPECTED_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
+
 /**
  * Check if wallet is miner of ConetTreasury.
  * If so, poll BaseTreasury for BUnitPurchased via eth_getLogs (base-rpc.conet.network compatible).
@@ -62,10 +65,28 @@ export async function startBaseVoteListen(
   conetRpc?: string
 ): Promise<void> {
   const baseRpcUrl = toHttpRpcUrl(baseRpc || BASE_RPC_DEFAULT)
+  const isHttp = /^https:\/\//.test(baseRpcUrl)
   const baseProvider = new ethers.JsonRpcProvider(baseRpcUrl)
   const conetProvider = new ethers.JsonRpcProvider(conetRpc || CONET_RPC_DEFAULT)
   const baseTreasury = new ethers.Contract(baseTreasuryAddr, BASE_TREASURY_ABI, baseProvider)
   const conetTreasury = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetProvider)
+
+  debug('startBaseVoteListen init', {
+    baseTreasuryAddr,
+    expectedBaseTreasury: EXPECTED_BASE_TREASURY,
+    addressMatch: baseTreasuryAddr.toLowerCase() === EXPECTED_BASE_TREASURY.toLowerCase(),
+    baseRpcUrl,
+    isHttp,
+    conetTreasuryAddr,
+    wallet: wallet.address,
+  })
+
+  if (baseTreasuryAddr.toLowerCase() !== EXPECTED_BASE_TREASURY.toLowerCase()) {
+    debug('WARN: baseTreasuryAddr does not match expected', {
+      actual: baseTreasuryAddr,
+      expected: EXPECTED_BASE_TREASURY,
+    })
+  }
 
   const isConetMiner = await conetTreasury.isMiner(wallet.address)
 
@@ -90,25 +111,46 @@ export async function startBaseVoteListen(
     return
   }
 
-  debug('Starting BaseTreasury poller (eth_getLogs, no eth_newFilter)', {
+  debug('Starting BaseTreasury poller (eth_getLogs)', {
     pollIntervalMs: POLL_INTERVAL_MS,
+    baseTreasuryAddr,
+    bunitPurchasedTopic,
+    isHttp,
   })
 
   let lastBlock = BigInt(await baseProvider.getBlockNumber())
   const processedTxHashes = new Set<string>()
+  let tickCount = 0
 
   const tick = async () => {
+    tickCount++
     try {
       const currentBlock = BigInt(await baseProvider.getBlockNumber())
-      if (currentBlock <= lastBlock) return
+      if (currentBlock <= lastBlock) {
+        if (isHttp && tickCount % 5 === 1) {
+          debug('Poll tick (no new blocks)', { lastBlock: lastBlock.toString(), currentBlock: currentBlock.toString(), tickCount })
+        }
+        return
+      }
 
+      const fromBlock = lastBlock + 1n
       const logs = await getBUnitPurchasedLogs(
         baseProvider,
         baseTreasuryAddr,
         bunitPurchasedTopic,
-        lastBlock + 1n,
+        fromBlock,
         currentBlock
       )
+
+      if (isHttp) {
+        debug('Poll tick (HTTP) listening', {
+          baseTreasuryAddr,
+          fromBlock: fromBlock.toString(),
+          toBlock: currentBlock.toString(),
+          logsCount: logs.length,
+          tickCount,
+        })
+      }
 
       for (const log of logs) {
         const txHash = log.transactionHash ?? ''
@@ -155,6 +197,11 @@ export async function startBaseVoteListen(
   setInterval(tick, POLL_INTERVAL_MS)
   tick()
 
-  debug('BaseTreasury poller started')
+  debug('BaseTreasury poller started', {
+    baseTreasuryAddr,
+    initialLastBlock: lastBlock.toString(),
+    pollIntervalMs: POLL_INTERVAL_MS,
+    isHttp,
+  })
 }
 
