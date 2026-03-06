@@ -354,14 +354,14 @@ export const forwardToSolanaRpc = (
     }
 }
 /**
- * Base RPC 转发目标：使用 Beamio Base RPC
- * 可通过环境变量 BASE_RPC_HTTP 覆盖，例如 BASE_RPC_HTTP=https://base-rpc.conet.network
+ * Base RPC 转发目标：使用 1rpc.io Base RPC
+ * 可通过环境变量 BASE_RPC_HTTP 覆盖，例如 BASE_RPC_HTTP=https://1rpc.io/base
  *
- * curl -v -X POST https://base-rpc.conet.network \
+ * curl -v -X POST https://1rpc.io/base \
  *  -H "Content-Type: application/json" \
  *  --data '{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{...},"latest"]}'
  */
-const BASE_RPC_HTTP_DEFAULT = 'https://base-rpc.conet.network'
+const BASE_RPC_HTTP_DEFAULT = 'https://1rpc.io/base'
 function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
 	const url = process.env.BASE_RPC_HTTP || process.env.BASE_RPC || BASE_RPC_HTTP_DEFAULT
 	// 支持 wss:// 格式的 BASE_RPC，转为 https://
@@ -374,7 +374,7 @@ function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
 			path: u.pathname || '/'
 		}
 	} catch {
-		return { hostname: 'base-rpc.conet.network', port: 443, path: '/' }
+		return { hostname: '1rpc.io', port: 443, path: '/base' }
 	}
 }
 let uuidv4
