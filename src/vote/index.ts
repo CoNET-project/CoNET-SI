@@ -112,12 +112,17 @@ export async function startBaseVoteListen(
     return
   }
 
-  debug('Poller setup: fetching initial block from Base RPC', { baseRpcUrl })
+  const baseRpcProtocol = baseRpcUrl.startsWith('https://') ? 'https' : baseRpcUrl.startsWith('wss://') ? 'wss' : baseRpcUrl.startsWith('http://') ? 'http' : 'unknown'
+  debug('Poller setup: fetching initial block from Base RPC', { baseRpcUrl, protocol: baseRpcProtocol })
   let lastBlock: bigint
   try {
     lastBlock = BigInt(await baseProvider.getBlockNumber())
   } catch (err: unknown) {
-    debug('Poller setup: Base getBlockNumber failed', { error: err instanceof Error ? err.message : String(err) })
+    debug('Poller setup: Base getBlockNumber failed', {
+      baseRpcUrl,
+      protocol: baseRpcProtocol,
+      error: err instanceof Error ? err.message : String(err),
+    })
     return
   }
   debug('Poller setup: got initial block', { block: lastBlock.toString() })
