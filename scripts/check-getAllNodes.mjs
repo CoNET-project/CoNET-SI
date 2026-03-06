@@ -14,7 +14,7 @@ const require = createRequire(import.meta.url)
 const { ethers } = require(join(__dirname, '../node_modules/ethers'))
 const newNodeInfoABI = require(join(__dirname, '../src/util/newNodeInfoABI.json'))
 
-const RPC = 'https://mainnet-rpc1.conet.network'
+const RPC = 'https://mainnet-rpc.conet.network'
 const CONTRACT = '0xCd68C3FFFE403f9F26081807c77aB29a4DF6940D'
 
 function curlRpc(payload) {

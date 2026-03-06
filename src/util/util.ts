@@ -27,7 +27,7 @@ import { webcrypto as crypto } from 'crypto'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
-export const CoNET_mainnet_RPC = 'https://mainnet-rpc1.conet.network'
+export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
