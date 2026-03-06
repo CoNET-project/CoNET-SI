@@ -354,21 +354,29 @@ export const forwardToSolanaRpc = (
     }
 }
 /**
- * 
- curl -v -X POST https://1rpc.io/base \
-  -H "Content-Type: application/json" \
-  --data '{
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "eth_call",
-    "params": [{
-      "to": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-      "data": "0x70a08231000000000000000000000000c8f855ff966f6be05cd659a5c5c7495a66c5c015"
-    }, "latest"]
-  }'
+ * Base RPC 转发目标：使用 Beamio Base RPC
+ * 可通过环境变量 BASE_RPC_HTTP 覆盖，例如 BASE_RPC_HTTP=https://base-rpc.conet.network
+ *
+ * curl -v -X POST https://base-rpc.conet.network \
+ *  -H "Content-Type: application/json" \
+ *  --data '{"jsonrpc":"2.0","id":1,"method":"eth_call","params":[{...},"latest"]}'
  */
-const baseRPC = 'chain-proxy.wallet.coinbase.com'
-const baseRPC1 = '1rpc.io'
+const BASE_RPC_HTTP_DEFAULT = 'https://base-rpc.conet.network'
+function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
+	const url = process.env.BASE_RPC_HTTP || process.env.BASE_RPC || BASE_RPC_HTTP_DEFAULT
+	// 支持 wss:// 格式的 BASE_RPC，转为 https://
+	const httpUrl = url.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '')
+	try {
+		const u = new URL(httpUrl)
+		return {
+			hostname: u.hostname,
+			port: u.port ? parseInt(u.port, 10) : 443,
+			path: u.pathname || '/'
+		}
+	} catch {
+		return { hostname: 'base-rpc.conet.network', port: 443, path: '/' }
+	}
+}
 let uuidv4
 let baseHeaders: Record<string, string>
 import("uuid").then(mod => {
@@ -443,14 +451,15 @@ export const forwardToBaseRpc = (
 
 //   logger(`forwardToBaseRpc forwardedHeaders`, inspect(forwardedHeaders, false, 3, true))
 
+  const target = getBaseRpcTarget()
   const options: Https.RequestOptions = {
-    hostname: baseRPC1,
-    port: 443,
-    path: '/base',
+    hostname: target.hostname,
+    port: target.port,
+    path: target.path,
     method: 'POST',
     headers: {
       ...forwardedHeaders,
-      Host: baseRPC1
+      Host: target.hostname
     }
   }
 

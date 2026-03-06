@@ -1,6 +1,6 @@
 import { ethers, Wallet } from 'ethers'
 
-const BASE_RPC_DEFAULT = process.env.BASE_RPC || 'https://1rpc.io/base'
+const BASE_RPC_DEFAULT = process.env.BASE_RPC || 'https://base-rpc.conet.network'
 const CONET_RPC_DEFAULT = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
 const POLL_INTERVAL_MS = Number(process.env.VOTE_POLL_INTERVAL_MS) || 12_000
@@ -23,7 +23,7 @@ function debug(msg: string, data?: object) {
 }
 
 /**
- * Poll BaseTreasury logs via eth_getLogs (no eth_newFilter). Compatible with 1rpc.io/base.
+ * Poll BaseTreasury logs via eth_getLogs (no eth_newFilter). Compatible with base-rpc.conet.network.
  */
 async function getBUnitPurchasedLogs(
   baseProvider: ethers.JsonRpcProvider,
@@ -43,7 +43,7 @@ async function getBUnitPurchasedLogs(
 
 /**
  * Check if wallet is miner of ConetTreasury.
- * If so, poll BaseTreasury for BUnitPurchased via eth_getLogs (1rpc.io compatible).
+ * If so, poll BaseTreasury for BUnitPurchased via eth_getLogs (base-rpc.conet.network compatible).
  * BaseTreasury miner status is not required.
  */
 export async function startBaseVoteListen(
