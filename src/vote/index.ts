@@ -102,6 +102,7 @@ export async function startBaseVoteListen(
     return
   }
 
+  debug('Poller setup: getting BUnitPurchased topic')
   const bunitPurchasedIface = new ethers.Interface([
     'event BUnitPurchased(address indexed user, address indexed usdc, uint256 amount)',
   ])
@@ -111,7 +112,15 @@ export async function startBaseVoteListen(
     return
   }
 
-  let lastBlock = BigInt(await baseProvider.getBlockNumber())
+  debug('Poller setup: fetching initial block from Base RPC', { baseRpcUrl })
+  let lastBlock: bigint
+  try {
+    lastBlock = BigInt(await baseProvider.getBlockNumber())
+  } catch (err: unknown) {
+    debug('Poller setup: Base getBlockNumber failed', { error: err instanceof Error ? err.message : String(err) })
+    return
+  }
+  debug('Poller setup: got initial block', { block: lastBlock.toString() })
   debug('Starting BaseTreasury poller (eth_getLogs)', {
     pollIntervalMs: POLL_INTERVAL_MS,
     baseTreasuryAddr,
