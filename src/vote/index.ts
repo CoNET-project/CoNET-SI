@@ -1,6 +1,14 @@
 import { ethers, Wallet } from 'ethers'
 
-const BASE_RPC_DEFAULT = process.env.BASE_RPC || 'https://base-rpc.conet.network'
+/** 将 wss:// 转为 https://，供 eth_getLogs 轮询使用（不依赖 WebSocket） */
+function toHttpRpcUrl(url: string): string {
+  return url.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '') || url
+}
+
+/** Base RPC：优先 BASE_RPC_HTTP（HTTP-only RPC 如 1rpc.io），否则将 BASE_RPC 的 wss 转为 https */
+const BASE_RPC_DEFAULT = toHttpRpcUrl(
+  process.env.BASE_RPC_HTTP || process.env.BASE_RPC || 'https://1rpc.io/base'
+)
 const CONET_RPC_DEFAULT = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
 const POLL_INTERVAL_MS = Number(process.env.VOTE_POLL_INTERVAL_MS) || 12_000
@@ -53,7 +61,7 @@ export async function startBaseVoteListen(
   baseRpc?: string,
   conetRpc?: string
 ): Promise<void> {
-  const baseRpcUrl = baseRpc || BASE_RPC_DEFAULT
+  const baseRpcUrl = toHttpRpcUrl(baseRpc || BASE_RPC_DEFAULT)
   const baseProvider = new ethers.JsonRpcProvider(baseRpcUrl)
   const conetProvider = new ethers.JsonRpcProvider(conetRpc || CONET_RPC_DEFAULT)
   const baseTreasury = new ethers.Contract(baseTreasuryAddr, BASE_TREASURY_ABI, baseProvider)
