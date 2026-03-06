@@ -111,14 +111,14 @@ export async function startBaseVoteListen(
     return
   }
 
+  let lastBlock = BigInt(await baseProvider.getBlockNumber())
   debug('Starting BaseTreasury poller (eth_getLogs)', {
     pollIntervalMs: POLL_INTERVAL_MS,
     baseTreasuryAddr,
     bunitPurchasedTopic,
     isHttp,
+    initialBlock: lastBlock.toString(),
   })
-
-  let lastBlock = BigInt(await baseProvider.getBlockNumber())
   const processedTxHashes = new Set<string>()
   let tickCount = 0
 
@@ -127,7 +127,7 @@ export async function startBaseVoteListen(
     try {
       const currentBlock = BigInt(await baseProvider.getBlockNumber())
       if (currentBlock <= lastBlock) {
-        if (isHttp && tickCount % 5 === 1) {
+        if (tickCount % 5 === 1) {
           debug('Poll tick (no new blocks)', { lastBlock: lastBlock.toString(), currentBlock: currentBlock.toString(), tickCount })
         }
         return
@@ -142,15 +142,12 @@ export async function startBaseVoteListen(
         currentBlock
       )
 
-      if (isHttp) {
-        debug('Poll tick (HTTP) listening', {
-          baseTreasuryAddr,
-          fromBlock: fromBlock.toString(),
-          toBlock: currentBlock.toString(),
-          logsCount: logs.length,
-          tickCount,
-        })
-      }
+      debug('Poll tick', {
+        fromBlock: fromBlock.toString(),
+        toBlock: currentBlock.toString(),
+        logsCount: logs.length,
+        tickCount,
+      })
 
       for (const log of logs) {
         const txHash = log.transactionHash ?? ''
