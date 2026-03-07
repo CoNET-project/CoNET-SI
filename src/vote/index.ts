@@ -5,9 +5,9 @@ function toHttpRpcUrl(url: string): string {
   return url.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '') || url
 }
 
-/** Base RPC：优先 BASE_RPC_HTTP，否则将 BASE_RPC 的 wss 转为 https。Beamio 标准：base-rpc.conet.network */
+/** Base RPC：优先 BASE_RPC (wss)，否则 BASE_RPC_HTTP；wss 转为 https。Beamio 标准：base-rpc.conet.network */
 const BASE_RPC_DEFAULT = toHttpRpcUrl(
-  process.env.BASE_RPC_HTTP || process.env.BASE_RPC || 'https://base-rpc.conet.network'
+  process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-rpc.conet.network'
 )
 const CONET_RPC_DEFAULT = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
@@ -64,7 +64,9 @@ export async function startBaseVoteListen(
   baseRpc?: string,
   conetRpc?: string
 ): Promise<void> {
-  const baseRpcUrl = toHttpRpcUrl(baseRpc || BASE_RPC_DEFAULT)
+  const baseRpcRaw = baseRpc || process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-rpc.conet.network'
+  const baseRpcUrl = toHttpRpcUrl(baseRpcRaw)
+  const baseRpcProtocol = baseRpcRaw.startsWith('wss://') ? 'wss' : baseRpcRaw.startsWith('https://') ? 'https' : baseRpcRaw.startsWith('http://') ? 'http' : 'unknown'
   const isHttp = /^https:\/\//.test(baseRpcUrl)
   const baseProvider = new ethers.JsonRpcProvider(baseRpcUrl)
   const conetProvider = new ethers.JsonRpcProvider(conetRpc || CONET_RPC_DEFAULT)
@@ -76,6 +78,7 @@ export async function startBaseVoteListen(
     expectedBaseTreasury: EXPECTED_BASE_TREASURY,
     addressMatch: baseTreasuryAddr.toLowerCase() === EXPECTED_BASE_TREASURY.toLowerCase(),
     baseRpcUrl,
+    protocol: baseRpcProtocol,
     isHttp,
     conetTreasuryAddr,
     wallet: wallet.address,
@@ -112,8 +115,7 @@ export async function startBaseVoteListen(
     return
   }
 
-  const baseRpcProtocol = baseRpcUrl.startsWith('https://') ? 'https' : baseRpcUrl.startsWith('wss://') ? 'wss' : baseRpcUrl.startsWith('http://') ? 'http' : 'unknown'
-  debug('Poller setup: fetching initial block from Base RPC', { baseRpcUrl, protocol: baseRpcProtocol })
+  debug(`Poller setup: fetching initial block from Base RPC (url=${baseRpcUrl} protocol=${baseRpcProtocol})`)
   let lastBlock: bigint
   try {
     lastBlock = BigInt(await baseProvider.getBlockNumber())

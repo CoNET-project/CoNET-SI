@@ -355,11 +355,11 @@ export const forwardToSolanaRpc = (
 }
 /**
  * Base RPC 转发目标：Beamio 标准 base-rpc.conet.network
- * 可通过环境变量 BASE_RPC_HTTP 覆盖
+ * 优先 BASE_RPC (wss)，否则 BASE_RPC_HTTP；wss 会转为 https
  */
 const BASE_RPC_HTTP_DEFAULT = 'https://base-rpc.conet.network'
 function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
-	const url = process.env.BASE_RPC_HTTP || process.env.BASE_RPC || BASE_RPC_HTTP_DEFAULT
+	const url = process.env.BASE_RPC || process.env.BASE_RPC_HTTP || BASE_RPC_HTTP_DEFAULT
 	// 支持 wss:// 格式的 BASE_RPC，转为 https://
 	const httpUrl = url.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '')
 	try {
