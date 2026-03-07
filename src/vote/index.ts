@@ -5,9 +5,9 @@ function toHttpRpcUrl(url: string): string {
   return url.replace(/^wss:\/\//, 'https://').replace(/\/ws\/?$/, '') || url
 }
 
-/** Base RPC：优先 BASE_RPC_HTTP，否则将 BASE_RPC 的 wss 转为 https。默认 PublicNode 免费 RPC */
+/** Base RPC：优先 BASE_RPC_HTTP，否则将 BASE_RPC 的 wss 转为 https。Beamio 标准：base-rpc.conet.network */
 const BASE_RPC_DEFAULT = toHttpRpcUrl(
-  process.env.BASE_RPC_HTTP || process.env.BASE_RPC || 'https://base-rpc.publicnode.com'
+  process.env.BASE_RPC_HTTP || process.env.BASE_RPC || 'https://base-rpc.conet.network'
 )
 const CONET_RPC_DEFAULT = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000

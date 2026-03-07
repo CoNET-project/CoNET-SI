@@ -354,10 +354,10 @@ export const forwardToSolanaRpc = (
     }
 }
 /**
- * Base RPC 转发目标：默认使用 PublicNode 免费公共 RPC
- * 可通过环境变量 BASE_RPC_HTTP 覆盖。其他免费选项：base.llamarpc.com、base-public.nodies.app
+ * Base RPC 转发目标：Beamio 标准 base-rpc.conet.network
+ * 可通过环境变量 BASE_RPC_HTTP 覆盖
  */
-const BASE_RPC_HTTP_DEFAULT = 'https://base-rpc.publicnode.com'
+const BASE_RPC_HTTP_DEFAULT = 'https://base-rpc.conet.network'
 function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
 	const url = process.env.BASE_RPC_HTTP || process.env.BASE_RPC || BASE_RPC_HTTP_DEFAULT
 	// 支持 wss:// 格式的 BASE_RPC，转为 https://
@@ -370,7 +370,7 @@ function getBaseRpcTarget(): { hostname: string; port: number; path: string } {
 			path: u.pathname || '/'
 		}
 	} catch {
-		return { hostname: 'base-rpc.publicnode.com', port: 443, path: '/' }
+		return { hostname: 'base-rpc.conet.network', port: 443, path: '/' }
 	}
 }
 let uuidv4
