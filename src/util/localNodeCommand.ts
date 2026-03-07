@@ -1760,6 +1760,8 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		hash: await nodeWallet?.signMessage(CurrentEpoch.toString())
 	}
 
+    // Always send proper HTTP + SSE headers. Previously TLS connections sent raw JSON without
+    // headers, causing fetch() to fail (client expects "HTTP/1.1 200 OK" first).
     const sseHeaders =
         `HTTP/1.1 200 OK\r\n` +
         // @ts-ignore
@@ -1771,11 +1773,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
         `Access-Control-Allow-Origin: *\r\n` +
         `\r\n`
 
-	// @ts-ignore
-	const responseData = typeof (res as any).getTLSTicket !== 'function'
-	//@ts-ignore
-		? `HTTP/1.1 200 OK\r\nDate: ${ new Date ().toGMTString()}\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: keep-alive\r\nVary: Accept-Encoding\r\n\r\n${JSON.stringify(returnData)}\r\n\r\n` 
-		: JSON.stringify(returnData)
+	const responseData = sseHeaders + `data: ${JSON.stringify(returnData)}\r\n\r\n`
 
 
 	s.once('error', (err: Error) => {
