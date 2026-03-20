@@ -60,7 +60,7 @@ export async function startBaseVoteListen(
   baseRpc?: string,
   conetRpc?: string
 ): Promise<void> {
-  const baseRpcRaw = baseRpc || process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-mainnet.public.blastapi.io'
+  const baseRpcRaw = baseRpc || process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-rpc.conet.network'
   const baseRpcUrl = toHttpRpcUrl(baseRpcRaw)
   const baseRpcProtocol = baseRpcRaw.startsWith('wss://') ? 'wss' : baseRpcRaw.startsWith('https://') ? 'https' : baseRpcRaw.startsWith('http://') ? 'http' : 'unknown'
   const isHttp = /^https:\/\//.test(baseRpcUrl)
