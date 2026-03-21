@@ -88,6 +88,7 @@ const BASE_TREASURY_ABI = [
 
 const CONET_TREASURY_ABI = [
   'function isMiner(address account) view returns (bool)',
+  'function hasVotedUsdc2BUnit(bytes32 txHash, address miner) view returns (bool)',
   'function voteAirdropBUnitFromBase(bytes32 txHash, address user, uint256 usdcAmount) external',
 ] as const
 
@@ -274,6 +275,29 @@ async function tryVoteBUnitPurchased(
     debug('vote skip duplicate Base tx already handled', { baseTxHash: txHash })
     return
   }
+
+  const txHashBytes32 = txHash as `0x${string}`
+  const conetRead = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetTxProvider)
+  let alreadyVoted: boolean
+  try {
+    alreadyVoted = await conetRead.hasVotedUsdc2BUnit(txHashBytes32, wallet.address)
+  } catch (err: unknown) {
+    debug('vote hasVotedUsdc2BUnit precheck failed', {
+      baseTxHash: txHash,
+      wallet: wallet.address,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return
+  }
+  if (alreadyVoted) {
+    debug('vote skip Conet hasVotedUsdc2BUnit already true', {
+      baseTxHash: txHash,
+      wallet: wallet.address,
+    })
+    processedTxHashes.add(dedupKey)
+    return
+  }
+
   processedTxHashes.add(dedupKey)
 
   debug('vote BUnitPurchased event handling', {
@@ -289,7 +313,6 @@ async function tryVoteBUnitPurchased(
       CONET_TREASURY_ABI,
       wallet.connect(conetTxProvider)
     )
-    const txHashBytes32 = txHash as `0x${string}`
 
     debug('vote sending Conet voteAirdropBUnitFromBase', {
       txHash: txHashBytes32,
@@ -327,8 +350,8 @@ async function tryVoteBUnitPurchased(
  * `VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；`VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000；0 关闭）。
  *
  * 去重：单次进程内用内存 Set（按 Base tx hash 小写）避免回溯/WS/poll 重复处理同一笔；
- * 持久化 `lastScannedBlock` 避免重启后重复扫描同一段块。若删除状态文件，会再次扫描窗口并可能再发链上 vote，
- * ConetTreasury `hasVotedUsdc2BUnit` 会对同一矿工 revert（仍可能消耗失败交易的 gas）。
+ * 持久化 `lastScannedBlock` 避免重启后重复扫描同一段块。
+ * 发交易前只读调用 `hasVotedUsdc2BUnit(baseTxHash, wallet)`，已为 true 则跳过，避免删状态后重复扫窗时白烧 gas。
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
