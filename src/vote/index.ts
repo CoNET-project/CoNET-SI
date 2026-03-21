@@ -108,6 +108,35 @@ function debug(msg: string, data?: Record<string, unknown> | object) {
 
 const EXPECTED_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
 
+/**
+ * ethers v6 `contract.on` 回调末参常为 ContractEventPayload：交易哈希在 `log.transactionHash`，
+ * 而非顶层 `transactionHash`（否则会出现 WS 触发但 baseTxHash 为空，只能靠 live poll 补投）。
+ */
+function baseTxHashFromListenerEvent(event: unknown): string {
+  if (event == null || typeof event !== 'object') return ''
+  const e = event as Record<string, unknown>
+  const top = e.transactionHash
+  if (typeof top === 'string' && top.startsWith('0x') && top.length >= 66) return top
+  const log = e.log
+  if (log != null && typeof log === 'object') {
+    const nested = (log as Record<string, unknown>).transactionHash
+    if (typeof nested === 'string' && nested.startsWith('0x') && nested.length >= 66) return nested
+  }
+  return ''
+}
+
+function baseBlockLabelFromListenerEvent(event: unknown): string {
+  if (event == null || typeof event !== 'object') return ''
+  const e = event as Record<string, unknown>
+  if (e.blockNumber != null) return String(e.blockNumber)
+  const log = e.log
+  if (log != null && typeof log === 'object') {
+    const bn = (log as Record<string, unknown>).blockNumber
+    if (bn != null) return String(bn)
+  }
+  return ''
+}
+
 type ScanStateV1 = {
   version: 1
   /** 已完成回填/扫描到的 Base 区块高度（十进制字符串） */
@@ -427,12 +456,12 @@ export async function startBaseVoteListen(
 
   baseTreasuryWs.on(
     'BUnitPurchased',
-    async (user: string, usdc: string, amount: bigint, event: ethers.EventLog) => {
-      const txHash = event.transactionHash ?? ''
-      const blockNumber = event.blockNumber?.toString?.() ?? String(event.blockNumber)
+    async (user: string, usdc: string, amount: bigint, event: unknown) => {
+      const txHash = baseTxHashFromListenerEvent(event)
+      const blockNumber = baseBlockLabelFromListenerEvent(event)
       debug('vote WS eth_subscribe BUnitPurchased fired', {
-        baseTxHash: txHash,
-        blockNumber,
+        baseTxHash: txHash || '(missing, rely on live poll if empty)',
+        blockNumber: blockNumber || '(missing)',
         user,
         usdc,
         amount: amount.toString(),
