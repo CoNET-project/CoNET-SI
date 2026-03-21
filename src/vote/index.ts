@@ -139,7 +139,11 @@ function baseBlockLabelFromListenerEvent(event: unknown): string {
 
 type ScanStateV1 = {
   version: 1
-  /** 已完成回填/扫描到的 Base 区块高度（十进制字符串） */
+  /**
+   * Base 链「已处理到的块高」检查点（十进制字符串）。
+   * 下次启动：`fromBlock = max(lastScannedBlock + 1, tip - BACKFILL + 1)`，避免对同一段历史重复 eth_getLogs / 重复尝试投票。
+   * live poll 成功后也会更新此字段。
+   */
   lastScannedBlock: string
   baseTreasuryAddrLower: string
   updatedAt: string
@@ -206,6 +210,13 @@ async function getBUnitPurchasedLogsChunked(
   return out
 }
 
+/** 内存去重 key：统一小写，避免同一笔 tx 因大小写不同被当成两笔 */
+function baseTxHashDedupKey(h: string): string {
+  const t = h.trim()
+  if (!t.startsWith('0x') || t.length < 66) return t
+  return t.toLowerCase()
+}
+
 function sortLogs(a: ethers.Log, b: ethers.Log): number {
   const ba = BigInt(a.blockNumber)
   const bb = BigInt(b.blockNumber)
@@ -258,11 +269,12 @@ async function tryVoteBUnitPurchased(
     debug('vote skip empty base tx hash', {})
     return
   }
-  if (processedTxHashes.has(txHash)) {
+  const dedupKey = baseTxHashDedupKey(txHash)
+  if (processedTxHashes.has(dedupKey)) {
     debug('vote skip duplicate Base tx already handled', { baseTxHash: txHash })
     return
   }
-  processedTxHashes.add(txHash)
+  processedTxHashes.add(dedupKey)
 
   debug('vote BUnitPurchased event handling', {
     user,
@@ -313,6 +325,10 @@ async function tryVoteBUnitPurchased(
  *
  * 环境变量：`CONET_RPC`（推荐 HTTPS，用于 isMiner 与投票）；或 `CONET_RPC_WSS`（会转成 https 再用于 HTTP provider）。
  * `VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；`VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000；0 关闭）。
+ *
+ * 去重：单次进程内用内存 Set（按 Base tx hash 小写）避免回溯/WS/poll 重复处理同一笔；
+ * 持久化 `lastScannedBlock` 避免重启后重复扫描同一段块。若删除状态文件，会再次扫描窗口并可能再发链上 vote，
+ * ConetTreasury `hasVotedUsdc2BUnit` 会对同一矿工 revert（仍可能消耗失败交易的 gas）。
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
