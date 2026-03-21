@@ -68,6 +68,11 @@ const VOTE_GAS_LIMIT = 1_500_000
 const BACKFILL_MAX_BLOCKS = BigInt(process.env.VOTE_BASE_BACKFILL_BLOCKS || '2000')
 /** 单次 eth_getLogs 分段，避免 RPC 范围过大 */
 const LOGS_CHUNK_BLOCKS = BigInt(process.env.VOTE_BASE_LOGS_CHUNK_BLOCKS || '400')
+/**
+ * 部分 Base WS 节点对 eth_subscribe(logs) 不推送或不可靠，仅靠 contract.on 会漏事件。
+ * 用 eth_getLogs 定时补扫与 WS 并行；设为 0 可关闭（不推荐）。
+ */
+const LIVE_POLL_INTERVAL_MS = Number(process.env.VOTE_BASE_LIVE_POLL_INTERVAL_MS) || 12_000
 
 const BASE_TREASURY_ABI = [
   'function isMiner(address account) view returns (bool)',
@@ -172,6 +177,32 @@ function sortLogs(a: ethers.Log, b: ethers.Log): number {
   return ia < ib ? -1 : ia > ib ? 1 : 0
 }
 
+async function processBUnitPurchasedLogs(
+  logs: ethers.Log[],
+  wallet: Wallet,
+  conetTreasuryAddr: string,
+  conetWsProvider: ethers.WebSocketProvider,
+  processedTxHashes: Set<string>
+): Promise<void> {
+  const sorted = [...logs].sort(sortLogs)
+  for (const log of sorted) {
+    const txHash = log.transactionHash ?? ''
+    const parsed = bunitPurchasedIface.parseLog({ data: log.data, topics: log.topics as string[] })
+    if (!parsed) continue
+    const { user, usdc, amount } = parsed.args
+    await tryVoteBUnitPurchased(
+      wallet,
+      conetTreasuryAddr,
+      conetWsProvider,
+      processedTxHashes,
+      txHash,
+      user,
+      usdc,
+      amount
+    )
+  }
+}
+
 async function tryVoteBUnitPurchased(
   wallet: Wallet,
   conetTreasuryAddr: string,
@@ -220,7 +251,8 @@ async function tryVoteBUnitPurchased(
  *
  * 例：仅订阅时无法看到已上链的 `0x8472766d12337a6a8c42d74daea80aa9a7eaaaae590a6c9b1d019984293757f4`（该笔 receipt 含 BaseTreasury BUnitPurchased），需依赖回填或当时进程已在线。
  *
- * 环境变量：可选 `CONET_RPC_WSS`；`VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）。
+ * 环境变量：可选 `CONET_RPC_WSS`；`VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；
+ * `VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000，eth_getLogs 补扫；0 关闭）。
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
@@ -324,22 +356,7 @@ export async function startBaseVoteListen(
       const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, fromBlock, tipBn)
       logs.sort(sortLogs)
       debug('Backfill logs fetched', { count: logs.length })
-      for (const log of logs) {
-        const txHash = log.transactionHash ?? ''
-        const parsed = bunitPurchasedIface.parseLog({ data: log.data, topics: log.topics as string[] })
-        if (!parsed) continue
-        const { user, usdc, amount } = parsed.args
-        await tryVoteBUnitPurchased(
-          wallet,
-          conetTreasuryAddr,
-          conetWsProvider,
-          processedTxHashes,
-          txHash,
-          user,
-          usdc,
-          amount
-        )
-      }
+      await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetWsProvider, processedTxHashes)
     } catch (err: unknown) {
       debug('Backfill eth_getLogs failed', { error: err instanceof Error ? err.message : String(err) })
       await destroyProviders()
@@ -389,7 +406,55 @@ export async function startBaseVoteListen(
     }
   )
 
-  debug('BaseTreasury BUnitPurchased listener started (WebSocket eth_subscribe)', {
+  let lastPolledBlock = tipBn
+  let livePollTickCount = 0
+  if (LIVE_POLL_INTERVAL_MS > 0) {
+    const livePollTick = async () => {
+      livePollTickCount++
+      try {
+        const cur = BigInt(await baseWsProvider.getBlockNumber())
+        if (cur <= lastPolledBlock) {
+          if (livePollTickCount % 10 === 1) {
+            debug('Live poll (no new blocks)', {
+              lastPolledBlock: lastPolledBlock.toString(),
+              cur: cur.toString(),
+              tick: livePollTickCount,
+            })
+          }
+          return
+        }
+        const from = lastPolledBlock + 1n
+        const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, from, cur)
+        debug('Live poll eth_getLogs', {
+          fromBlock: from.toString(),
+          toBlock: cur.toString(),
+          logsCount: logs.length,
+          tick: livePollTickCount,
+        })
+        await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetWsProvider, processedTxHashes)
+        lastPolledBlock = cur
+        const pollNow = new Date().toISOString()
+        await saveScanState(statePath, {
+          version: 1,
+          lastScannedBlock: cur.toString(),
+          baseTreasuryAddrLower: baseTreasuryLower,
+          updatedAt: pollNow,
+        })
+      } catch (err: unknown) {
+        debug('Live poll error', { error: err instanceof Error ? err.message : String(err) })
+      }
+    }
+    setInterval(livePollTick, LIVE_POLL_INTERVAL_MS)
+    void livePollTick()
+    debug('Live poll scheduled (eth_getLogs backup for unreliable log subscriptions)', {
+      intervalMs: LIVE_POLL_INTERVAL_MS,
+      startAfterBlock: lastPolledBlock.toString(),
+    })
+  } else {
+    debug('Live poll disabled (VOTE_BASE_LIVE_POLL_INTERVAL_MS=0)')
+  }
+
+  debug('BaseTreasury BUnitPurchased listener started (WebSocket eth_subscribe + optional live poll)', {
     baseTreasuryAddr,
     baseWssUrl,
     conetWssUrl,
