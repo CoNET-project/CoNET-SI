@@ -91,10 +91,14 @@ const bunitPurchasedIface = new ethers.Interface([
 ])
 const BUNIT_PURCHASED_TOPIC = bunitPurchasedIface.getEvent('BUnitPurchased')!.topicHash
 
+/**
+ * 统一带 [vote] 且单行输出，便于 `journalctl -f -u conet.service | grep vot`（多行 JSON 续行不含 tag 会被漏掉）。
+ */
 const VOTE_TAG = 'vote'
-function debug(msg: string, data?: object) {
+function debug(msg: string, data?: Record<string, unknown> | object) {
   const ts = new Date().toISOString()
-  console.log(`[${ts}] [${VOTE_TAG}] ${msg}`, data ? JSON.stringify(data, null, 2) : '')
+  const suffix = data !== undefined ? ` ${JSON.stringify(data)}` : ''
+  console.log(`[${VOTE_TAG}] [${ts}] ${msg}${suffix}`)
 }
 
 const EXPECTED_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
@@ -184,6 +188,9 @@ async function processBUnitPurchasedLogs(
   conetWsProvider: ethers.WebSocketProvider,
   processedTxHashes: Set<string>
 ): Promise<void> {
+  if (logs.length > 0) {
+    debug('vote process BUnitPurchased log batch', { count: logs.length })
+  }
   const sorted = [...logs].sort(sortLogs)
   for (const log of sorted) {
     const txHash = log.transactionHash ?? ''
@@ -213,10 +220,22 @@ async function tryVoteBUnitPurchased(
   usdc: string,
   amount: bigint
 ): Promise<void> {
-  if (!txHash || processedTxHashes.has(txHash)) return
+  if (!txHash) {
+    debug('vote skip empty base tx hash', {})
+    return
+  }
+  if (processedTxHashes.has(txHash)) {
+    debug('vote skip duplicate Base tx already handled', { baseTxHash: txHash })
+    return
+  }
   processedTxHashes.add(txHash)
 
-  debug('BUnitPurchased', { user, usdc, amount: amount.toString(), baseTxHash: txHash })
+  debug('vote BUnitPurchased event handling', {
+    user,
+    usdc,
+    amount: amount.toString(),
+    baseTxHash: txHash,
+  })
 
   try {
     const conetTreasuryWithSigner = new ethers.Contract(
@@ -226,7 +245,7 @@ async function tryVoteBUnitPurchased(
     )
     const txHashBytes32 = txHash as `0x${string}`
 
-    debug('Voting voteAirdropBUnitFromBase', {
+    debug('vote sending Conet voteAirdropBUnitFromBase', {
       txHash: txHashBytes32,
       user,
       usdcAmount: amount.toString(),
@@ -237,9 +256,16 @@ async function tryVoteBUnitPurchased(
       gasLimit: VOTE_GAS_LIMIT,
     })
     const receipt = await tx.wait()
-    debug('voteAirdropBUnitFromBase success', { txHash: tx.hash, blockNumber: receipt?.blockNumber })
+    debug('vote Conet voteAirdropBUnitFromBase success', {
+      conetTxHash: tx.hash,
+      blockNumber: receipt?.blockNumber,
+      baseTxHash: txHash,
+    })
   } catch (err: unknown) {
-    debug('voteAirdropBUnitFromBase failed', { error: err instanceof Error ? err.message : String(err) })
+    debug('vote Conet voteAirdropBUnitFromBase failed', {
+      baseTxHash: txHash,
+      error: err instanceof Error ? err.message : String(err),
+    })
   }
 }
 
@@ -282,7 +308,7 @@ export async function startBaseVoteListen(
   const baseTreasuryLower = baseTreasuryAddr.toLowerCase()
   const statePath = defaultScanStatePath()
 
-  debug('startBaseVoteListen init', {
+  debug('vote startBaseVoteListen init', {
     baseTreasuryAddr,
     expectedBaseTreasury: EXPECTED_BASE_TREASURY,
     addressMatch: baseTreasuryLower === EXPECTED_BASE_TREASURY.toLowerCase(),
@@ -297,7 +323,7 @@ export async function startBaseVoteListen(
   })
 
   if (baseTreasuryLower !== EXPECTED_BASE_TREASURY.toLowerCase()) {
-    debug('WARN: baseTreasuryAddr does not match expected', {
+    debug('vote WARN baseTreasuryAddr does not match expected', {
       actual: baseTreasuryAddr,
       expected: EXPECTED_BASE_TREASURY,
     })
@@ -305,7 +331,7 @@ export async function startBaseVoteListen(
 
   const isConetMiner = await conetTreasury.isMiner(wallet.address)
 
-  debug('Miner check', {
+  debug('vote miner check (ConetTreasury isMiner)', {
     wallet: wallet.address,
     baseTreasury: baseTreasuryAddr,
     conetTreasury: conetTreasuryAddr,
@@ -313,19 +339,19 @@ export async function startBaseVoteListen(
   })
 
   if (!isConetMiner) {
-    debug('Not ConetTreasury miner, skipping BaseTreasury listener', { isConetMiner })
+    debug('vote abort not ConetTreasury miner skipping listener', { isConetMiner })
     await destroyProviders()
     return
   }
 
-  debug('Listener setup: verifying Base WebSocket RPC')
+  debug('vote listener setup verifying Base WebSocket RPC', {})
   let tipBn: bigint
   try {
     tipBn = BigInt(await baseWsProvider.getBlockNumber())
-    debug('Listener setup: Base WebSocket connected', { block: tipBn.toString() })
+    debug('vote Base WebSocket connected', { block: tipBn.toString() })
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err)
-    debug(`Listener setup: Base WebSocket getBlockNumber failed baseWssUrl=${baseWssUrl} error=${errMsg}`)
+    debug('vote Base WebSocket getBlockNumber failed', { baseWssUrl, error: errMsg })
     await destroyProviders()
     return
   }
@@ -334,7 +360,7 @@ export async function startBaseVoteListen(
 
   let prevState = await loadScanState(statePath)
   if (prevState && prevState.baseTreasuryAddrLower !== baseTreasuryLower) {
-    debug('Scan state treasury mismatch, resetting checkpoint', {
+    debug('vote scan state treasury mismatch resetting checkpoint', {
       prev: prevState.baseTreasuryAddrLower,
       now: baseTreasuryLower,
     })
@@ -346,7 +372,7 @@ export async function startBaseVoteListen(
   const fromBlock = lastScanned >= 0n ? (lastScanned + 1n > floor ? lastScanned + 1n : floor) : floor
 
   if (fromBlock <= tipBn) {
-    debug('Backfill BUnitPurchased via eth_getLogs', {
+    debug('vote backfill BUnitPurchased eth_getLogs range', {
       fromBlock: fromBlock.toString(),
       toBlock: tipBn.toString(),
       floor: floor.toString(),
@@ -355,15 +381,15 @@ export async function startBaseVoteListen(
     try {
       const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, fromBlock, tipBn)
       logs.sort(sortLogs)
-      debug('Backfill logs fetched', { count: logs.length })
+      debug('vote backfill logs fetched', { count: logs.length })
       await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetWsProvider, processedTxHashes)
     } catch (err: unknown) {
-      debug('Backfill eth_getLogs failed', { error: err instanceof Error ? err.message : String(err) })
+      debug('vote backfill eth_getLogs failed', { error: err instanceof Error ? err.message : String(err) })
       await destroyProviders()
       return
     }
   } else {
-    debug('Backfill skipped (already scanned through tip)', {
+    debug('vote backfill skipped already scanned through tip', {
       fromBlock: fromBlock.toString(),
       tip: tipBn.toString(),
     })
@@ -376,23 +402,31 @@ export async function startBaseVoteListen(
     baseTreasuryAddrLower: baseTreasuryLower,
     updatedAt: now,
   })
-  debug('Scan state written', {
+  debug('vote scan state written', {
     path: statePath,
     lastScannedBlock: tipBn.toString(),
     updatedAt: now,
   })
 
   baseWsProvider.on('error', (err: unknown) => {
-    debug('Base WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
+    debug('vote Base WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
   })
   conetWsProvider.on('error', (err: unknown) => {
-    debug('Conet WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
+    debug('vote Conet WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
   })
 
   baseTreasuryWs.on(
     'BUnitPurchased',
     async (user: string, usdc: string, amount: bigint, event: ethers.EventLog) => {
       const txHash = event.transactionHash ?? ''
+      const blockNumber = event.blockNumber?.toString?.() ?? String(event.blockNumber)
+      debug('vote WS eth_subscribe BUnitPurchased fired', {
+        baseTxHash: txHash,
+        blockNumber,
+        user,
+        usdc,
+        amount: amount.toString(),
+      })
       await tryVoteBUnitPurchased(
         wallet,
         conetTreasuryAddr,
@@ -405,6 +439,7 @@ export async function startBaseVoteListen(
       )
     }
   )
+  debug('vote WebSocket subscribed BUnitPurchased eth_subscribe', { baseTreasuryAddr })
 
   let lastPolledBlock = tipBn
   let livePollTickCount = 0
@@ -415,7 +450,7 @@ export async function startBaseVoteListen(
         const cur = BigInt(await baseWsProvider.getBlockNumber())
         if (cur <= lastPolledBlock) {
           if (livePollTickCount % 10 === 1) {
-            debug('Live poll (no new blocks)', {
+            debug('vote live poll no new blocks', {
               lastPolledBlock: lastPolledBlock.toString(),
               cur: cur.toString(),
               tick: livePollTickCount,
@@ -425,7 +460,7 @@ export async function startBaseVoteListen(
         }
         const from = lastPolledBlock + 1n
         const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, from, cur)
-        debug('Live poll eth_getLogs', {
+        debug('vote live poll eth_getLogs', {
           fromBlock: from.toString(),
           toBlock: cur.toString(),
           logsCount: logs.length,
@@ -441,20 +476,20 @@ export async function startBaseVoteListen(
           updatedAt: pollNow,
         })
       } catch (err: unknown) {
-        debug('Live poll error', { error: err instanceof Error ? err.message : String(err) })
+        debug('vote live poll error', { error: err instanceof Error ? err.message : String(err) })
       }
     }
     setInterval(livePollTick, LIVE_POLL_INTERVAL_MS)
     void livePollTick()
-    debug('Live poll scheduled (eth_getLogs backup for unreliable log subscriptions)', {
+    debug('vote live poll scheduled eth_getLogs backup', {
       intervalMs: LIVE_POLL_INTERVAL_MS,
       startAfterBlock: lastPolledBlock.toString(),
     })
   } else {
-    debug('Live poll disabled (VOTE_BASE_LIVE_POLL_INTERVAL_MS=0)')
+    debug('vote live poll disabled VOTE_BASE_LIVE_POLL_INTERVAL_MS=0', {})
   }
 
-  debug('BaseTreasury BUnitPurchased listener started (WebSocket eth_subscribe + optional live poll)', {
+  debug('vote BaseTreasury listener ready WS plus live poll', {
     baseTreasuryAddr,
     baseWssUrl,
     conetWssUrl,
