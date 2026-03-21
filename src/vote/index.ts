@@ -35,28 +35,33 @@ function toBaseWssRpcUrl(url: string): string {
 }
 
 /**
- * CoNET L1：与 bizSite `CONET_MAINNET_WSS` 一致，默认 `wss://mainnet-rpc.conet.network`（无 /ws 后缀，与 Base 不同）。
+ * CoNET L1 JSON-RPC（eth_call / eth_sendRawTransaction）。
+ * 生产上 WebSocket 对首次 eth_call 可能长时间无响应，故 isMiner 与投票发交易统一走 HTTP。
  */
-function toConetWssRpcUrl(url: string): string {
+function toConetHttpRpcUrl(url: string): string {
   const u = url.trim()
-  if (/^wss:\/\//i.test(u)) return u
-  if (/^ws:\/\//i.test(u)) return u
-  try {
-    if (/^https:\/\//i.test(u)) {
+  if (/^https:\/\//i.test(u)) return u
+  if (/^http:\/\//i.test(u)) return u
+  if (/^wss:\/\//i.test(u)) {
+    try {
       const parsed = new URL(u)
       const pathPart = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
-      return `wss://${parsed.host}${pathPart}`
+      return `https://${parsed.host}${pathPart}`
+    } catch {
+      return u.replace(/^wss:\/\//i, 'https://')
     }
-    if (/^http:\/\//i.test(u)) {
+  }
+  if (/^ws:\/\//i.test(u)) {
+    try {
       const parsed = new URL(u)
       const pathPart = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
-      return `ws://${parsed.host}${pathPart}`
+      return `http://${parsed.host}${pathPart}`
+    } catch {
+      return u.replace(/^ws:\/\//i, 'http://')
     }
-  } catch {
-    /* fall through */
   }
   if (!/:\/\//.test(u)) {
-    return `wss://${u.replace(/\/$/, '')}`
+    return `https://${u.replace(/\/$/, '')}`
   }
   return u
 }
@@ -185,7 +190,7 @@ async function processBUnitPurchasedLogs(
   logs: ethers.Log[],
   wallet: Wallet,
   conetTreasuryAddr: string,
-  conetWsProvider: ethers.WebSocketProvider,
+  conetTxProvider: ethers.Provider,
   processedTxHashes: Set<string>
 ): Promise<void> {
   if (logs.length > 0) {
@@ -200,7 +205,7 @@ async function processBUnitPurchasedLogs(
     await tryVoteBUnitPurchased(
       wallet,
       conetTreasuryAddr,
-      conetWsProvider,
+      conetTxProvider,
       processedTxHashes,
       txHash,
       user,
@@ -213,7 +218,7 @@ async function processBUnitPurchasedLogs(
 async function tryVoteBUnitPurchased(
   wallet: Wallet,
   conetTreasuryAddr: string,
-  conetWsProvider: ethers.WebSocketProvider,
+  conetTxProvider: ethers.Provider,
   processedTxHashes: Set<string>,
   txHash: string,
   user: string,
@@ -241,7 +246,7 @@ async function tryVoteBUnitPurchased(
     const conetTreasuryWithSigner = new ethers.Contract(
       conetTreasuryAddr,
       CONET_TREASURY_ABI,
-      wallet.connect(conetWsProvider)
+      wallet.connect(conetTxProvider)
     )
     const txHashBytes32 = txHash as `0x${string}`
 
@@ -273,12 +278,12 @@ async function tryVoteBUnitPurchased(
  * 若钱包为 ConetTreasury miner，则：
  * 1) 启动时用 eth_getLogs 回填最近最多 {@link BACKFILL_MAX_BLOCKS} 块内的 BUnitPurchased（WebSocket 不会推送历史日志）；
  * 2) 将已扫描到的 tip 写入本地状态文件（默认 cwd 下 `.vote-base-bunit-scan-state.json`，可用 `VOTE_BASE_SCAN_STATE_FILE` 覆盖）；
- * 3) 再订阅 WebSocket 新事件。
+ * 3) Base 上再订阅 WebSocket 新事件；Conet 上 isMiner 与 vote 使用 HTTP JsonRpc（避免 CoNET WS 上 eth_call 挂起）。
  *
  * 例：仅订阅时无法看到已上链的 `0x8472766d12337a6a8c42d74daea80aa9a7eaaaae590a6c9b1d019984293757f4`（该笔 receipt 含 BaseTreasury BUnitPurchased），需依赖回填或当时进程已在线。
  *
- * 环境变量：可选 `CONET_RPC_WSS`；`VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；
- * `VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000，eth_getLogs 补扫；0 关闭）。
+ * 环境变量：`CONET_RPC`（推荐 HTTPS，用于 isMiner 与投票）；或 `CONET_RPC_WSS`（会转成 https 再用于 HTTP provider）。
+ * `VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；`VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000；0 关闭）。
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
@@ -290,19 +295,16 @@ export async function startBaseVoteListen(
   const baseRpcRaw = baseRpc || process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-rpc.conet.network'
   const baseWssUrl = toBaseWssRpcUrl(baseRpcRaw)
   const conetRpcRaw =
-    conetRpc || process.env.CONET_RPC_WSS || process.env.CONET_RPC || CONET_RPC_DEFAULT_HTTP
-  const conetWssUrl = toConetWssRpcUrl(conetRpcRaw)
+    conetRpc || process.env.CONET_RPC || process.env.CONET_RPC_WSS || CONET_RPC_DEFAULT_HTTP
+  const conetHttpUrl = toConetHttpRpcUrl(conetRpcRaw)
 
   const baseWsProvider = new ethers.WebSocketProvider(baseWssUrl)
-  const conetWsProvider = new ethers.WebSocketProvider(conetWssUrl)
+  const conetHttpProvider = new ethers.JsonRpcProvider(conetHttpUrl)
   const baseTreasuryWs = new ethers.Contract(baseTreasuryAddr, BASE_TREASURY_ABI, baseWsProvider)
-  const conetTreasury = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetWsProvider)
+  const conetTreasury = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetHttpProvider)
 
   const destroyProviders = async () => {
-    await Promise.all([
-      baseWsProvider.destroy().catch(() => undefined),
-      conetWsProvider.destroy().catch(() => undefined),
-    ])
+    await baseWsProvider.destroy().catch(() => undefined)
   }
 
   const baseTreasuryLower = baseTreasuryAddr.toLowerCase()
@@ -314,7 +316,7 @@ export async function startBaseVoteListen(
     addressMatch: baseTreasuryLower === EXPECTED_BASE_TREASURY.toLowerCase(),
     baseWssUrl,
     baseRpcRaw,
-    conetWssUrl,
+    conetHttpUrl,
     conetRpcRaw,
     conetTreasuryAddr,
     wallet: wallet.address,
@@ -329,9 +331,20 @@ export async function startBaseVoteListen(
     })
   }
 
-  const isConetMiner = await conetTreasury.isMiner(wallet.address)
+  debug('vote calling ConetTreasury isMiner', { conetHttpUrl, wallet: wallet.address })
+  let isConetMiner: boolean
+  try {
+    isConetMiner = await conetTreasury.isMiner(wallet.address)
+  } catch (err: unknown) {
+    debug('vote ConetTreasury isMiner threw', {
+      conetHttpUrl,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    await destroyProviders()
+    return
+  }
 
-  debug('vote miner check (ConetTreasury isMiner)', {
+  debug('vote miner check ConetTreasury isMiner result', {
     wallet: wallet.address,
     baseTreasury: baseTreasuryAddr,
     conetTreasury: conetTreasuryAddr,
@@ -382,7 +395,7 @@ export async function startBaseVoteListen(
       const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, fromBlock, tipBn)
       logs.sort(sortLogs)
       debug('vote backfill logs fetched', { count: logs.length })
-      await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetWsProvider, processedTxHashes)
+      await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetHttpProvider, processedTxHashes)
     } catch (err: unknown) {
       debug('vote backfill eth_getLogs failed', { error: err instanceof Error ? err.message : String(err) })
       await destroyProviders()
@@ -411,9 +424,6 @@ export async function startBaseVoteListen(
   baseWsProvider.on('error', (err: unknown) => {
     debug('vote Base WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
   })
-  conetWsProvider.on('error', (err: unknown) => {
-    debug('vote Conet WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
-  })
 
   baseTreasuryWs.on(
     'BUnitPurchased',
@@ -430,7 +440,7 @@ export async function startBaseVoteListen(
       await tryVoteBUnitPurchased(
         wallet,
         conetTreasuryAddr,
-        conetWsProvider,
+        conetHttpProvider,
         processedTxHashes,
         txHash,
         user,
@@ -466,7 +476,7 @@ export async function startBaseVoteListen(
           logsCount: logs.length,
           tick: livePollTickCount,
         })
-        await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetWsProvider, processedTxHashes)
+        await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetHttpProvider, processedTxHashes)
         lastPolledBlock = cur
         const pollNow = new Date().toISOString()
         await saveScanState(statePath, {
@@ -492,6 +502,6 @@ export async function startBaseVoteListen(
   debug('vote BaseTreasury listener ready WS plus live poll', {
     baseTreasuryAddr,
     baseWssUrl,
-    conetWssUrl,
+    conetHttpUrl,
   })
 }
