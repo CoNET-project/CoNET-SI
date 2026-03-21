@@ -1,4 +1,6 @@
 import { ethers, Wallet } from 'ethers'
+import * as fs from 'fs/promises'
+import * as path from 'path'
 
 /**
  * 将 BASE_RPC / BASE_RPC_HTTP 等规范为 WebSocket URL，供 eth_subscribe（logs）使用。
@@ -42,13 +44,13 @@ function toConetWssRpcUrl(url: string): string {
   try {
     if (/^https:\/\//i.test(u)) {
       const parsed = new URL(u)
-      const path = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
-      return `wss://${parsed.host}${path}`
+      const pathPart = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
+      return `wss://${parsed.host}${pathPart}`
     }
     if (/^http:\/\//i.test(u)) {
       const parsed = new URL(u)
-      const path = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
-      return `ws://${parsed.host}${path}`
+      const pathPart = parsed.pathname === '/' || parsed.pathname === '' ? '' : parsed.pathname
+      return `ws://${parsed.host}${pathPart}`
     }
   } catch {
     /* fall through */
@@ -62,6 +64,11 @@ function toConetWssRpcUrl(url: string): string {
 const CONET_RPC_DEFAULT_HTTP = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
 
+/** 自当前 tip 起最多向前回填的区块数（含 tip 共 BACKFILL 个区块） */
+const BACKFILL_MAX_BLOCKS = BigInt(process.env.VOTE_BASE_BACKFILL_BLOCKS || '2000')
+/** 单次 eth_getLogs 分段，避免 RPC 范围过大 */
+const LOGS_CHUNK_BLOCKS = BigInt(process.env.VOTE_BASE_LOGS_CHUNK_BLOCKS || '400')
+
 const BASE_TREASURY_ABI = [
   'function isMiner(address account) view returns (bool)',
   'event ETHDeposited(address indexed depositor, uint256 amount)',
@@ -74,6 +81,11 @@ const CONET_TREASURY_ABI = [
   'function voteAirdropBUnitFromBase(bytes32 txHash, address user, uint256 usdcAmount) external',
 ] as const
 
+const bunitPurchasedIface = new ethers.Interface([
+  'event BUnitPurchased(address indexed user, address indexed usdc, uint256 amount)',
+])
+const BUNIT_PURCHASED_TOPIC = bunitPurchasedIface.getEvent('BUnitPurchased')!.topicHash
+
 const VOTE_TAG = 'vote'
 function debug(msg: string, data?: object) {
   const ts = new Date().toISOString()
@@ -82,11 +94,133 @@ function debug(msg: string, data?: object) {
 
 const EXPECTED_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
 
+type ScanStateV1 = {
+  version: 1
+  /** 已完成回填/扫描到的 Base 区块高度（十进制字符串） */
+  lastScannedBlock: string
+  baseTreasuryAddrLower: string
+  updatedAt: string
+}
+
+function defaultScanStatePath(): string {
+  return process.env.VOTE_BASE_SCAN_STATE_FILE || path.join(process.cwd(), '.vote-base-bunit-scan-state.json')
+}
+
+async function loadScanState(filePath: string): Promise<ScanStateV1 | null> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf8')
+    const j = JSON.parse(raw) as unknown
+    if (
+      j &&
+      typeof j === 'object' &&
+      (j as ScanStateV1).version === 1 &&
+      typeof (j as ScanStateV1).lastScannedBlock === 'string' &&
+      typeof (j as ScanStateV1).baseTreasuryAddrLower === 'string'
+    ) {
+      return j as ScanStateV1
+    }
+  } catch {
+    /* missing or invalid */
+  }
+  return null
+}
+
+async function saveScanState(filePath: string, state: ScanStateV1): Promise<void> {
+  const dir = path.dirname(filePath)
+  await fs.mkdir(dir, { recursive: true })
+  const tmp = `${filePath}.${process.pid}.tmp`
+  await fs.writeFile(tmp, JSON.stringify(state, null, 2), 'utf8')
+  await fs.rename(tmp, filePath)
+}
+
 /**
- * 若钱包为 ConetTreasury miner，则通过 Base 链 WebSocket（eth_subscribe logs）监听 BaseTreasury 的 BUnitPurchased。
- * 不在 Base 端要求 miner；isMiner / voteAirdropBUnitFromBase 经 CoNET WebSocket JSON-RPC 完成。
+ * 自 tip 起最多 BACKFILL_MAX_BLOCKS 个区块的最早块号（含）。
+ */
+function backfillFloorBlock(tip: bigint): bigint {
+  if (tip + 1n <= BACKFILL_MAX_BLOCKS) return 0n
+  return tip + 1n - BACKFILL_MAX_BLOCKS
+}
+
+async function getBUnitPurchasedLogsChunked(
+  provider: ethers.Provider,
+  baseTreasuryAddr: string,
+  fromBlock: bigint,
+  toBlock: bigint
+): Promise<ethers.Log[]> {
+  const out: ethers.Log[] = []
+  let start = fromBlock
+  while (start <= toBlock) {
+    const end = start + LOGS_CHUNK_BLOCKS - 1n <= toBlock ? start + LOGS_CHUNK_BLOCKS - 1n : toBlock
+    const chunk = await provider.getLogs({
+      address: baseTreasuryAddr,
+      topics: [BUNIT_PURCHASED_TOPIC],
+      fromBlock: start,
+      toBlock: end,
+    })
+    out.push(...chunk)
+    start = end + 1n
+  }
+  return out
+}
+
+function sortLogs(a: ethers.Log, b: ethers.Log): number {
+  const ba = BigInt(a.blockNumber)
+  const bb = BigInt(b.blockNumber)
+  if (ba !== bb) return ba < bb ? -1 : 1
+  const ia = BigInt(a.index)
+  const ib = BigInt(b.index)
+  return ia < ib ? -1 : ia > ib ? 1 : 0
+}
+
+async function tryVoteBUnitPurchased(
+  wallet: Wallet,
+  conetTreasuryAddr: string,
+  conetWsProvider: ethers.WebSocketProvider,
+  processedTxHashes: Set<string>,
+  txHash: string,
+  user: string,
+  usdc: string,
+  amount: bigint
+): Promise<void> {
+  if (!txHash || processedTxHashes.has(txHash)) return
+  processedTxHashes.add(txHash)
+
+  debug('BUnitPurchased', { user, usdc, amount: amount.toString(), baseTxHash: txHash })
+
+  try {
+    const conetTreasuryWithSigner = new ethers.Contract(
+      conetTreasuryAddr,
+      CONET_TREASURY_ABI,
+      wallet.connect(conetWsProvider)
+    )
+    const txHashBytes32 = txHash as `0x${string}`
+
+    debug('Voting voteAirdropBUnitFromBase', {
+      txHash: txHashBytes32,
+      user,
+      usdcAmount: amount.toString(),
+      gasLimit: VOTE_GAS_LIMIT,
+    })
+
+    const tx = await conetTreasuryWithSigner.voteAirdropBUnitFromBase(txHashBytes32, user, amount, {
+      gasLimit: VOTE_GAS_LIMIT,
+    })
+    const receipt = await tx.wait()
+    debug('voteAirdropBUnitFromBase success', { txHash: tx.hash, blockNumber: receipt?.blockNumber })
+  } catch (err: unknown) {
+    debug('voteAirdropBUnitFromBase failed', { error: err instanceof Error ? err.message : String(err) })
+  }
+}
+
+/**
+ * 若钱包为 ConetTreasury miner，则：
+ * 1) 启动时用 eth_getLogs 回填最近最多 {@link BACKFILL_MAX_BLOCKS} 块内的 BUnitPurchased（WebSocket 不会推送历史日志）；
+ * 2) 将已扫描到的 tip 写入本地状态文件（默认 cwd 下 `.vote-base-bunit-scan-state.json`，可用 `VOTE_BASE_SCAN_STATE_FILE` 覆盖）；
+ * 3) 再订阅 WebSocket 新事件。
  *
- * 环境变量：可选 `CONET_RPC_WSS`（已是 wss 时优先）；否则用 `CONET_RPC` 或默认 HTTPS 推导 wss。
+ * 例：仅订阅时无法看到已上链的 `0x8472766d12337a6a8c42d74daea80aa9a7eaaaae590a6c9b1d019984293757f4`（该笔 receipt 含 BaseTreasury BUnitPurchased），需依赖回填或当时进程已在线。
+ *
+ * 环境变量：可选 `CONET_RPC_WSS`；`VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）。
  */
 export async function startBaseVoteListen(
   wallet: Wallet,
@@ -113,19 +247,24 @@ export async function startBaseVoteListen(
     ])
   }
 
+  const baseTreasuryLower = baseTreasuryAddr.toLowerCase()
+  const statePath = defaultScanStatePath()
+
   debug('startBaseVoteListen init', {
     baseTreasuryAddr,
     expectedBaseTreasury: EXPECTED_BASE_TREASURY,
-    addressMatch: baseTreasuryAddr.toLowerCase() === EXPECTED_BASE_TREASURY.toLowerCase(),
+    addressMatch: baseTreasuryLower === EXPECTED_BASE_TREASURY.toLowerCase(),
     baseWssUrl,
     baseRpcRaw,
     conetWssUrl,
     conetRpcRaw,
     conetTreasuryAddr,
     wallet: wallet.address,
+    backfillMaxBlocks: BACKFILL_MAX_BLOCKS.toString(),
+    scanStateFile: statePath,
   })
 
-  if (baseTreasuryAddr.toLowerCase() !== EXPECTED_BASE_TREASURY.toLowerCase()) {
+  if (baseTreasuryLower !== EXPECTED_BASE_TREASURY.toLowerCase()) {
     debug('WARN: baseTreasuryAddr does not match expected', {
       actual: baseTreasuryAddr,
       expected: EXPECTED_BASE_TREASURY,
@@ -148,9 +287,10 @@ export async function startBaseVoteListen(
   }
 
   debug('Listener setup: verifying Base WebSocket RPC')
+  let tipBn: bigint
   try {
-    const bn = await baseWsProvider.getBlockNumber()
-    debug('Listener setup: Base WebSocket connected', { block: bn.toString() })
+    tipBn = BigInt(await baseWsProvider.getBlockNumber())
+    debug('Listener setup: Base WebSocket connected', { block: tipBn.toString() })
   } catch (err: unknown) {
     const errMsg = err instanceof Error ? err.message : String(err)
     debug(`Listener setup: Base WebSocket getBlockNumber failed baseWssUrl=${baseWssUrl} error=${errMsg}`)
@@ -159,6 +299,71 @@ export async function startBaseVoteListen(
   }
 
   const processedTxHashes = new Set<string>()
+
+  let prevState = await loadScanState(statePath)
+  if (prevState && prevState.baseTreasuryAddrLower !== baseTreasuryLower) {
+    debug('Scan state treasury mismatch, resetting checkpoint', {
+      prev: prevState.baseTreasuryAddrLower,
+      now: baseTreasuryLower,
+    })
+    prevState = null
+  }
+
+  const floor = backfillFloorBlock(tipBn)
+  const lastScanned = prevState ? BigInt(prevState.lastScannedBlock) : -1n
+  const fromBlock = lastScanned >= 0n ? (lastScanned + 1n > floor ? lastScanned + 1n : floor) : floor
+
+  if (fromBlock <= tipBn) {
+    debug('Backfill BUnitPurchased via eth_getLogs', {
+      fromBlock: fromBlock.toString(),
+      toBlock: tipBn.toString(),
+      floor: floor.toString(),
+      lastScanned: lastScanned >= 0n ? lastScanned.toString() : null,
+    })
+    try {
+      const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, fromBlock, tipBn)
+      logs.sort(sortLogs)
+      debug('Backfill logs fetched', { count: logs.length })
+      for (const log of logs) {
+        const txHash = log.transactionHash ?? ''
+        const parsed = bunitPurchasedIface.parseLog({ data: log.data, topics: log.topics as string[] })
+        if (!parsed) continue
+        const { user, usdc, amount } = parsed.args
+        await tryVoteBUnitPurchased(
+          wallet,
+          conetTreasuryAddr,
+          conetWsProvider,
+          processedTxHashes,
+          txHash,
+          user,
+          usdc,
+          amount
+        )
+      }
+    } catch (err: unknown) {
+      debug('Backfill eth_getLogs failed', { error: err instanceof Error ? err.message : String(err) })
+      await destroyProviders()
+      return
+    }
+  } else {
+    debug('Backfill skipped (already scanned through tip)', {
+      fromBlock: fromBlock.toString(),
+      tip: tipBn.toString(),
+    })
+  }
+
+  const now = new Date().toISOString()
+  await saveScanState(statePath, {
+    version: 1,
+    lastScannedBlock: tipBn.toString(),
+    baseTreasuryAddrLower: baseTreasuryLower,
+    updatedAt: now,
+  })
+  debug('Scan state written', {
+    path: statePath,
+    lastScannedBlock: tipBn.toString(),
+    updatedAt: now,
+  })
 
   baseWsProvider.on('error', (err: unknown) => {
     debug('Base WebSocketProvider error', { error: err instanceof Error ? err.message : String(err) })
@@ -171,34 +376,16 @@ export async function startBaseVoteListen(
     'BUnitPurchased',
     async (user: string, usdc: string, amount: bigint, event: ethers.EventLog) => {
       const txHash = event.transactionHash ?? ''
-      if (!txHash || processedTxHashes.has(txHash)) return
-      processedTxHashes.add(txHash)
-
-      debug('BUnitPurchased', { user, usdc, amount: amount.toString(), baseTxHash: txHash })
-
-      try {
-        const conetTreasuryWithSigner = new ethers.Contract(
-          conetTreasuryAddr,
-          CONET_TREASURY_ABI,
-          wallet.connect(conetWsProvider)
-        )
-        const txHashBytes32 = txHash as `0x${string}`
-
-        debug('Voting voteAirdropBUnitFromBase', {
-          txHash: txHashBytes32,
-          user,
-          usdcAmount: amount.toString(),
-          gasLimit: VOTE_GAS_LIMIT,
-        })
-
-        const tx = await conetTreasuryWithSigner.voteAirdropBUnitFromBase(txHashBytes32, user, amount, {
-          gasLimit: VOTE_GAS_LIMIT,
-        })
-        const receipt = await tx.wait()
-        debug('voteAirdropBUnitFromBase success', { txHash: tx.hash, blockNumber: receipt?.blockNumber })
-      } catch (err: unknown) {
-        debug('voteAirdropBUnitFromBase failed', { error: err instanceof Error ? err.message : String(err) })
-      }
+      await tryVoteBUnitPurchased(
+        wallet,
+        conetTreasuryAddr,
+        conetWsProvider,
+        processedTxHashes,
+        txHash,
+        user,
+        usdc,
+        amount
+      )
     }
   )
 
