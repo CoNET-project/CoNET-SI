@@ -2181,6 +2181,10 @@ export const getAllNodeWallets = async (): Promise<{ipAddr: string, wallet: stri
     try {
         const allWallets = JSON.parse(wallets)
         const nodeWallets = allWallets?.nodeWallets
+        if (!Array.isArray(nodeWallets)) {
+            logger(Colors.yellow(`getAllNodeWallets: response missing nodeWallets[] (miningRate); forward wallet lookup will fail`))
+            return null
+        }
         return nodeWallets
 
     } catch (ex) {

@@ -130,6 +130,10 @@ let Guardian_Nodes: nodeInfo[] = []
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 
+/** 与 apiv4 `miningRate` 返回的 `nodeWallets[].ipAddr` 对齐比较用（trim、去 IPv4-mapped 前缀、小写） */
+const normalizeNodeWalletIp = (ip: string) =>
+	(ip || '').trim().replace(/^::ffff:/i, '').toLowerCase()
+
 const _getAllNodes = async (): Promise<any[]> => {
   let i = 0
   const length = 100
@@ -219,7 +223,9 @@ export const reScanAllWallets = async () => {
 
     routerInfo.forEach((val, key) => {
         
-        const index = wallets.findIndex(n => n.ipAddr === val.ipaddress)
+        const index = wallets.findIndex(
+			n => normalizeNodeWalletIp(n.ipAddr) === normalizeNodeWalletIp(val.ipaddress)
+		)
         if ( index< 0) {
             logger(`reScanAllWallets Error! ********************* NODE ${val.ipaddress} have no wallet to find in API server! **************`)
             return
@@ -262,7 +268,9 @@ export const getAllNodes = async (): Promise<boolean> => {
 
       let wallet = ""
       if (wallets?.length) {
-        const hit = wallets.find(n => n.ipAddr === ipAddr)
+        const hit = wallets.find(
+			n => normalizeNodeWalletIp(n.ipAddr) === normalizeNodeWalletIp(ipAddr)
+		)
         if (hit) wallet = hit.wallet
       }
 
