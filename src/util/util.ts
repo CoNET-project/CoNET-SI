@@ -276,8 +276,12 @@ export const getAllNodes = async (): Promise<boolean> => {
         wallet
       }
 
-      // 更新 routerInfo（按 domain）
-      if (domain) routerInfo.set(domain, itemNode)
+      // 更新 routerInfo（按 Guardian domain；同时写入 trim 后原串与 UPPER，避免与链上 routeKeyID 大小写不一致）
+      if (domain) {
+        const d = domain.trim()
+        routerInfo.set(d, itemNode)
+        routerInfo.set(d.toUpperCase(), itemNode)
+      }
 
       // 更新 merged（按 ip 去重）
       merged.set(ipAddr, itemNode)
@@ -391,14 +395,20 @@ const getRouteFromPGP = async (keyFormat: string): Promise<nodeInfo|false> => {
                         return false
                     }
 
-                    //      keyID ==> node
-                    const node = routerInfo.get(route.toUpperCase())
+                    //      keyID ==> node（routerInfo 的 key 为 Guardian 的 domain，须与链上 routeKeyID 一致、大小写与 set 时一致）
+                    const routeKey = route.toUpperCase()
+                    let node = routerInfo.get(routeKey)
+                    if (!node && route !== routeKey) {
+                        node = routerInfo.get(route)
+                    }
                     if (node) {
-                        logger(`routerInfo.get(route.toUpperCase()=${route.toUpperCase()}) === ${node.ipaddress}`)
+                        logger(`routerInfo.get(route=${routeKey}) => ${node.ipaddress}`)
                         clientRoute.set(keyFormat, node)
                         return node
                     }
-                    
+                    logger(Colors.yellow(
+                        `getRouteFromPGP: chain routeKeyID="${route}" not in routerInfo (run getAllNodes / check domain casing vs Guardian; key tried UPPER and raw)`
+                    ))
                 } catch (ex: any) {
                     logger(`await PGP_manager_readonly.getRouteKeyIDByUserPgpKeyID(keyFormat) Error`, ex.message)
                 }
@@ -490,20 +500,29 @@ export const setClientOnline = (wallet: string, status: boolean) => {
 export const getRoute = async (keyID: string): Promise<[string, string]|[]> => {
     const keyFormat = keyID.toUpperCase()
 	const node = routerInfo.get(keyFormat)
-    logger(``)
 	if (!node) {
-        logger(`routerInfo.get ${keyFormat} NULL`)
+        // routerInfo 按 Guardian domain 索引；入参多为用户 PGP KeyID，此处未命中为常态
+        logger(`getRoute: no routerInfo[${keyFormat}] (direct hit); resolving via AddressPGP getRouteKeyIDByUserPgpKeyID`)
         const client = await getRouteFromPGP(keyFormat)
         if (!client) {
-            logger(Colors.red(`getRoute has not !client`))
+            logger(Colors.red(`getRoute: could not resolve route for user PGP keyID ${keyFormat} (chain empty / not in routerInfo / RPC error)`))
             return []
         }
-       
-        
-		logger(Colors.red(`getRoute has not Node has this key ${keyID.toUpperCase()}`)) //inspect(routerInfo.keys(), false, 3, true))
+        if (!client.wallet) {
+            logger(Colors.yellow(
+                `getRoute: resolved IP ${client.ipaddress} but wallet empty — check getAllNodeWallets() has this IP; forward may fail until reScanAllWallets`
+            ))
+        } else {
+            logger(Colors.green(`getRoute: resolved ${keyFormat} -> ${client.ipaddress} (wallet ok)`))
+        }
 		return [client.ipaddress, client.wallet]
 	}
-    
+
+    if (!node.wallet) {
+        logger(Colors.yellow(
+            `getRoute: direct routerInfo[${keyFormat}] IP ${node.ipaddress} but wallet empty — check getAllNodeWallets / reScanAllWallets`
+        ))
+    }
 	return [node.ipaddress, node.wallet]
 }
 
