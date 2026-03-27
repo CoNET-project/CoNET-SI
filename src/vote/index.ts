@@ -78,6 +78,54 @@ const LOGS_CHUNK_BLOCKS = BigInt(process.env.VOTE_BASE_LOGS_CHUNK_BLOCKS || '400
  * 用 eth_getLogs 定时补扫与 WS 并行；设为 0 可关闭（不推荐）。
  */
 const LIVE_POLL_INTERVAL_MS = Number(process.env.VOTE_BASE_LIVE_POLL_INTERVAL_MS) || 12_000
+/**
+ * Base `eth_blockNumber` 在连续超过该时间内严格未增长（始终 ≤ 当前高水位）则销毁 WS 并重启一轮 `startBaseVoteListen`。
+ * `VOTE_BASE_TIP_STALL_RESTART_MS=0` 关闭。
+ */
+const TIP_STALL_RESTART_MS = (() => {
+  const raw = process.env.VOTE_BASE_TIP_STALL_RESTART_MS
+  if (raw === '0') return 0
+  const n = Number(raw)
+  if (Number.isFinite(n) && n > 0) return n
+  return 60_000
+})()
+/**
+ * Base 单次 `eth_blockNumber` 超时（毫秒）：挂起超过该时间则 teardown 并重启监听。
+ * `VOTE_BASE_GETBLOCK_TIMEOUT_MS=0` 关闭（与链上行为一致，不推荐生产关闭）。
+ */
+const BASE_GETBLOCK_TIMEOUT_MS = (() => {
+  const raw = process.env.VOTE_BASE_GETBLOCK_TIMEOUT_MS
+  if (raw === '0') return 0
+  const n = Number(raw)
+  if (Number.isFinite(n) && n > 0) return n
+  return 45_000
+})()
+
+class GetBlockNumberTimeoutError extends Error {
+  constructor(readonly timeoutMs: number) {
+    super(`getBlockNumber exceeded ${timeoutMs}ms`)
+    this.name = 'GetBlockNumberTimeoutError'
+  }
+}
+
+/** `eth_blockNumber` 带超时；超时抛出 {@link GetBlockNumberTimeoutError}。 */
+async function getBaseBlockNumberWithTimeout(provider: ethers.Provider, timeoutMs: number): Promise<bigint> {
+  if (timeoutMs <= 0) {
+    return BigInt(await provider.getBlockNumber())
+  }
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const timeoutP = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new GetBlockNumberTimeoutError(timeoutMs)), timeoutMs)
+  })
+  try {
+    const n = await Promise.race([provider.getBlockNumber(), timeoutP])
+    if (timer !== undefined) clearTimeout(timer)
+    return BigInt(n)
+  } catch (e) {
+    if (timer !== undefined) clearTimeout(timer)
+    throw e
+  }
+}
 
 const BASE_TREASURY_ABI = [
   'function isMiner(address account) view returns (bool)',
@@ -348,6 +396,8 @@ async function tryVoteBUnitPurchased(
  *
  * 环境变量：`CONET_RPC`（推荐 HTTPS，用于 isMiner 与投票）；或 `CONET_RPC_WSS`（会转成 https 再用于 HTTP provider）。
  * `VOTE_BASE_BACKFILL_BLOCKS`（默认 2000）；`VOTE_BASE_LOGS_CHUNK_BLOCKS`（默认 400）；`VOTE_BASE_LIVE_POLL_INTERVAL_MS`（默认 12000；0 关闭）。
+ * `VOTE_BASE_TIP_STALL_RESTART_MS`（默认 60000）：Base `getBlockNumber` 高水位在该毫秒内未增长则重建 WS 监听；0 关闭。
+ * `VOTE_BASE_GETBLOCK_TIMEOUT_MS`（默认 45000）：单次 `getBlockNumber` 挂起超过该毫秒则重建 WS 监听；0 关闭超时。
  *
  * 去重：单次进程内用内存 Set（按 Base tx hash 小写）避免回溯/WS/poll 重复处理同一笔；
  * 持久化 `lastScannedBlock` 避免重启后重复扫描同一段块。
@@ -371,8 +421,62 @@ export async function startBaseVoteListen(
   const baseTreasuryWs = new ethers.Contract(baseTreasuryAddr, BASE_TREASURY_ABI, baseWsProvider)
   const conetTreasury = new ethers.Contract(conetTreasuryAddr, CONET_TREASURY_ABI, conetHttpProvider)
 
+  let sessionActive = true
+  let pollTimer: ReturnType<typeof setInterval> | undefined
+  let stallWatchTimer: ReturnType<typeof setInterval> | undefined
+  let pollBusy = false
+  /** 本轮会话内 Base `getBlockNumber` 见过的最大块高；严格大于该值才视为「增长」 */
+  let rpcTipHighWater = 0n
+  let lastRpcTipGrowthAt = Date.now()
+
   const destroyProviders = async () => {
     await baseWsProvider.destroy().catch(() => undefined)
+  }
+
+  const teardownSessionAndRestart = async (reason: string, extra?: Record<string, unknown>) => {
+    if (!sessionActive) return
+    sessionActive = false
+    if (pollTimer !== undefined) {
+      clearInterval(pollTimer)
+      pollTimer = undefined
+    }
+    if (stallWatchTimer !== undefined) {
+      clearInterval(stallWatchTimer)
+      stallWatchTimer = undefined
+    }
+    try {
+      baseTreasuryWs.removeAllListeners()
+    } catch {
+      /* ignore */
+    }
+    baseWsProvider.removeAllListeners()
+    debug('vote restarting Base listener (tip stall / watchdog)', { reason, ...extra })
+    await destroyProviders()
+    setImmediate(() => {
+      void startBaseVoteListen(wallet, baseTreasuryAddr, conetTreasuryAddr, baseRpc, conetRpc)
+    })
+  }
+
+  /**
+   * 在已成功取得 `cur = getBlockNumber()` 后调用；若需重启则返回 true（会话已 teardown）。
+   */
+  const checkRpcTipStallAfterFetch = async (cur: bigint, context: string): Promise<boolean> => {
+    if (TIP_STALL_RESTART_MS <= 0 || !sessionActive) return false
+    if (cur > rpcTipHighWater) {
+      rpcTipHighWater = cur
+      lastRpcTipGrowthAt = Date.now()
+      return false
+    }
+    const elapsed = Date.now() - lastRpcTipGrowthAt
+    if (elapsed < TIP_STALL_RESTART_MS) return false
+    await teardownSessionAndRestart('base_tip_stalled', {
+      context,
+      rpcTipHighWater: rpcTipHighWater.toString(),
+      cur: cur.toString(),
+      elapsedMs: elapsed,
+      thresholdMs: TIP_STALL_RESTART_MS,
+    })
+    return true
   }
 
   const baseTreasuryLower = baseTreasuryAddr.toLowerCase()
@@ -390,6 +494,7 @@ export async function startBaseVoteListen(
     wallet: wallet.address,
     backfillMaxBlocks: BACKFILL_MAX_BLOCKS.toString(),
     scanStateFile: statePath,
+    baseGetBlockTimeoutMs: BASE_GETBLOCK_TIMEOUT_MS,
   })
 
   if (baseTreasuryLower !== EXPECTED_BASE_TREASURY.toLowerCase()) {
@@ -428,9 +533,23 @@ export async function startBaseVoteListen(
   debug('vote listener setup verifying Base WebSocket RPC', {})
   let tipBn: bigint
   try {
-    tipBn = BigInt(await baseWsProvider.getBlockNumber())
+    tipBn = await getBaseBlockNumberWithTimeout(baseWsProvider, BASE_GETBLOCK_TIMEOUT_MS)
+    rpcTipHighWater = tipBn
+    lastRpcTipGrowthAt = Date.now()
     debug('vote Base WebSocket connected', { block: tipBn.toString() })
   } catch (err: unknown) {
+    if (err instanceof GetBlockNumberTimeoutError) {
+      debug('vote Base WebSocket getBlockNumber timeout', {
+        baseWssUrl,
+        timeoutMs: err.timeoutMs,
+        context: 'initial',
+      })
+      await teardownSessionAndRestart('base_getBlockNumber_timeout', {
+        context: 'initial',
+        timeoutMs: err.timeoutMs,
+      })
+      return
+    }
     const errMsg = err instanceof Error ? err.message : String(err)
     debug('vote Base WebSocket getBlockNumber failed', { baseWssUrl, error: errMsg })
     await destroyProviders()
@@ -496,6 +615,7 @@ export async function startBaseVoteListen(
   baseTreasuryWs.on(
     'BUnitPurchased',
     async (user: string, usdc: string, amount: bigint, event: unknown) => {
+      if (!sessionActive) return
       const txHash = baseTxHashFromListenerEvent(event)
       const blockNumber = baseBlockLabelFromListenerEvent(event)
       debug('vote WS eth_subscribe BUnitPurchased fired', {
@@ -521,50 +641,102 @@ export async function startBaseVoteListen(
 
   let lastPolledBlock = tipBn
   let livePollTickCount = 0
-  if (LIVE_POLL_INTERVAL_MS > 0) {
-    const livePollTick = async () => {
-      livePollTickCount++
-      try {
-        const cur = BigInt(await baseWsProvider.getBlockNumber())
-        if (cur <= lastPolledBlock) {
-          if (livePollTickCount % 10 === 1) {
-            debug('vote live poll no new blocks', {
-              lastPolledBlock: lastPolledBlock.toString(),
-              cur: cur.toString(),
-              tick: livePollTickCount,
-            })
-          }
-          return
+  const livePollTick = async () => {
+    if (!sessionActive) return
+    if (pollBusy) return
+    pollBusy = true
+    livePollTickCount++
+    try {
+      const cur = await getBaseBlockNumberWithTimeout(baseWsProvider, BASE_GETBLOCK_TIMEOUT_MS)
+      if (await checkRpcTipStallAfterFetch(cur, 'livePoll')) return
+
+      if (cur <= lastPolledBlock) {
+        if (livePollTickCount % 10 === 1) {
+          debug('vote live poll no new blocks', {
+            lastPolledBlock: lastPolledBlock.toString(),
+            cur: cur.toString(),
+            tick: livePollTickCount,
+          })
         }
-        const from = lastPolledBlock + 1n
-        const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, from, cur)
-        debug('vote live poll eth_getLogs', {
-          fromBlock: from.toString(),
-          toBlock: cur.toString(),
-          logsCount: logs.length,
-          tick: livePollTickCount,
-        })
-        await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetHttpProvider, processedTxHashes)
-        lastPolledBlock = cur
-        const pollNow = new Date().toISOString()
-        await saveScanState(statePath, {
-          version: 1,
-          lastScannedBlock: cur.toString(),
-          baseTreasuryAddrLower: baseTreasuryLower,
-          updatedAt: pollNow,
-        })
-      } catch (err: unknown) {
-        debug('vote live poll error', { error: err instanceof Error ? err.message : String(err) })
+        return
       }
+      const from = lastPolledBlock + 1n
+      const logs = await getBUnitPurchasedLogsChunked(baseWsProvider, baseTreasuryAddr, from, cur)
+      debug('vote live poll eth_getLogs', {
+        fromBlock: from.toString(),
+        toBlock: cur.toString(),
+        logsCount: logs.length,
+        tick: livePollTickCount,
+      })
+      await processBUnitPurchasedLogs(logs, wallet, conetTreasuryAddr, conetHttpProvider, processedTxHashes)
+      lastPolledBlock = cur
+      const pollNow = new Date().toISOString()
+      await saveScanState(statePath, {
+        version: 1,
+        lastScannedBlock: cur.toString(),
+        baseTreasuryAddrLower: baseTreasuryLower,
+        updatedAt: pollNow,
+      })
+    } catch (err: unknown) {
+      if (err instanceof GetBlockNumberTimeoutError) {
+        await teardownSessionAndRestart('base_getBlockNumber_timeout', {
+          context: 'livePoll',
+          timeoutMs: err.timeoutMs,
+        })
+        return
+      }
+      debug('vote live poll error', { error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      pollBusy = false
     }
-    setInterval(livePollTick, LIVE_POLL_INTERVAL_MS)
+  }
+
+  if (LIVE_POLL_INTERVAL_MS > 0) {
+    pollTimer = setInterval(() => {
+      void livePollTick()
+    }, LIVE_POLL_INTERVAL_MS)
     void livePollTick()
     debug('vote live poll scheduled eth_getLogs backup', {
       intervalMs: LIVE_POLL_INTERVAL_MS,
       startAfterBlock: lastPolledBlock.toString(),
+      tipStallRestartMs: TIP_STALL_RESTART_MS,
+      baseGetBlockTimeoutMs: BASE_GETBLOCK_TIMEOUT_MS,
     })
   } else {
     debug('vote live poll disabled VOTE_BASE_LIVE_POLL_INTERVAL_MS=0', {})
+  }
+
+  if (TIP_STALL_RESTART_MS > 0 && LIVE_POLL_INTERVAL_MS <= 0) {
+    const stallCheckMs = Math.min(15_000, Math.max(5_000, Math.floor(TIP_STALL_RESTART_MS / 4)))
+    stallWatchTimer = setInterval(() => {
+      void (async () => {
+        if (!sessionActive) return
+        if (pollBusy) return
+        pollBusy = true
+        try {
+          const cur = await getBaseBlockNumberWithTimeout(baseWsProvider, BASE_GETBLOCK_TIMEOUT_MS)
+          if (await checkRpcTipStallAfterFetch(cur, 'stallWatch')) return
+        } catch (err: unknown) {
+          if (err instanceof GetBlockNumberTimeoutError) {
+            await teardownSessionAndRestart('base_getBlockNumber_timeout', {
+              context: 'stallWatch',
+              timeoutMs: err.timeoutMs,
+            })
+            return
+          }
+          debug('vote stall watch getBlockNumber error', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        } finally {
+          pollBusy = false
+        }
+      })()
+    }, stallCheckMs)
+    debug('vote stall watch scheduled (live poll off)', {
+      stallCheckMs,
+      tipStallRestartMs: TIP_STALL_RESTART_MS,
+      baseGetBlockTimeoutMs: BASE_GETBLOCK_TIMEOUT_MS,
+    })
   }
 
   debug('vote BaseTreasury listener ready WS plus live poll', {
