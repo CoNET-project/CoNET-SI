@@ -66,7 +66,7 @@ function toConetHttpRpcUrl(url: string): string {
   return u
 }
 
-const CONET_RPC_DEFAULT_HTTP = process.env.CONET_RPC || 'https://mainnet-rpc.conet.network'
+const CONET_RPC_DEFAULT_HTTP = process.env.CONET_RPC || 'https://rpc1.conet.network'
 const VOTE_GAS_LIMIT = 1_500_000
 
 /** 自当前 tip 起最多向前回填的区块数（含 tip 共 BACKFILL 个区块） */

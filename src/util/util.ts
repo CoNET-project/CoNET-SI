@@ -27,13 +27,13 @@ import { webcrypto as crypto } from 'crypto'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
-export const CoNET_mainnet_RPC = 'https://mainnet-rpc.conet.network'
+export const CoNET_mainnet_RPC = 'https://rpc1.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
-const GuardianNodeInfo_mainnet = '0xCd68C3FFFE403f9F26081807c77aB29a4DF6940D'.toLowerCase()
+const GuardianNodeInfo_mainnet = '0xdE51f1daaCa6eae9BDeEe33E324c3e6e96837e94'.toLowerCase()
 
 const conet_PGP_address = '0x13A96Bcd6aB010619d1004A1Cb4f5FE149e0F4c4'
 const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)

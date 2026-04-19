@@ -2306,7 +2306,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
     executor(true)
 })
 
-const GuardianNodeInfo_mainnet = '0xCd68C3FFFE403f9F26081807c77aB29a4DF6940D'.toLowerCase()
+const GuardianNodeInfo_mainnet = '0xdE51f1daaCa6eae9BDeEe33E324c3e6e96837e94'.toLowerCase()
 
 const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
