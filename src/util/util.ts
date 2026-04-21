@@ -642,6 +642,36 @@ export const forWardPGPMessageToClient = (pgpMessage: string, clentKeyID: string
 
 }
 
+/** Align with SI liveness SSE: frames split on blank line; strip optional `data: ` lines. */
+const streamFrameToJsonText = (frame: string): string => {
+	const block = frame.trim()
+	if (!block) return block
+	const lines = block.split(/\r?\n/)
+	const dataParts: string[] = []
+	let sawDataLine = false
+	for (const line of lines) {
+		if (line.startsWith('data:')) {
+			sawDataLine = true
+			dataParts.push(line.slice(5).replace(/^\s/, ''))
+			continue
+		}
+		if (line.startsWith(':')) continue
+		if (/^(event|id|retry)\s*:/i.test(line)) continue
+	}
+	if (sawDataLine) return dataParts.join('\n').trim()
+	return block
+}
+
+const pullNextFrame = (buf: string): { frame: string; rest: string } | null => {
+	let idx = buf.indexOf('\r\n\r\n')
+	let sep = 4
+	if (idx === -1) {
+		idx = buf.indexOf('\n\n')
+		sep = 2
+	}
+	if (idx === -1) return null
+	return { frame: buf.slice(0, idx), rest: buf.slice(idx + sep) }
+}
 
 const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?: string) => void) => {
 
@@ -656,7 +686,8 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 		path: "/post",
 	}
 
-	let first = true
+	let gotFirst = false
+	let buffer = ''
 
 	const kkk = request(option, res => {
 
@@ -664,29 +695,21 @@ const startGossip = (node: nodeInfo, POST: string, callback: (err: string, data?
 			return logger(`startTestMiner ${node.domain}:${node.ipaddress} got res.statusCode = [${res.statusCode}] != 200 error! restart`)
 		}
 
-		let data = ''
-		let _Time: NodeJS.Timeout
-
 		res.on ('data', _data => {
-			
-			data += _data.toString()
-			
-			if (/\r\n\r\n/.test(data)) {
-				
-				if (first) {
-					first = false
-					// logger(Colors.magenta(`first`))
-					try{
-						const uu = JSON.parse(data)
-						callback('', uu)
-					} catch(ex) {
-						logger(Colors.red(`first JSON.parse Error`), data)
-					}
-					data = ''
-					res._destroy(null, () => {
-						//logger(Colors.magenta(`startGossip stop connecting!`))
-					})
-				}
+			if (gotFirst) return
+			buffer += _data.toString()
+			const pulled = pullNextFrame(buffer)
+			if (!pulled) return
+			buffer = pulled.rest
+			const jsonText = streamFrameToJsonText(pulled.frame)
+			if (!jsonText) return
+			try {
+				const uu = JSON.parse(jsonText)
+				gotFirst = true
+				callback('', uu)
+				res._destroy(null, () => {})
+			} catch (ex) {
+				logger(Colors.red(`startGossip first JSON.parse Error`), jsonText.slice(0, 200), ex)
 			}
 		})
 
