@@ -15,7 +15,7 @@ const { ethers } = require(join(__dirname, '../node_modules/ethers'))
 const newNodeInfoABI = require(join(__dirname, '../src/util/newNodeInfoABI.json'))
 
 const RPC = 'https://rpc1.conet.network'
-const CONTRACT = '0xdE51f1daaCa6eae9BDeEe33E324c3e6e96837e94'
+const CONTRACT = '0x6d7a526BFD03E90ea8D19eDB986577395a139872'
 
 function curlRpc(payload) {
   return execSync(
