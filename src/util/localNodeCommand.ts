@@ -1927,7 +1927,7 @@ const epoch_mining_info_cancun_addr = '0xbC713Fef0c7Bb178151cE45eFF1FD17d020a9ec
 const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, conet_Mainnet)
 
 
-const nodeRestartEvent_addr = '0x28022d17064367F7246F5800af905DA3E53C01A4'
+const nodeRestartEvent_addr = '0xf82a6362b9F23F2380C621B5A649987C5bc228B7'
 const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, conet_Mainnet)
 
 const checkCurrentRate = async (block: number) => {
