@@ -222,22 +222,40 @@ export const reScanAllWallets = async () => {
     }
 
 
+    let matched = 0
+    let failed = 0
+    const failedIps: string[] = []
     routerInfo.forEach((val, key) => {
-        
+
         const index = wallets.findIndex(
 			n => normalizeNodeWalletIp(n.ipAddr) === normalizeNodeWalletIp(val.ipaddress)
 		)
         if ( index< 0) {
-            logger(`reScanAllWallets Error! ********************* NODE ${val.ipaddress} have no wallet to find in API server! **************`)
+            failed++
+            failedIps.push(val.ipaddress)
+            logger(Colors.yellow(`reScanAllWallets miss: NODE ${val.ipaddress} have no wallet in apiv4 miningRate.nodeWallets`))
             return
         }
         val.wallet = wallets[index].wallet
         routerInfo.set(key, val)
+        matched++
     })
     reScanAllWalletsProcess = false
-    logger(`r********************* reScanAllWallets  SUCCESS!   **************`)
 
+    const total = routerInfo.size
+    const summary = `reScanAllWallets DONE matched=${matched} failed=${failed} total=${total} apiServerWallets=${wallets.length}`
 
+    if (matched === 0 && total > 0) {
+        // 全部失配通常意味着 apiv4 miningRate.nodeWallets 与链上 getAllNodes 数据源/格式不一致
+        // 仅当所有节点都失配时才升级为 FATAL，避免单条失配时误报
+        logger(Colors.red(
+            `reScanAllWallets FATAL: ${summary} — apiv4 miningRate.nodeWallets likely stale/empty/wrong-format (sample failed IPs: ${failedIps.slice(0, 3).join(', ')})`
+        ))
+    } else if (failed > 0) {
+        logger(Colors.yellow(`reScanAllWallets PARTIAL: ${summary}`))
+    } else {
+        logger(Colors.green(`reScanAllWallets SUCCESS: ${summary}`))
+    }
 }
 
 export const getAllNodes = async (): Promise<boolean> => {

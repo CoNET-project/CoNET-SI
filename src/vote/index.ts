@@ -155,6 +155,7 @@ function debug(msg: string, data?: Record<string, unknown> | object) {
   console.log(`[${VOTE_TAG}] [${ts}] ${msg}${suffix}`)
 }
 
+/** Base 主网 BaseTreasury（监听 BUnitPurchased）；勿与 ConetTreasury（投票目标）混用 */
 const EXPECTED_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
 
 /**
