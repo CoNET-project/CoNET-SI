@@ -35,7 +35,8 @@ const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
 const GuardianNodeInfo_mainnet = '0x6d7a526BFD03E90ea8D19eDB986577395a139872'.toLowerCase()
 
-const conet_PGP_address = '0x9C94238945295146F3F572D77ae492C13DF90bDd'
+/** 与 `deployments/conet-addresses.json` / `conet-AddressPGP.json` 中 AddressPGP 一致 */
+const conet_PGP_address = '0xb2aABe52f476356AE638839A786EAE425A0c1b66'
 const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)
 
 
@@ -383,8 +384,12 @@ export const getWalletFromKeyID = async (wallet: string) => {
 
         await getRouteFromPGP(userPgpKeyID)
         return userPgpKeyID
-    } catch(ex: any) {
-        logger(`getWalletFromKeyID Error ${ex.message}`)
+    } catch (ex: any) {
+		if (ex?.code === 'BAD_DATA' && /value="0x"/.test(ex?.message ?? '')) {
+			logger(`getWalletFromKeyID: searchKey 返回 0x（检查 AddressPGP 部署地址是否与链上一致）`)
+		} else {
+			logger(`getWalletFromKeyID Error ${ex?.message ?? ex}`)
+		}
     }
     return null
 }
