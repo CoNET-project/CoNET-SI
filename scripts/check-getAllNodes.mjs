@@ -15,7 +15,8 @@ const { ethers } = require(join(__dirname, '../node_modules/ethers'))
 const newNodeInfoABI = require(join(__dirname, '../src/util/newNodeInfoABI.json'))
 
 const RPC = 'https://rpc1.conet.network'
-const CONTRACT = '0x6d7a526BFD03E90ea8D19eDB986577395a139872'
+/** 与 deployments/conet-addresses.json GuardianNodesInfoV6 一致（由 updateConetReferences.ts 同步） */
+const CONTRACT = '0x359F781A5eEb17630A44e15Bc2aC57b248b81790'
 
 function curlRpc(payload) {
   return execSync(
