@@ -1969,6 +1969,12 @@ const getRestart = async (block: number) => {
 		}
 		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.restartBlockNumber())
 		logger(`getRestart restartBlockNumber = ${restartBlockNumber} erttData.restartBlockNumber = ${serttData?.restartBlockNumber} ==========================================`)
+		// 旧链 setup 可能仍保留 restartBlockNumber=77553；新链合约返回 0 时清掉以免误导日志
+		if (!restartBlockNumber && serttData && (serttData.restartBlockNumber ?? 0) > 0) {
+			logger(Colors.yellow(`getRestart clear stale setup restartBlockNumber ${serttData.restartBlockNumber} → 0 (new chain)`))
+			serttData.restartBlockNumber = 0
+			await saveSetup(serttData, false)
+		}
 		if (restartBlockNumber) {
 			
 			if (serttData) {
@@ -2004,7 +2010,7 @@ const nodeRestartEvent = (block: number) => new Promise (async resolve=> {
 	searchEpochEventProcess = true
 
 	await Promise.all([
-		// checkCurrentRate(block),
+		checkCurrentRate(block),
 		getRestart(block)
 	])
 
@@ -2147,6 +2153,7 @@ const moveData = (block: number) => new Promise(executor => {
 
 	// logger(inspect(nodeWallets, false, 3, true))
 	let totalMiners = nodeWallets.length
+	previousGossipStatus.epoch = block
 	previousGossipStatus.nodeWallets = nodeWallets
 	previousGossipStatus.totalConnectNode = gossipStatus.nodesWallets.size
 	previousGossipStatus.totalMiners = totalMiners
@@ -2160,7 +2167,13 @@ const moveData = (block: number) => new Promise(executor => {
 	})
 
 	moveDataProcess = false
-	logger(Colors.magenta(`gossipStart sendEpoch ${block} totalMiners ${totalMiners} total Users ${userWallets.length}`))
+	const chainMiners = currentRate?.totalMiners ?? 0
+	const chainUsers = currentRate?.totalUsrs ?? 0
+	logger(
+		Colors.magenta(
+			`gossipStart sendEpoch ${block} localMiners ${totalMiners} chainMiners ${chainMiners} localUsers ${userWallets.length} chainUsers ${chainUsers} livenessClients ${livenessListeningPool.size}`
+		)
+	)
     logger(inspect(previousGossipStatus, false, 3, true))
     executor(true)
 })
@@ -2290,7 +2303,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 			rate: rate?.minerRate,
 			hash: signMessage,
 			nodeWallet,
-			online: rate?.totalMiners,
+			online: rate?.totalMiners ?? previousGossipStatus.totalMiners,
 			connetingNodes: previousGossipStatus.nodesWallets.size,
 			nodeDomain,
 			nodeIpAddr,
