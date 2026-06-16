@@ -1923,11 +1923,11 @@ let CurrentEpoch = 0
 let listenValidatorEpoch = 0
 let nodeWallet = ''
 const conet_Mainnet = new ethers.JsonRpcProvider (CoNET_mainnet_RPC)
-const epoch_mining_info_cancun_addr = '0x9163937cBBacf2F12C069eeEbD7c6A8b91b0e9BD'.toLocaleLowerCase()
+const epoch_mining_info_cancun_addr = '0x648f1a17269627C3d465fEa40b3C229f7CacE5cA'.toLocaleLowerCase()
 const epoch_mining_infoSC = new ethers.Contract(epoch_mining_info_cancun_addr, epoch_info_ABI, conet_Mainnet)
 
 
-const nodeRestartEvent_addr = '0x185b17bb66A28d1a86322Fc5c123361A324Bf3c3'
+const nodeRestartEvent_addr = '0x64c9c9d5CAAff0693F324E02fB9B7de907540DF1'
 const epoch_RestartEvent_SC_readonly = new ethers.Contract(nodeRestartEvent_addr, nodeRestartABI, conet_Mainnet)
 
 const checkCurrentRate = async (block: number) => {
@@ -1963,6 +1963,10 @@ let serttData: ICoNET_NodeSetup|null
 const getRestart = async (block: number) => {
 	
 	try {
+		const restartCode = await conet_Mainnet.getCode(nodeRestartEvent_addr)
+		if (!restartCode || restartCode === '0x') {
+			return
+		}
 		const restartBlockNumber = parseInt(await epoch_RestartEvent_SC_readonly.restartBlockNumber())
 		logger(`getRestart restartBlockNumber = ${restartBlockNumber} erttData.restartBlockNumber = ${serttData?.restartBlockNumber} ==========================================`)
 		if (restartBlockNumber) {
