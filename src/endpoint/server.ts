@@ -77,8 +77,6 @@ const responseRootHomePage = (socket: Socket|TLSSocket) => {
 }
 
 
-//		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
-
 
 /**
  * @description 修正后的服务器主处理函数。
@@ -349,7 +347,7 @@ class conet_si_server {
 		// 地址来自 deployments/conet-addresses.json，见 env.example
 		// 优先 BASE_RPC (wss)，否则 BASE_RPC_HTTP；wss 会在 vote 内转为 https。Beamio 标准：base-rpc.conet.network
 		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
-		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || '0xb7A5d95a50b799d70424777D6f7d7EAAE0Da06A1'
+		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || '0xc6e615431BC0c0c65E09e04877a08AC927A30242'
 		logger(Colors.cyan(`[vote] Starting BaseTreasury vote listen: baseTreasury=${baseTreasuryAddr} conetTreasury=${conetTreasuryAddr}`))
 		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
 			startBaseVoteListen(

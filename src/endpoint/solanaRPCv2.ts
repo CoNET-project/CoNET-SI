@@ -38,7 +38,6 @@ const solanaRPCURL = `https://${solanaRPC_host}`
 
 const indexHtmlFileName = join(`${__dirname}`, 'index.html')
 
-//		curl -v -i -X OPTIONS https://solana-rpc.conet.network/
 // 輔助函數：處理 OPTIONS 預檢請求
 const responseOPTIONS = (socket: Net.Socket, headers: string[]) => {
 	const checkMac = headers.findIndex(n => / AppleWebKit\//.test(n))

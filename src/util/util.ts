@@ -27,16 +27,16 @@ import { webcrypto as crypto } from 'crypto'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
-export const CoNET_mainnet_RPC = 'https://rpc1.conet.network'
+export const CoNET_mainnet_RPC = 'https://publicrpc.conet.network'
 const ipfsEndpoint = `https://ipfs.conet.network/api/`
 
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
-const GuardianNodeInfo_mainnet = '0x359F781A5eEb17630A44e15Bc2aC57b248b81790'.toLowerCase()
+const GuardianNodeInfo_mainnet = '0xBC6b53065b5647261396d002bDBA0d3396E0722f'.toLowerCase()
 
 /** 与 `deployments/conet-addresses.json` / `conet-AddressPGP.json` 中 AddressPGP 一致（由 updateConetReferences.ts 同步） */
-const conet_PGP_address = '0xa5F64dd3c034442F5377c8F2Aa1A03ba378D685e'
+const conet_PGP_address = '0x684b0ac760cEE9c9b85de36d69746420648Cf9e2'
 const PGP_manager_readonly = new ethers.Contract(conet_PGP_address, CoNET_PGP_ABI, CONETP_mainnet_rovider)
 
 
