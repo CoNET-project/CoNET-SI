@@ -2032,24 +2032,26 @@ const blockProcess = async (block: number ) => {
         return
     }
     runningBlockProcess = true
-    //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
-    
-    await nodeRestartEvent(block)
-    await checkNodeUpdate(block)
-    
-    if (block % 2) {
+    try {
+        //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
+        await nodeRestartEvent(block)
+        await checkNodeUpdate(block)
+
+        if (block % 2) {
+            return
+        }
+
+        CurrentEpoch = block
+        await moveData(block)
+
+        // gossipStart(block)
+        await stratlivenessV2(block, localNodeKey, nodeDomain, nodeIpAddr)
+        logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
+    } catch (ex: any) {
+        logger(Colors.red(`blockProcess error on block ${block}: ${ex?.message ?? ex}`))
+    } finally {
         runningBlockProcess = false
-        return //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
     }
-
-    
-    CurrentEpoch = block
-    await moveData(block)
-
-    // gossipStart(block)
-    await stratlivenessV2(block, localNodeKey, nodeDomain, nodeIpAddr)
-    runningBlockProcess = false
-    logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} *************** END! ${new Date().toISOString()}`))
 }
 
 let nodeDomain: string 
@@ -2068,10 +2070,32 @@ export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, do
 
 	serttData = await getSetup()
 
-	listenValidatorEpoch = CurrentEpoch = await CONETProvider_Mainnet.getBlockNumber()
+	let blockNum = 0
+	for (let attempt = 1; attempt <= 5; attempt++) {
+		try {
+			blockNum = await CONETProvider_Mainnet.getBlockNumber()
+			break
+		} catch (ex: any) {
+			logger(Colors.yellow(`startEPOCH getBlockNumber attempt ${attempt}/5: ${ex?.message ?? ex}`))
+			if (attempt === 5) {
+				logger(Colors.red(`startEPOCH getBlockNumber failed after 5 attempts; mining loop not started`))
+				return
+			}
+			await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+		}
+	}
+	listenValidatorEpoch = CurrentEpoch = blockNum
 	nodeWallet = nodePrivate.address.toLowerCase()
-	await getFaucet(nodePrivate)
-	await startUp(nodePrivate, domain)
+	try {
+		await getFaucet(nodePrivate)
+	} catch (ex: any) {
+		logger(Colors.yellow(`startEPOCH getFaucet failed (non-fatal): ${ex?.message ?? ex}`))
+	}
+	try {
+		await startUp(nodePrivate, domain)
+	} catch (ex: any) {
+		logger(Colors.yellow(`startEPOCH startUp failed (non-fatal): ${ex?.message ?? ex}`))
+	}
 	
 	currentRate = {
 		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
@@ -2237,7 +2261,8 @@ export const httpsPostToUrl = (url: string, body: string):Promise<string> => new
 		
 		res.once('end', () => {
 			if (res.statusCode !==200) {
-				return logger(`httpsPostToUrl ${url} statusCode = [${res.statusCode}] != 200 error!`)
+				logger(`httpsPostToUrl ${url} statusCode = [${res.statusCode}] != 200 error!`)
+				return resolve('')
 			}
             resolve(data)
 		})
@@ -2245,7 +2270,9 @@ export const httpsPostToUrl = (url: string, body: string):Promise<string> => new
 	})
 
 	kkk.once('error', err => {
+		clearTimeout(waitingTimeout)
 		logger(Colors.red(`httpsPostToUrl on('error') [${url}] requestHttps on Error! no call relaunch`), err.message)
+		resolve('')
 	})
 
 	kkk.end(body)
@@ -2326,6 +2353,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 const GuardianNodeInfo_mainnet = '0xBC6b53065b5647261396d002bDBA0d3396E0722f'.toLowerCase()
 
 const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
+	try {
 	const blockTs = await CONETProvider_Mainnet.getBlock(block)
 	
 	if (!blockTs?.transactions) {
@@ -2349,6 +2377,9 @@ const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
     if (hasGuardianNodeEvent) {
         await getAllNodes()
     }
+	} catch (ex: any) {
+		logger(Colors.yellow(`checkNodeUpdate block ${block} failed (non-fatal): ${ex?.message ?? ex}`))
+	}
     
     resolve(true)
 })
