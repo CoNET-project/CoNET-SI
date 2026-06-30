@@ -341,14 +341,13 @@ class conet_si_server {
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 
-		// BaseTreasury events: miner check + poll BUnitPurchased via eth_getLogs (HTTP, 不依赖 wss)
-		// BUnitPurchased -> ConetTreasury.voteAirdropBUnitFromBase with high gas
-		// BASE_TREASURY_ADDRESS = Base 主网 BaseTreasury；CONET_TREASURY_ADDRESS = CoNET L1，二者勿混
-		// 地址来自 deployments/conet-addresses.json，见 env.example
+		// 统一国库 ConetTreasury CREATE2（跨链同址）：Base 监听 BUnitPurchased → CoNET voteAirdropBUnitFromBase
+		// BASE_TREASURY_ADDRESS / CONET_TREASURY_ADDRESS 默认均为 0xa311…3B30（见 env.example）
 		// 优先 BASE_RPC (wss)，否则 BASE_RPC_HTTP；wss 会在 vote 内转为 https。Beamio 标准：base-rpc.conet.network
-		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
-		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || '0x6dC686831A497c2a9d0a2ff5A000E3Bb40a2E795'
-		logger(Colors.cyan(`[vote] Starting BaseTreasury vote listen: baseTreasury=${baseTreasuryAddr} conetTreasury=${conetTreasuryAddr}`))
+		const UNIFIED_TREASURY_CREATE2 = '0xa311c8fBE7CafC611603Ee925465A62493B73B30'
+		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || UNIFIED_TREASURY_CREATE2
+		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || UNIFIED_TREASURY_CREATE2
+		logger(Colors.cyan(`[vote] Starting unified ConetTreasury vote listen: base=${baseTreasuryAddr} conet=${conetTreasuryAddr}`))
 		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
 			startBaseVoteListen(
 				this.nodeWallet,
