@@ -1684,18 +1684,35 @@ const pgpTest = async () => {
 	logger (keys)
 }
 
-export const CertificatePATH = ['/etc/letsencrypt/live/slickstack/cert.pem','/etc/letsencrypt/live/slickstack/privkey.pem']
+// Prefer fullchain.pem (leaf + intermediate). cert.pem alone causes TLS
+// "unable to verify the first certificate" for Node/strict clients and can
+// make browser POST /post fail while GET / still looks healthy.
+const LE_LIVE = '/etc/letsencrypt/live/slickstack'
+export const CertificatePATH = [`${LE_LIVE}/fullchain.pem`, `${LE_LIVE}/privkey.pem`]
+const CertificatePATHFallback = [`${LE_LIVE}/cert.pem`, `${LE_LIVE}/privkey.pem`]
 export const testCertificateFiles: () => Promise<boolean> = () => new Promise (async resolve => {
 	try {
 		await Promise.all([
 			access(CertificatePATH[0], constants.R_OK),
 			access(CertificatePATH[1], constants.R_OK),
 		])
-		logger(`testCertificateFiles success!`)
+		logger(`testCertificateFiles success! (fullchain)`)
 		return resolve (true)
 	} catch (ex) {
-		logger(ex)
-		return resolve (false)
+		try {
+			await Promise.all([
+				access(CertificatePATHFallback[0], constants.R_OK),
+				access(CertificatePATHFallback[1], constants.R_OK),
+			])
+			CertificatePATH[0] = CertificatePATHFallback[0]
+			CertificatePATH[1] = CertificatePATHFallback[1]
+			logger(Colors.yellow(`testCertificateFiles: fullchain missing, falling back to cert.pem (incomplete chain)`))
+			return resolve (true)
+		} catch (ex2) {
+			logger(ex)
+			logger(ex2)
+			return resolve (false)
+		}
 	}
 })
 
