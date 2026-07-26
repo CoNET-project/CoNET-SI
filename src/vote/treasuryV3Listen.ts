@@ -6,6 +6,7 @@ import { BASE_CHAIN_ID, CONET_CHAIN_ID, TREASURY_V3_CREATE2 } from './treasuryAd
 const TREASURY_V3_ABI = [
   'event BridgeOperation(bytes32 indexed operationId,uint256 indexed sourceChainId,uint256 indexed destinationChainId,uint8 phase,uint8 mode,address sourceTreasury,address sourceAsset,address destinationAsset,address sender,address beneficiary,uint256 grossAmount,uint256 feeAmount,uint256 netAmount,bytes32 sourceTxHash,uint256 nonce)',
   'function isMiner(address account) view returns (bool)',
+  'function voteBridgeOperation(bytes32 operationId,uint256 sourceChainId,uint256 destinationChainId,address sourceTreasury,address sourceAsset,address destinationAsset,address beneficiary,uint8 mode,uint256 grossAmount,uint256 feeAmount,bytes32 sourceTxHash,uint256 nonce)',
 ] as const
 
 const BRIDGE_OPERATION_TOPIC = ethers.id(
@@ -18,25 +19,6 @@ const POLL_DELAY_MS = Number(process.env.TREASURY_V3_POLL_DELAY_MS || 12_000)
 const MAX_BACKFILL_BLOCKS = BigInt(process.env.TREASURY_V3_BACKFILL_BLOCKS || '0')
 const DEPLOY_BLOCK_BASE = BigInt(process.env.TREASURY_V3_DEPLOY_BLOCK_BASE || process.env.TREASURY_V3_DEPLOY_BLOCK || '0')
 const DEPLOY_BLOCK_CONET = BigInt(process.env.TREASURY_V3_DEPLOY_BLOCK_CONET || process.env.TREASURY_V3_DEPLOY_BLOCK || '0')
-const ATTESTATION_RELAY_URL = process.env.TREASURY_V3_ATTESTATION_RELAY_URL?.trim()
-
-const ATTESTATION_TYPES = {
-  BridgeAttestation: [
-    { name: 'operationId', type: 'bytes32' },
-    { name: 'sourceChainId', type: 'uint256' },
-    { name: 'destinationChainId', type: 'uint256' },
-    { name: 'sourceTreasury', type: 'address' },
-    { name: 'sourceAsset', type: 'address' },
-    { name: 'destinationAsset', type: 'address' },
-    { name: 'beneficiary', type: 'address' },
-    { name: 'mode', type: 'uint8' },
-    { name: 'grossAmount', type: 'uint256' },
-    { name: 'feeAmount', type: 'uint256' },
-    { name: 'sourceTxHash', type: 'bytes32' },
-    { name: 'nonce', type: 'uint256' },
-  ],
-}
-
 type BridgeOperation = {
   operationId: string
   sourceChainId: bigint
@@ -152,87 +134,63 @@ function parseBridgeOperation(log: ethers.Log): BridgeOperation | null {
   }
 }
 
-async function signAndRelay(wallet: Wallet, operation: BridgeOperation, sourceChainId: bigint): Promise<void> {
+async function voteOnDestination(
+  wallet: Wallet,
+  operation: BridgeOperation,
+  sourceChainId: bigint,
+  destinationRpc: string,
+): Promise<void> {
   if (operation.destinationChainId !== (sourceChainId === BASE_CHAIN_ID ? CONET_CHAIN_ID : BASE_CHAIN_ID)) return
-  const domain = {
-    name: 'TreasuryBridgeV3',
-    version: '1',
-    chainId: operation.destinationChainId,
-    verifyingContract: TREASURY_V3_CREATE2,
+  const destinationProvider = new ethers.JsonRpcProvider(rpcHttpUrl(destinationRpc))
+  const destinationWallet = wallet.connect(destinationProvider)
+  const treasury = new ethers.Contract(TREASURY_V3_CREATE2, TREASURY_V3_ABI, destinationWallet)
+  if (!(await treasury.isMiner(destinationWallet.address))) {
+    throw new Error(`destination wallet ${destinationWallet.address} is not a Treasury V3 miner`)
   }
-  const message = {
-    operationId: operation.operationId,
-    sourceChainId: operation.sourceChainId,
-    destinationChainId: operation.destinationChainId,
-    sourceTreasury: operation.sourceTreasury,
-    sourceAsset: operation.sourceAsset,
-    destinationAsset: operation.destinationAsset,
-    beneficiary: operation.beneficiary,
-    mode: operation.mode,
-    grossAmount: operation.grossAmount,
-    feeAmount: operation.feeAmount,
-    sourceTxHash: operation.sourceTxHash,
-    nonce: operation.nonce,
-  }
-  const signature = await wallet.signTypedData(domain, ATTESTATION_TYPES, message)
-  const payload = {
-    chainId: operation.destinationChainId.toString(),
-    treasury: TREASURY_V3_CREATE2,
-    operationId: operation.operationId,
-    sourceTransactionHash: operation.sourceTransactionHash,
-    sourceBlockNumber: operation.sourceBlockNumber,
-    signer: wallet.address,
-    signature,
-    attestation: {
-      ...message,
-      sourceChainId: message.sourceChainId.toString(),
-      destinationChainId: message.destinationChainId.toString(),
-      grossAmount: message.grossAmount.toString(),
-      feeAmount: message.feeAmount.toString(),
-      nonce: message.nonce.toString(),
-    },
-  }
-  debug('signed Treasury V3 attestation', {
+  debug('submitting direct Treasury V3 miner vote', {
     operationId: operation.operationId,
     sourceChainId: operation.sourceChainId.toString(),
     destinationChainId: operation.destinationChainId.toString(),
-    signer: wallet.address,
+    signer: destinationWallet.address,
   })
-  if (!ATTESTATION_RELAY_URL) {
-    debug('attestation relay disabled; signature emitted only', { operationId: operation.operationId })
-    return
-  }
-  const response = await fetch(ATTESTATION_RELAY_URL, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(payload),
+  const tx = await treasury.voteBridgeOperation(
+    operation.operationId,
+    operation.sourceChainId,
+    operation.destinationChainId,
+    operation.sourceTreasury,
+    operation.sourceAsset,
+    operation.destinationAsset,
+    operation.beneficiary,
+    operation.mode,
+    operation.grossAmount,
+    operation.feeAmount,
+    operation.sourceTxHash,
+    operation.nonce,
+  )
+  const receipt = await tx.wait()
+  if (!receipt) throw new Error(`missing receipt for Treasury V3 vote ${tx.hash}`)
+  debug('Treasury V3 miner vote confirmed', {
+    operationId: operation.operationId,
+    txHash: tx.hash,
+    blockNumber: receipt.blockNumber,
   })
-  if (!response.ok) throw new Error(`attestation relay HTTP ${response.status}`)
-  debug('Treasury V3 attestation relayed', { operationId: operation.operationId })
 }
 
 async function processLogs(
   wallet: Wallet,
-  provider: ethers.Provider,
   sourceChainId: bigint,
+  destinationRpc: string,
   logs: ethers.Log[],
 ): Promise<void> {
   for (const log of logs) {
     const operation = parseBridgeOperation(log)
     if (!operation) continue
-    try {
-      await signAndRelay(wallet, operation, sourceChainId)
-    } catch (error) {
-      debug('Treasury V3 attestation failed', {
-        operationId: operation.operationId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
+    await voteOnDestination(wallet, operation, sourceChainId, destinationRpc)
   }
 }
 
-async function runChain(wallet: Wallet, sourceChainId: bigint, rpc: string): Promise<void> {
-  const provider = new ethers.JsonRpcProvider(rpcHttpUrl(rpc))
+async function runChain(wallet: Wallet, sourceChainId: bigint, sourceRpc: string, destinationRpc: string): Promise<void> {
+  const provider = new ethers.JsonRpcProvider(rpcHttpUrl(sourceRpc))
   const treasury = new ethers.Contract(TREASURY_V3_CREATE2, TREASURY_V3_ABI, provider)
   const miner = await treasury.isMiner(wallet.address)
   debug('Treasury V3 miner check', { sourceChainId: sourceChainId.toString(), wallet: wallet.address, miner })
@@ -261,7 +219,12 @@ async function runChain(wallet: Wallet, sourceChainId: bigint, rpc: string): Pro
     const maxBlocks = CHUNK_BLOCKS * BigInt(CHUNKS_PER_TICK)
     const toBlock = lastProcessed + maxBlocks < scanTarget ? lastProcessed + maxBlocks : scanTarget
     if (lastProcessed < toBlock) {
-      await processLogs(wallet, provider, sourceChainId, await getLogsChunked(provider, lastProcessed + 1n, toBlock))
+      await processLogs(
+        wallet,
+        sourceChainId,
+        destinationRpc,
+        await getLogsChunked(provider, lastProcessed + 1n, toBlock),
+      )
       lastProcessed = toBlock
     }
     await saveState(stateFile, lastProcessed, scanTarget)
@@ -289,5 +252,8 @@ export async function startTreasuryV3VoteListen(
 ): Promise<void> {
   const base = baseRpc || process.env.BASE_RPC || process.env.BASE_RPC_HTTP || 'https://base-rpc.conet.network'
   const conet = conetRpc || process.env.CONET_RPC || 'https://rpc1.conet.network'
-  await Promise.all([runChain(wallet, BASE_CHAIN_ID, base), runChain(wallet, CONET_CHAIN_ID, conet)])
+  await Promise.all([
+    runChain(wallet, BASE_CHAIN_ID, base, conet),
+    runChain(wallet, CONET_CHAIN_ID, conet, base),
+  ])
 }
