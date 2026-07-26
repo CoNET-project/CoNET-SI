@@ -134,6 +134,12 @@ function parseBridgeOperation(log: ethers.Log): BridgeOperation | null {
   }
 }
 
+/** Errors that mean this miner can skip the op without blocking the cursor. */
+function isSkippableVoteError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /AlreadyVoted|OperationAlreadyUsed|already voted|already (used|executed)/i.test(message)
+}
+
 async function voteOnDestination(
   wallet: Wallet,
   operation: BridgeOperation,
@@ -181,17 +187,41 @@ async function voteOnDestination(
   })
 }
 
+/**
+ * Vote each Initiated log. Returns retryable failure count.
+ * Skippable on-chain states (already voted / executed) do not count as failures.
+ */
 async function processLogs(
   wallet: Wallet,
   sourceChainId: bigint,
   destinationRpc: string,
   logs: ethers.Log[],
-): Promise<void> {
+): Promise<number> {
+  let retryableFailures = 0
   for (const log of logs) {
     const operation = parseBridgeOperation(log)
     if (!operation) continue
-    await voteOnDestination(wallet, operation, sourceChainId, destinationRpc)
+    try {
+      await voteOnDestination(wallet, operation, sourceChainId, destinationRpc)
+    } catch (error) {
+      if (isSkippableVoteError(error)) {
+        debug('Treasury V3 vote skipped', {
+          operationId: operation.operationId,
+          sourceChainId: sourceChainId.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        })
+        continue
+      }
+      retryableFailures++
+      debug('Treasury V3 vote failed; chunk will be retried', {
+        operationId: operation.operationId,
+        sourceChainId: sourceChainId.toString(),
+        sourceBlockNumber: operation.sourceBlockNumber,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
   }
+  return retryableFailures
 }
 
 async function runChain(wallet: Wallet, sourceChainId: bigint, sourceRpc: string, destinationRpc: string): Promise<void> {
@@ -217,31 +247,50 @@ async function runChain(wallet: Wallet, sourceChainId: bigint, sourceRpc: string
   }
   await saveState(stateFile, lastProcessed, scanTarget)
 
-  const tick = async (): Promise<void> => {
-    if (lastProcessed >= scanTarget) {
-      scanTarget = BigInt(await provider.getBlockNumber())
-    }
-    const maxBlocks = CHUNK_BLOCKS * BigInt(CHUNKS_PER_TICK)
-    const toBlock = lastProcessed + maxBlocks < scanTarget ? lastProcessed + maxBlocks : scanTarget
-    if (lastProcessed < toBlock) {
-      await processLogs(
-        wallet,
-        sourceChainId,
-        destinationRpc,
-        await getLogsChunked(provider, lastProcessed + 1n, toBlock),
-      )
-      lastProcessed = toBlock
-    }
-    await saveState(stateFile, lastProcessed, scanTarget)
-    setTimeout(() => void tick().catch((error) => debug('Treasury V3 poll failed', {
-      sourceChainId: sourceChainId.toString(),
-      error: error instanceof Error ? error.message : String(error),
-    })), POLL_DELAY_MS)
+  // Serial setTimeout chain: always reschedule in finally so a thrown vote/RPC
+  // error cannot kill the poll loop (previous bug: setTimeout only ran after success).
+  const scheduleNext = (): void => {
+    setTimeout(() => {
+      void tick()
+    }, POLL_DELAY_MS)
   }
-  setTimeout(() => void tick().catch((error) => debug('Treasury V3 poll failed', {
-    sourceChainId: sourceChainId.toString(),
-    error: error instanceof Error ? error.message : String(error),
-  })), POLL_DELAY_MS)
+
+  const tick = async (): Promise<void> => {
+    try {
+      if (lastProcessed >= scanTarget) {
+        scanTarget = BigInt(await provider.getBlockNumber())
+      }
+      const maxBlocks = CHUNK_BLOCKS * BigInt(CHUNKS_PER_TICK)
+      const toBlock = lastProcessed + maxBlocks < scanTarget ? lastProcessed + maxBlocks : scanTarget
+      if (lastProcessed < toBlock) {
+        const failures = await processLogs(
+          wallet,
+          sourceChainId,
+          destinationRpc,
+          await getLogsChunked(provider, lastProcessed + 1n, toBlock),
+        )
+        if (failures === 0) {
+          lastProcessed = toBlock
+        } else {
+          debug('Treasury V3 cursor not advanced', {
+            sourceChainId: sourceChainId.toString(),
+            lastProcessedBlock: lastProcessed.toString(),
+            attemptedToBlock: toBlock.toString(),
+            retryableFailures: failures,
+          })
+        }
+      }
+      await saveState(stateFile, lastProcessed, scanTarget)
+    } catch (error) {
+      debug('Treasury V3 poll failed', {
+        sourceChainId: sourceChainId.toString(),
+        error: error instanceof Error ? error.message : String(error),
+      })
+    } finally {
+      scheduleNext()
+    }
+  }
+  scheduleNext()
   debug('Treasury V3 listener ready', {
     sourceChainId: sourceChainId.toString(),
     lastProcessedBlock: lastProcessed.toString(),
