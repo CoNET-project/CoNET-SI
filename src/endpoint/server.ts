@@ -5,11 +5,9 @@ import Cluster from 'cluster'
 import {Socket, createServer, Server} from 'net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
-import { startBaseVoteListen } from '../vote'
-import { startPeerBridgeVoteListen } from '../vote/peerBridgeListen'
+import { startTreasuryV3VoteListen } from '../vote/treasuryV3Listen'
 import {
 	CONET_TREASURY_CREATE2,
-	CONET_TREASURY_PEER_CREATE2,
 } from '../vote/treasuryAddresses'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
@@ -345,30 +343,17 @@ class conet_si_server {
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 
-		// 统一国库 ConetTreasury CREATE2（跨链同址）：
-		// 1) Base BUnitPurchased → CoNET voteAirdropBUnitFromBase（购 B-Unit）
-		// 2) Base ConetTreasuryPeer BridgeOut → CoNET voteMintFromPeer*（去中心化跨链铸 CONET-USDC 等；仅 Treasury miner）
-		// BASE_TREASURY_ADDRESS / CONET_TREASURY_ADDRESS 默认 0xa311…；Peer 默认 0x025e…（见 env.example）
-		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || CONET_TREASURY_CREATE2
-		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || CONET_TREASURY_CREATE2
-		const basePeerAddr = process.env.BASE_TREASURY_PEER_ADDRESS || CONET_TREASURY_PEER_CREATE2
-		const conetPeerAddr = process.env.CONET_TREASURY_PEER_ADDRESS || CONET_TREASURY_PEER_CREATE2
+		// Treasury V3 双链同址监听：BridgeOperation(Initiated) → EIP-712 attestation。
+		// 国库地址固定为 Treasury V3 canonical proxy；旧 BUnit/Peer vote listener 不再启动。
 		const baseRpc = process.env.BASE_RPC || process.env.BASE_RPC_HTTP || undefined
 		const conetRpc = process.env.CONET_RPC ?? undefined
-		logger(Colors.cyan(`[vote] Starting ConetTreasury BUnit listen: base=${baseTreasuryAddr} conet=${conetTreasuryAddr}`))
-		logger(Colors.cyan(`[vote] Starting ConetTreasuryPeer bridge listen: basePeer=${basePeerAddr} conetPeer=${conetPeerAddr}`))
-		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
-			startBaseVoteListen(this.nodeWallet, baseTreasuryAddr, conetTreasuryAddr, baseRpc, conetRpc)
-			startPeerBridgeVoteListen(
-				this.nodeWallet,
-				basePeerAddr,
-				conetPeerAddr,
-				conetTreasuryAddr,
-				baseRpc,
-				conetRpc
-			)
+		logger(Colors.cyan(`[vote-v3] Starting Treasury V3 BridgeOperation listener: treasury=${CONET_TREASURY_CREATE2}`))
+		if (this.nodeWallet) {
+			void startTreasuryV3VoteListen(this.nodeWallet, baseRpc, conetRpc).catch(error => {
+				logger(Colors.red(`[vote-v3] Treasury V3 listener failed: ${error instanceof Error ? error.message : String(error)}`))
+			})
 		} else {
-			logger(Colors.yellow(`[vote] Skipped treasury/peer vote listen: baseTreasuryAddr=${!!baseTreasuryAddr} conetTreasuryAddr=${!!conetTreasuryAddr} nodeWallet=${!!this.nodeWallet}`))
+			logger(Colors.yellow('[vote-v3] Skipped Treasury V3 listener: nodeWallet unavailable'))
 		}
 	}
 

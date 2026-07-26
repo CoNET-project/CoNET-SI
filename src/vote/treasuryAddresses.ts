@@ -1,13 +1,10 @@
-/**
- * 统一国库 + Peer 跨链桥 CREATE2 同址（Base 8453 + CoNET 224422）。
- * 与 x402sdk `chainAddresses.ts` / deployments/conet-treasury-cross-chain-stack.json 对齐。
- */
+/** Treasury V3 UUPS proxy，Base 与 CoNET 使用同一 canonical 地址。 */
+export const TREASURY_V3_CREATE2 =
+  process.env.TREASURY_V3_ADDRESS?.trim() || '0xa208982212978550594A7FEEB70a61665d129003'
 
-/** ConetTreasury（miner 治理、BUnitPurchased、Factory mint） */
-export const CONET_TREASURY_CREATE2 = '0xa311c8fBE7CafC611603Ee925465A62493B73B30'
-
-/** ConetTreasuryPeer（跨链 burn / StableSwap → 目标链 voteMint*） */
-export const CONET_TREASURY_PEER_CREATE2 = '0x025eC62F801B2f63d5C5b3eB066bab21B12Bbeb5'
+/** @deprecated 旧国库地址，仅保留给历史兼容代码，不得用于新投票监听。 */
+export const CONET_TREASURY_CREATE2 = TREASURY_V3_CREATE2
+export const CONET_TREASURY_PEER_CREATE2 = TREASURY_V3_CREATE2
 
 export const BASE_CHAIN_ID = 8453n
 export const CONET_CHAIN_ID = 224422n
