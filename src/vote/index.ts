@@ -1,6 +1,7 @@
 import { ethers, Wallet } from 'ethers'
 import * as fs from 'fs/promises'
 import * as path from 'path'
+import { CONET_TREASURY_CREATE2 } from './treasuryAddresses'
 
 /**
  * 将 BASE_RPC / BASE_RPC_HTTP 等规范为 WebSocket URL，供 eth_subscribe（logs）使用。
@@ -156,7 +157,7 @@ function debug(msg: string, data?: Record<string, unknown> | object) {
 }
 
 /** Base 主网统一国库 ConetTreasury CREATE2（监听 BUnitPurchased） */
-const EXPECTED_BASE_TREASURY = '0xa311c8fBE7CafC611603Ee925465A62493B73B30'
+const EXPECTED_BASE_TREASURY = CONET_TREASURY_CREATE2
 /** @deprecated 旧 BaseTreasury */
 const LEGACY_BASE_TREASURY = '0x5c64a8b0935DA72d60933bBD8cD10579E1C40c58'
 

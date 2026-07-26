@@ -6,7 +6,11 @@ import {Socket, createServer, Server} from 'net'
 import {logger} from '../util/logger'
 import {postOpenpgpRouteSocket, IclientPool, generateWalletAddress, getPublicKeyArmoredKeyID, getSetup, loadWalletAddress, makeOpenpgpObj, saveSetup, testCertificateFiles, CertificatePATH, startEPOCH_EventListeningForMining, Restart} from '../util/localNodeCommand'
 import { startBaseVoteListen } from '../vote'
-import { startConetVoteForERC20Deposited } from '../vote/conetVote'
+import { startPeerBridgeVoteListen } from '../vote/peerBridgeListen'
+import {
+	CONET_TREASURY_CREATE2,
+	CONET_TREASURY_PEER_CREATE2,
+} from '../vote/treasuryAddresses'
 import Colors from 'colors/safe'
 import { readFileSync} from 'fs'
 import {createServer as createServerSSL, TLSSocket} from 'tls'
@@ -341,24 +345,30 @@ class conet_si_server {
 		this.startServer ()
 		startEPOCH_EventListeningForMining(this.nodeWallet, this.publicKeyID, this.nodeIpAddr)
 
-		// 统一国库 ConetTreasury CREATE2（跨链同址）：Base 监听 BUnitPurchased → CoNET voteAirdropBUnitFromBase
-		// BASE_TREASURY_ADDRESS / CONET_TREASURY_ADDRESS 默认均为 0xa311…3B30（见 env.example）
-		// 优先 BASE_RPC (wss)，否则 BASE_RPC_HTTP；wss 会在 vote 内转为 https。Beamio 标准：base-rpc.conet.network
-		const UNIFIED_TREASURY_CREATE2 = '0xa311c8fBE7CafC611603Ee925465A62493B73B30'
-		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || UNIFIED_TREASURY_CREATE2
-		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || UNIFIED_TREASURY_CREATE2
-		logger(Colors.cyan(`[vote] Starting unified ConetTreasury vote listen: base=${baseTreasuryAddr} conet=${conetTreasuryAddr}`))
+		// 统一国库 ConetTreasury CREATE2（跨链同址）：
+		// 1) Base BUnitPurchased → CoNET voteAirdropBUnitFromBase（购 B-Unit）
+		// 2) Base ConetTreasuryPeer BridgeOut → CoNET voteMintFromPeer*（去中心化跨链铸 CONET-USDC 等；仅 Treasury miner）
+		// BASE_TREASURY_ADDRESS / CONET_TREASURY_ADDRESS 默认 0xa311…；Peer 默认 0x025e…（见 env.example）
+		const baseTreasuryAddr = process.env.BASE_TREASURY_ADDRESS || CONET_TREASURY_CREATE2
+		const conetTreasuryAddr = process.env.CONET_TREASURY_ADDRESS || CONET_TREASURY_CREATE2
+		const basePeerAddr = process.env.BASE_TREASURY_PEER_ADDRESS || CONET_TREASURY_PEER_CREATE2
+		const conetPeerAddr = process.env.CONET_TREASURY_PEER_ADDRESS || CONET_TREASURY_PEER_CREATE2
+		const baseRpc = process.env.BASE_RPC || process.env.BASE_RPC_HTTP || undefined
+		const conetRpc = process.env.CONET_RPC ?? undefined
+		logger(Colors.cyan(`[vote] Starting ConetTreasury BUnit listen: base=${baseTreasuryAddr} conet=${conetTreasuryAddr}`))
+		logger(Colors.cyan(`[vote] Starting ConetTreasuryPeer bridge listen: basePeer=${basePeerAddr} conetPeer=${conetPeerAddr}`))
 		if (baseTreasuryAddr && conetTreasuryAddr && this.nodeWallet) {
-			startBaseVoteListen(
+			startBaseVoteListen(this.nodeWallet, baseTreasuryAddr, conetTreasuryAddr, baseRpc, conetRpc)
+			startPeerBridgeVoteListen(
 				this.nodeWallet,
-				baseTreasuryAddr,
+				basePeerAddr,
+				conetPeerAddr,
 				conetTreasuryAddr,
-				process.env.BASE_RPC || process.env.BASE_RPC_HTTP || undefined,
-				process.env.CONET_RPC ?? undefined
+				baseRpc,
+				conetRpc
 			)
-			startConetVoteForERC20Deposited(this.nodeWallet, conetTreasuryAddr, process.env.CONET_RPC ?? undefined)
 		} else {
-			logger(Colors.yellow(`[vote] Skipped startBaseVoteListen: baseTreasuryAddr=${!!baseTreasuryAddr} conetTreasuryAddr=${!!conetTreasuryAddr} nodeWallet=${!!this.nodeWallet}`))
+			logger(Colors.yellow(`[vote] Skipped treasury/peer vote listen: baseTreasuryAddr=${!!baseTreasuryAddr} conetTreasuryAddr=${!!conetTreasuryAddr} nodeWallet=${!!this.nodeWallet}`))
 		}
 	}
 
