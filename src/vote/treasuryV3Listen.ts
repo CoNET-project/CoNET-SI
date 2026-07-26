@@ -153,6 +153,10 @@ async function voteOnDestination(
     destinationChainId: operation.destinationChainId.toString(),
     signer: destinationWallet.address,
   })
+  // Quorum-final votes execute mint/release in the same tx. estimateGas often
+  // prices only the vote branch (~90k) when local tip still shows voteCount <
+  // required, then the mined tx becomes the executor and OOGs. Pin a ceiling.
+  const VOTE_GAS_LIMIT = BigInt(process.env.TREASURY_V3_VOTE_GAS_LIMIT || '450000')
   const tx = await treasury.voteBridgeOperation(
     operation.operationId,
     operation.sourceChainId,
@@ -166,6 +170,7 @@ async function voteOnDestination(
     operation.feeAmount,
     operation.sourceTxHash,
     operation.nonce,
+    { gasLimit: VOTE_GAS_LIMIT },
   )
   const receipt = await tx.wait()
   if (!receipt) throw new Error(`missing receipt for Treasury V3 vote ${tx.hash}`)
