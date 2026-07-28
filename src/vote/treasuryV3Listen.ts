@@ -4,13 +4,13 @@ import * as path from 'path'
 import { BASE_CHAIN_ID, CONET_CHAIN_ID, TREASURY_V3_CREATE2 } from './treasuryAddresses'
 
 const TREASURY_V3_ABI = [
-  'event BridgeOperation(bytes32 indexed operationId,uint256 indexed sourceChainId,uint256 indexed destinationChainId,uint8 phase,uint8 mode,address sourceTreasury,address sourceAsset,address destinationAsset,address sender,address[] beneficiaries,uint256[] amounts,uint256 grossAmount,uint256 feeAmount,uint256 netAmount,bytes32 sourceTxHash,uint256 nonce)',
+  'event BridgeOperation(bytes32 indexed operationId,uint256 indexed sourceChainId,uint256 indexed destinationChainId,uint8 phase,uint8 mode,address sourceTreasury,address sourceAsset,address destinationAsset,address sender,address[] beneficiaries,uint256[] amounts,uint256 grossAmount,uint256 feeAmount,uint256 netAmount,bytes32 sourceTxHash,uint256 nonce,address callbackTarget)',
   'function isMiner(address account) view returns (bool)',
-  'function voteBridgeOperation(bytes32 operationId,uint256 sourceChainId,uint256 destinationChainId,address sourceTreasury,address sourceAsset,address destinationAsset,address[] beneficiaries,uint256[] amounts,uint8 mode,uint256 grossAmount,uint256 feeAmount,bytes32 sourceTxHash,uint256 nonce)',
+  'function voteBridgeOperation(bytes32 operationId,uint256 sourceChainId,uint256 destinationChainId,address sourceTreasury,address sourceAsset,address destinationAsset,address[] beneficiaries,uint256[] amounts,uint8 mode,uint256 grossAmount,uint256 feeAmount,bytes32 sourceTxHash,uint256 nonce,address callbackTarget)',
 ] as const
 
 const BRIDGE_OPERATION_TOPIC = ethers.id(
-  'BridgeOperation(bytes32,uint256,uint256,uint8,uint8,address,address,address,address,address[],uint256[],uint256,uint256,uint256,bytes32,uint256)',
+  'BridgeOperation(bytes32,uint256,uint256,uint8,uint8,address,address,address,address,address[],uint256[],uint256,uint256,uint256,bytes32,uint256,address)',
 )
 const VOTE_TAG = 'vote-v3'
 const CHUNK_BLOCKS = BigInt(process.env.TREASURY_V3_LOGS_CHUNK_BLOCKS || '400')
@@ -33,6 +33,7 @@ type BridgeOperation = {
   feeAmount: bigint
   sourceTxHash: string
   nonce: bigint
+  callbackTarget: string
   sourceTransactionHash: string
   sourceBlockNumber: number
 }
@@ -131,6 +132,8 @@ function parseBridgeOperation(log: ethers.Log): BridgeOperation | null {
     feeAmount: BigInt(parsed.args.feeAmount),
     sourceTxHash: parsed.args.sourceTxHash,
     nonce: BigInt(parsed.args.nonce),
+    // Pre-callback event layouts omit this field; default ZeroAddress for local forks only.
+    callbackTarget: parsed.args.callbackTarget ?? ethers.ZeroAddress,
     sourceTransactionHash: log.transactionHash,
     sourceBlockNumber: log.blockNumber,
   }
@@ -165,7 +168,8 @@ async function voteOnDestination(
   // prices only the vote branch (~90k) when local tip still shows voteCount <
   // required, then the mined tx becomes the executor and OOGs. Multi-beneficiary
   // mint/transfer needs headroom — pin a higher ceiling.
-  const VOTE_GAS_LIMIT = BigInt(process.env.TREASURY_V3_VOTE_GAS_LIMIT || '900000')
+  // Quorum-final vote may mint + best-effort onBridgeMint (200k stipend); keep headroom.
+  const VOTE_GAS_LIMIT = BigInt(process.env.TREASURY_V3_VOTE_GAS_LIMIT || '1200000')
   const tx = await treasury.voteBridgeOperation(
     operation.operationId,
     operation.sourceChainId,
@@ -180,6 +184,7 @@ async function voteOnDestination(
     operation.feeAmount,
     operation.sourceTxHash,
     operation.nonce,
+    operation.callbackTarget,
     { gasLimit: VOTE_GAS_LIMIT },
   )
   const receipt = await tx.wait()
