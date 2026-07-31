@@ -1509,8 +1509,9 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
     const infoDown = `socketForward to node <= ${ipAddr}`
     const upload = new BandwidthCount(infoUp, wallet||'')
     const download = new BandwidthCount(infoDown, wallet||'')
+	let opened = false
 	const conn = createConnection ( port, ipAddr, () => {
-
+		opened = true
 		logger (Colors.blue (`socketForward packet to node ${ ipAddr }:${port} success !`))
 		
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
@@ -1540,7 +1541,16 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 	
 	conn.on ('error', err => {
 		logger (Colors.red(`Fardward node ${ ipAddr }:${port} on error [${err.message}] STOP connect \n`) )
-		safeClose(sourceSocket)
+		if (!opened) {
+			// Pre-connect failure: return CORS-aware 404 so browser fetch is readable.
+			try {
+				distorySocket(sourceSocket)
+			} catch {
+				safeClose(sourceSocket)
+			}
+		} else {
+			safeClose(sourceSocket)
+		}
 	})
 
 	conn.once ('close', () => {
