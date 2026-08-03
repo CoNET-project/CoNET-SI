@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, tryGetLocal } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -1586,6 +1586,14 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         
         if (client) {
+            const sock = client.res as Socket
+            if (sock.destroyed || (sock as any).writableEnded || !sock.writable) {
+                logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has STALE client ${client.wallet} — saveLocal`)
+                livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
+                livenessListeningPool.delete(client.wallet)
+                await saveLocal(encryptedText, gpgPublicKeyID)
+                return
+            }
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has client ${client.wallet}`)
             livenessListeningPool.delete(client.wallet)
         } else {
@@ -1610,6 +1618,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
                 return 
             }
             logger(`forWardPGPMessageToClient online SAVE to LOCAL`, encryptedText)
+            livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
             await saveLocal (encryptedText, gpgPublicKeyID)
         })
 
@@ -1732,23 +1741,33 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
 
+/** Write offline PGP frames; returns lines not confirmed written (caller must rollback). */
 async function writeLinesWithBackpressure(
     res: TLSSocket|Socket,
     lines: string[]
-) {
+): Promise<string[]> {
     const s = res as Socket
-    for (const line of lines) {
-        // 如果客户端断开，立即停止
-        if (s.destroyed || (s as any).writableEnded) return
+    for (let i = 0; i < lines.length; i++) {
+        if (s.destroyed || (s as any).writableEnded) {
+            return lines.slice(i)
+        }
+        const line = lines[i]
         const data = JSON.stringify({data: line}) + '\r\n\r\n'
         const ok = s.write(data)
         logger(`writeLinesWithBackpressure try send ${line}`)
         if (!ok) {
             logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
-            // ✅ 背压：等待缓冲区排空
-            await once(s, 'drain')
+            try {
+                await once(s, 'drain')
+            } catch {
+                return lines.slice(i)
+            }
+            if (s.destroyed || (s as any).writableEnded) {
+                return lines.slice(i)
+            }
         }
     }
+    return []
 }
 
 
@@ -1835,12 +1854,21 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     if (keyID) {
         logger(`======================================= try to get ${keyID}:${wallet}  offline datas`)
         
-        const data = await tryGetLocal(keyID)
+        const data = tryGetLocal(keyID)
         logger(`======================================= User ${keyID}:${wallet} has offline datas = ${data.length}`)
     
         if (data.length) {
-        
-            await writeLinesWithBackpressure(res, data)
+            const unsent = await writeLinesWithBackpressure(res, data)
+            if (unsent.length) {
+                logger(`======================================= User ${keyID} offline flush incomplete unsent=${unsent.length} — rollback`)
+                rollbackLocalOfflineFlush(keyID, unsent)
+            } else if ((res as Socket).destroyed || (res as any).writableEnded) {
+                // Wrote into a dying socket — reclaim so next listen can retry (may duplicate if client got some).
+                logger(`======================================= User ${keyID} offline flush socket dead after write — rollback all`)
+                rollbackLocalOfflineFlush(keyID, data)
+            } else {
+                commitLocalOfflineFlush(keyID)
+            }
         }
         logger(`======================================= User ${keyID} success all offline data!`)
         if ((res as Socket).destroyed || (res as any).writableEnded) return 

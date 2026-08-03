@@ -569,31 +569,84 @@ export const tryGetLocal = (clentKeyID: string): string[] => {
 
     const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
     const filePath = path.join(baseDir, `${safeKey}.json`)
+    const inflightPath = path.join(baseDir, `${safeKey}.inflight.json`)
 
-    if (!fs.existsSync(filePath)) {
+    // Prefer reclaiming a prior interrupted flush (client aborted mid-SSE).
+    const candidatePaths = [inflightPath, filePath]
+    let sourcePath: string | null = null
+    for (const p of candidatePaths) {
+        if (fs.existsSync(p)) {
+            sourcePath = p
+            break
+        }
+    }
+    if (!sourcePath) return []
+
+    let result: string[] = []
+    try {
+        const raw = fs.readFileSync(sourcePath, 'utf8')
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+            result = parsed.filter(v => typeof v === 'string')
+        }
+    } catch {
+        // ignore parse errors — still try to quarantine the bad file
+    }
+
+    if (!result.length) {
+        try { fs.unlinkSync(sourcePath) } catch {}
         return []
     }
 
-    let result: string[] = []
-
+    // Claim: move to .inflight so a second concurrent listen cannot double-take,
+    // and a crashed flush can be reclaimed on the next listen.
     try {
-        const raw = fs.readFileSync(filePath, 'utf8')
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) {
-        result = parsed.filter(v => typeof v === 'string')
+        if (sourcePath !== inflightPath) {
+            try { fs.unlinkSync(inflightPath) } catch {}
+            fs.renameSync(sourcePath, inflightPath)
         }
     } catch {
-        // ignore parse errors
-    } finally {
-        // ✅ 关键：无论成功与否，读取后立即删除
-        try {
-        fs.unlinkSync(filePath)
-        } catch {
-        // ignore delete errors
-        }
+        // If rename fails, keep reading from source but do not delete yet.
     }
 
     return result
+}
+
+/** Delete claimed offline file after all lines were written to the client socket. */
+export const commitLocalOfflineFlush = (clentKeyID: string): void => {
+    if (!clentKeyID) return
+    const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
+    const inflightPath = path.join(os.homedir(), '.data', `${safeKey}.inflight.json`)
+    try { fs.unlinkSync(inflightPath) } catch {}
+}
+
+/** Put unsent (or all) offline messages back so the next listen can flush again. */
+export const rollbackLocalOfflineFlush = (clentKeyID: string, unsent: string[]): void => {
+    if (!clentKeyID) return
+    const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
+    const baseDir = path.join(os.homedir(), '.data')
+    if (!fs.existsSync(baseDir)) {
+        fs.mkdirSync(baseDir, { recursive: true })
+    }
+    const filePath = path.join(baseDir, `${safeKey}.json`)
+    const inflightPath = path.join(baseDir, `${safeKey}.inflight.json`)
+
+    let existing: string[] = []
+    if (fs.existsSync(filePath)) {
+        try {
+            const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+            if (Array.isArray(parsed)) existing = parsed.filter(v => typeof v === 'string')
+        } catch {
+            existing = []
+        }
+    }
+
+    const merged = [...(Array.isArray(unsent) ? unsent.filter(v => typeof v === 'string') : []), ...existing]
+    if (merged.length) {
+        fs.writeFileSync(filePath, JSON.stringify(merged, null, 2), 'utf8')
+        logger(`${clentKeyID} rollback offline flush → ${merged.length} messages`)
+    }
+    try { fs.unlinkSync(inflightPath) } catch {}
 }
 
 
