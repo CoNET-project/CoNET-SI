@@ -23,7 +23,7 @@ import { Writable } from 'stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal, notifyOfflineDeliveryImmediate, hashPgpArmor} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'tls'
@@ -1706,7 +1706,6 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         logger(`forwardEncryptedSocket to MySelf!!`)
         // Durability first: never trust SSE write alone (zombie C↔B pipes after force-quit).
         // Do not alter entry socketForward / half-close proxy.
-        await saveLocal(encryptedText, gpgPublicKeyID)
 
         // Force-quit leaves the listen socket in-pool for a few seconds; expire quickly so
         // "send immediately after kill" takes the offline → APNs path instead of zombie SSE.
@@ -1722,13 +1721,23 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         }
 
         const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
+        const ageMs = client?.connectedAt != null ? Date.now() - client.connectedAt : 0
+        const listenUnusable =
+            !client ||
+            isLivenessListenSocketStale(client.res) ||
+            ageMs > LISTEN_SESSION_MAX_MS
+
+        // Already offline (no usable SSE): saveLocal + APNs immediately — skip 2-heartbeat ACK wait.
+        // Fresh listen SSE: saveLocal + track pending ACK; APNs only if 2 heartbeats without ack.
+        const armorHash = await saveLocal(encryptedText, gpgPublicKeyID, {
+            alreadyOffline: listenUnusable,
+        })
 
         if (!client) {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
             return
         }
 
-        const ageMs = client.connectedAt != null ? Date.now() - client.connectedAt : 0
         if (isLivenessListenSocketStale(client.res) || ageMs > LISTEN_SESSION_MAX_MS) {
             const reason = isLivenessListenSocketStale(client.res)
                 ? 'has STALE client'
@@ -1755,8 +1764,10 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
                 livenessListeningPool.set(client.wallet, client)
                 return
             }
-            logger(`forWardPGPMessageToClient FAIL — already saveLocal; evict`, encryptedText)
+            logger(`forWardPGPMessageToClient FAIL — already saveLocal; evict → immediate offline APNs`, encryptedText)
             evictListenClient(client, 'has dead forward')
+            // Just judged offline (dead SSE); do not wait for heartbeats.
+            notifyOfflineDeliveryImmediate(gpgPublicKeyID, armorHash || hashPgpArmor(encryptedText))
         })
 
         return

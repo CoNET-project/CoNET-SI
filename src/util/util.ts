@@ -686,8 +686,11 @@ export const hashPgpArmor = (pgpMessage: string): string => {
 }
 
 /**
- * After saveLocal / best-effort SSE: wait for client `gossip_delivery_ack`.
+ * After saveLocal + best-effort SSE (client was in listen pool): wait for `gossip_delivery_ack`.
  * Each `stratlivenessV2` (even-block liveness heartbeat) increments; at 2 → APNs.
+ *
+ * If the client is **already offline** (no non-stale listen SSE), skip this grace and call
+ * {@link notifyOfflineDeliveryImmediate} instead — no heartbeat wait.
  */
 type PendingDeliveryAck = {
 	pgpKeyId: string
@@ -696,7 +699,7 @@ type PendingDeliveryAck = {
 }
 
 const pendingDeliveryAcks = new Map<string, PendingDeliveryAck>()
-/** How many liveness heartbeats (stratlivenessV2) without ACK before APNs. */
+/** How many liveness heartbeats (stratlivenessV2) without ACK before APNs (online→zombie path only). */
 export const DELIVERY_ACK_HEARTBEATS_BEFORE_APNS = 2
 
 export const trackPendingDeliveryAck = (pgpKeyId: string, armorHash: string): void => {
@@ -713,6 +716,19 @@ export const clearPendingDeliveryAck = (armorHash: string): void => {
 	if (pendingDeliveryAcks.delete(key)) {
 		logger(Colors.green(`pendingDeliveryAck cleared ${key.slice(0, 12)}…`))
 	}
+}
+
+/**
+ * Client already judged offline (no fresh listen SSE): drop ACK grace timer and APNs now.
+ * Offline armor stays on disk for next listen flush; late ACK still clears via removeLocalByArmorHash.
+ */
+export const notifyOfflineDeliveryImmediate = (pgpKeyId: string, armorHash: string): void => {
+	const pgp = String(pgpKeyId || '').trim().toUpperCase()
+	const key = String(armorHash || '').trim().toLowerCase()
+	if (!pgp) return
+	if (key) clearPendingDeliveryAck(key)
+	logger(Colors.magenta(`pendingDeliveryAck IMMEDIATE offline (no live SSE) key=${pgp} → APNs`))
+	notifyOfflineChatPush(pgp, 1)
 }
 
 /** Call once per stratlivenessV2 (mailbox → client liveness heartbeat / even block). */
@@ -740,8 +756,17 @@ export const tickPendingDeliveryAcks = (): void => {
 	}
 }
 
-export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
-    if (!pgpMessage || !clentKeyID) return
+export type SaveLocalOptions = {
+	/**
+	 * True when mailbox already knows the recipient has no usable listen SSE
+	 * (not in pool / stale / expired session). Skip 2-heartbeat ACK grace → APNs now.
+	 */
+	alreadyOffline?: boolean
+}
+
+/** Returns armor hash used for gossip_delivery_ack / pending APNs. */
+export const saveLocal = (pgpMessage: string, clentKeyID: string, opts?: SaveLocalOptions): string => {
+    if (!pgpMessage || !clentKeyID) return ''
 
     // 跨 OS 的 home 目录
     const homeDir = os.homedir()
@@ -781,9 +806,15 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
     logger(`${clentKeyID} messages ${list.length } save to Local`)
 
-	// Do NOT APNs here. Track armor hash; APNs only after 2 liveness heartbeats without gossip_delivery_ack.
 	const armorHash = hashPgpArmor(pgpMessage)
-	trackPendingDeliveryAck(clentKeyID, armorHash)
+	if (opts?.alreadyOffline) {
+		// Already offline + no new SSE: do not wait for liveness heartbeats.
+		notifyOfflineDeliveryImmediate(clentKeyID, armorHash)
+	} else {
+		// Live (or just-tried) SSE path: APNs only after 2 heartbeats without gossip_delivery_ack.
+		trackPendingDeliveryAck(clentKeyID, armorHash)
+	}
+	return armorHash
 }
 
 /**
