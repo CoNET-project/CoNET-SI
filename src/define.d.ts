@@ -88,7 +88,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
@@ -99,6 +99,8 @@ interface SICommandObj {
 	armorHash?: string
 	sendId?: string
 	timestamp?: number
+	/** wallet_online_query: wallet to check (signer is walletAddress) */
+	targetWallet?: string
 }
 
 

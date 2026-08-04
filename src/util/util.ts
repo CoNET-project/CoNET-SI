@@ -494,38 +494,17 @@ export const isMyRoute = async (userAddress: string, nodeAddress: string): Promi
 }
 
 
+/**
+ * @deprecated Abandoned: do not write online/offline to AddressPGP.
+ * Presence is local listen-pool only; clients query via `wallet_online_query`.
+ */
 const statusProcess = async () => {
-    const obj = clientStatusPool.shift()
-    if (!obj) return
-
-    const SC = pgp_managerSCPool.shift()
-    if (!SC) {
-        clientStatusPool.unshift(obj)
-        return setTimeout(() => statusProcess(), 1000)
-    }
-
-
-    try {
-        const tx = await SC.setUserOnlineOnMe(obj.wallet, obj.status)
-        await tx.wait()
-        logger(`statusProcess success ${obj.wallet} ===> ${obj.status}`)
-    } catch (ex: any) {
-        logger(`statusProcess Error!`, ex.message)
-    }
-
-    pgp_managerSCPool.push(SC)
-    setTimeout(() => statusProcess(), 1000)
-
+	clientStatusPool.length = 0
 }
 
-export const setClientOnline = (wallet: string, status: boolean) => {
-
-    clientStatusPool.push({
-        wallet,
-        status
-    })
-    
-    statusProcess()
+/** @deprecated No-op — chain setUserOnlineOnMe abandoned. */
+export const setClientOnline = (_wallet: string, _status: boolean) => {
+	// intentionally empty
 }
 
 //      get client route

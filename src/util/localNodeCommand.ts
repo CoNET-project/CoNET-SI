@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -988,6 +988,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return handleGossipDeliveryAck(socket, command, wallet)
 		}
 
+		case 'wallet_online_query': {
+			return handleWalletOnlineQuery(socket, command, wallet)
+		}
+
 		// case 'mining_gossip': {
 		// 	logger(`mining_gossip...`)
 		// 	return addToGossipPool (socket.remoteAddress||'', command.walletAddress, socket)
@@ -999,6 +1003,75 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 	}
 
+}
+
+/**
+ * Presence query: is `targetWallet` currently in this mailbox's listen pool?
+ * Encrypted to mailbox B route PGP (same as mining). Does **not** use chain routeOnline.
+ * `walletAddress` = requester (signer); `targetWallet` = contact to check.
+ */
+const handleWalletOnlineQuery = async (
+	socket: Socket,
+	command: minerObj,
+	nodeWallet: ethers.Wallet,
+) => {
+	const requester = (command.walletAddress || '').toLowerCase()
+	const targetRaw = typeof (command as any).targetWallet === 'string'
+		? String((command as any).targetWallet).trim()
+		: ''
+	const target = targetRaw.toLowerCase()
+	const ts = Number((command as any).timestamp)
+	const now = Math.floor(Date.now() / 1000)
+	if (!requester || !ethers.isAddress(requester)) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_requester', online: false }))
+	}
+	if (!target || !ethers.isAddress(target)) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_target', online: false }))
+	}
+	if (!Number.isFinite(ts) || Math.abs(now - ts) > 600) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'timestamp', online: false }))
+	}
+	const isMine = await isMyRoute(target, nodeWallet.address)
+	if (!isMine) {
+		logger(Colors.yellow(`wallet_online_query not my route target=${target} from=${requester}`))
+		return response200Html(
+			socket,
+			JSON.stringify({ ok: false, error: 'not_my_route', wallet: target, online: false }),
+		)
+	}
+	// Pool keys are lowercased by checkSign; also try checksummed form for safety.
+	let client = livenessListeningPool.get(target)
+	if (!client) {
+		try {
+			client = livenessListeningPool.get(ethers.getAddress(target))
+		} catch {
+			client = undefined
+		}
+	}
+	let online = false
+	let listenAgeMs: number | null = null
+	if (client) {
+		const stale = isLivenessListenSocketStale(client.res)
+		if (!stale) {
+			online = true
+			listenAgeMs = client.connectedAt != null ? Date.now() - client.connectedAt : null
+		}
+	}
+	logger(
+		Colors.cyan(
+			`wallet_online_query target=${target} online=${online} from=${requester}${listenAgeMs != null ? ` ageMs=${listenAgeMs}` : ''}`,
+		),
+	)
+	return response200Html(
+		socket,
+		JSON.stringify({
+			ok: true,
+			wallet: target,
+			online,
+			listenAgeMs,
+			nodeWallet: nodeWallet.address?.toLowerCase() || '',
+		}),
+	)
 }
 
 /**
@@ -1860,12 +1933,8 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	logger(`addIpaddressToLivenessListeningPool isMyClient = await isMyRoute(wallet, nodeWallet?.address)`)
 
     const isMyClient = await isMyRoute(wallet, nodeWallet?.address)
-    if (isMyClient) {
-        logger(`addIpaddressToLivenessListeningPool setClientOnline TRUE`)
-        setClientOnline(wallet, true)
-    }
+	// Presence = in-memory listen pool only (chain setUserOnlineOnMe abandoned).
 
-    
 	const returnData = {
 		ipaddress,
 		epoch: CurrentEpoch,
@@ -1894,9 +1963,6 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		livenessListeningPool.delete(wallet)
 		if (keyID) {
 			livenessListeningPGPKeyIDPool.delete(keyID)
-		}
-		if (isMyClient) {
-			setClientOnline(wallet, false)
 		}
 	}
 
