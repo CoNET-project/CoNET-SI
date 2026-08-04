@@ -655,9 +655,11 @@ export const rollbackLocalOfflineFlush = (clentKeyID: string, unsent: string[]):
  * After offline mailbox write: ask Beamio API to bump push badge.
  * Auth = Guardian node wallet EIP-191 (no shared secret on SI).
  * Body: pgpKeyId + eoa + timestamp + signature — never message plaintext/armor.
+ *
+ * Call only after delivery-ACK grace expires (see pendingDeliveryAcks + stratlivenessV2).
  */
-/** Call only when mailbox cannot deliver live (no/stale/expired listen or SSE forward fail). */
-export const notifyOfflineChatPush = (pgpKeyId: string): void => {
+export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
+	const safeCount = Math.max(1, Math.min(50, Math.floor(count) || 1))
 	void (async () => {
 		try {
 			if (!nodePrivatekey) {
@@ -683,13 +685,15 @@ export const notifyOfflineChatPush = (pgpKeyId: string): void => {
 				url: `${apiBase}/api/notifyOfflineChat`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				data: JSON.stringify({ pgpKeyId, eoa, timestamp, signature }),
+				data: JSON.stringify({ pgpKeyId, eoa, timestamp, signature, count: safeCount }),
 				parse: 'json',
 				timeout: 8_000,
 			})
 			const status = res.statusCode || 0
 			if (status < 200 || status >= 300) {
 				logger(Colors.yellow(`notifyOfflineChat HTTP ${status} for ${eoa}`))
+			} else {
+				logger(Colors.green(`notifyOfflineChat ok eoa=${eoa} count=${safeCount}`))
 			}
 		} catch (err: any) {
 			logger(Colors.yellow(`notifyOfflineChat failed: ${err?.message ?? err}`))
@@ -700,6 +704,61 @@ export const notifyOfflineChatPush = (pgpKeyId: string): void => {
 /** Canonical hash of a stored offline PGP armor string (client ACK must match). */
 export const hashPgpArmor = (pgpMessage: string): string => {
 	return ethers.keccak256(ethers.toUtf8Bytes(pgpMessage))
+}
+
+/**
+ * After saveLocal / best-effort SSE: wait for client `gossip_delivery_ack`.
+ * Each `stratlivenessV2` (even-block liveness heartbeat) increments; at 2 → APNs.
+ */
+type PendingDeliveryAck = {
+	pgpKeyId: string
+	armorHash: string
+	heartbeats: number
+}
+
+const pendingDeliveryAcks = new Map<string, PendingDeliveryAck>()
+/** How many liveness heartbeats (stratlivenessV2) without ACK before APNs. */
+export const DELIVERY_ACK_HEARTBEATS_BEFORE_APNS = 2
+
+export const trackPendingDeliveryAck = (pgpKeyId: string, armorHash: string): void => {
+	const key = String(armorHash || '').trim().toLowerCase()
+	const pgp = String(pgpKeyId || '').trim().toUpperCase()
+	if (!pgp || !/^0x[0-9a-f]{64}$/.test(key)) return
+	if (pendingDeliveryAcks.has(key)) return
+	pendingDeliveryAcks.set(key, { pgpKeyId: pgp, armorHash: key, heartbeats: 0 })
+}
+
+export const clearPendingDeliveryAck = (armorHash: string): void => {
+	const key = String(armorHash || '').trim().toLowerCase()
+	if (!key) return
+	if (pendingDeliveryAcks.delete(key)) {
+		logger(Colors.green(`pendingDeliveryAck cleared ${key.slice(0, 12)}…`))
+	}
+}
+
+/** Call once per stratlivenessV2 (mailbox → client liveness heartbeat / even block). */
+export const tickPendingDeliveryAcks = (): void => {
+	if (!pendingDeliveryAcks.size) return
+	const notifyByKey = new Map<string, number>()
+	for (const [hash, p] of [...pendingDeliveryAcks.entries()]) {
+		p.heartbeats += 1
+		if (p.heartbeats < DELIVERY_ACK_HEARTBEATS_BEFORE_APNS) {
+			logger(
+				`pendingDeliveryAck wait key=${p.pgpKeyId} hash=${hash.slice(0, 12)}… heartbeats=${p.heartbeats}/${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS}`,
+			)
+			continue
+		}
+		pendingDeliveryAcks.delete(hash)
+		notifyByKey.set(p.pgpKeyId, (notifyByKey.get(p.pgpKeyId) || 0) + 1)
+	}
+	for (const [pgpKeyId, count] of notifyByKey) {
+		logger(
+			Colors.magenta(
+				`pendingDeliveryAck TIMEOUT heartbeats=${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS} key=${pgpKeyId} count=${count} → APNs`,
+			),
+		)
+		notifyOfflineChatPush(pgpKeyId, count)
+	}
 }
 
 export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
@@ -743,11 +802,9 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
     logger(`${clentKeyID} messages ${list.length } save to Local`)
 
-	// Always notify after durable save. Force-quit leaves a zombie listen for a few
-	// seconds where SSE write still "succeeds"; skipping notify then means no APNs.
-	// Foreground iOS suppresses banners but must still apply badge; PWA syncChatBadge
-	// clears unread when the recipient is actually online and reading.
-	notifyOfflineChatPush(clentKeyID)
+	// Do NOT APNs here. Track armor hash; APNs only after 2 liveness heartbeats without gossip_delivery_ack.
+	const armorHash = hashPgpArmor(pgpMessage)
+	trackPendingDeliveryAck(clentKeyID, armorHash)
 }
 
 /**
@@ -786,6 +843,8 @@ export const removeLocalByArmorHash = (clentKeyID: string, armorHashRaw: string)
 		}
 		logger(`${clentKeyID} removeLocalByArmorHash removed ${list.length - next.length} from ${path.basename(filePath)}`)
 	}
+	// ACK (or late ACK after flush) always cancels the 2-heartbeat APNs timer.
+	clearPendingDeliveryAck(want)
 	return removedAny
 }
 

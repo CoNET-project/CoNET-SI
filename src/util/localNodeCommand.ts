@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -1037,6 +1037,7 @@ const handleGossipDeliveryAck = async (
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'no_pgp' }))
 	}
 	const removed = removeLocalByArmorHash(String(keyID).toUpperCase(), armorHash)
+	// removeLocalByArmorHash also clears pendingDeliveryAck → cancels 2-heartbeat APNs timer
 	logger(
 		Colors.green(
 			`gossip_delivery_ack wallet=${wallet} key=${keyID} removed=${removed} sendId=${(command as any).sendId || '-'}`,
@@ -2444,6 +2445,9 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
 
 	//logger(Colors.grey(`stratliveness EPOCH ${block} starting! ${nodeWprivateKey.address} Pool length = [${livenessListeningPool.size}]`))
 	// logger(inspect(rate, false, 3, true))
+
+	// Delivery-ACK grace: each even-block liveness heartbeat. 2 misses → notifyOfflineChat APNs.
+	tickPendingDeliveryAcks()
 
 	// clusterNodes = await getApiNodes()
 	const processPool: any[] = []
