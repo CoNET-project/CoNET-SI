@@ -1634,7 +1634,9 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         // Do not alter entry socketForward / half-close proxy.
         await saveLocal(encryptedText, gpgPublicKeyID)
 
-        const LISTEN_SESSION_MAX_MS = 30_000
+        // Force-quit leaves the listen socket in-pool for a few seconds; expire quickly so
+        // "send immediately after kill" takes the offline → APNs path instead of zombie SSE.
+        const LISTEN_SESSION_MAX_MS = 8_000
         const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet}`)
             livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)

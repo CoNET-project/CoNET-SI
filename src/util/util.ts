@@ -656,7 +656,8 @@ export const rollbackLocalOfflineFlush = (clentKeyID: string, unsent: string[]):
  * Auth = Guardian node wallet EIP-191 (no shared secret on SI).
  * Body: pgpKeyId + eoa + timestamp + signature — never message plaintext/armor.
  */
-const notifyOfflineChatPush = (pgpKeyId: string): void => {
+/** Call only when mailbox cannot deliver live (no/stale/expired listen or SSE forward fail). */
+export const notifyOfflineChatPush = (pgpKeyId: string): void => {
 	void (async () => {
 		try {
 			if (!nodePrivatekey) {
@@ -742,7 +743,10 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
     logger(`${clentKeyID} messages ${list.length } save to Local`)
 
-	// Fire-and-forget badge notify (must not block / fail saveLocal)
+	// Always notify after durable save. Force-quit leaves a zombie listen for a few
+	// seconds where SSE write still "succeeds"; skipping notify then means no APNs.
+	// Foreground iOS suppresses banners but must still apply badge; PWA syncChatBadge
+	// clears unread when the recipient is actually online and reading.
 	notifyOfflineChatPush(clentKeyID)
 }
 
