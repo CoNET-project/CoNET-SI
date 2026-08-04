@@ -650,6 +650,51 @@ export const rollbackLocalOfflineFlush = (clentKeyID: string, unsent: string[]):
 }
 
 
+/**
+ * After offline mailbox write: ask Beamio API to bump push badge.
+ * Auth = Guardian node wallet EIP-191 (no shared secret on SI).
+ * Body: pgpKeyId + eoa + timestamp + signature — never message plaintext/armor.
+ */
+const notifyOfflineChatPush = (pgpKeyId: string): void => {
+	void (async () => {
+		try {
+			if (!nodePrivatekey) {
+				logger(Colors.yellow('notifyOfflineChat skip: nodePrivatekey not initialized'))
+				return
+			}
+			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
+			const eoa = await getClientWalletAddress(pgpKeyId)
+			if (!eoa) {
+				logger(Colors.yellow(`notifyOfflineChat skip: no EOA for pgpKeyId=${pgpKeyId}`))
+				return
+			}
+			const timestamp = Math.floor(Date.now() / 1000)
+			const message = [
+				'Beamio notifyOfflineChat',
+				`pgpKeyId:${pgpKeyId}`,
+				`eoa:${eoa.toLowerCase()}`,
+				`timestamp:${timestamp}`,
+			].join('\n')
+			const wallet = new ethers.Wallet(nodePrivatekey)
+			const signature = await wallet.signMessage(message)
+			const res = await P({
+				url: `${apiBase}/api/notifyOfflineChat`,
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				data: JSON.stringify({ pgpKeyId, eoa, timestamp, signature }),
+				parse: 'json',
+				timeout: 8_000,
+			})
+			const status = res.statusCode || 0
+			if (status < 200 || status >= 300) {
+				logger(Colors.yellow(`notifyOfflineChat HTTP ${status} for ${eoa}`))
+			}
+		} catch (err: any) {
+			logger(Colors.yellow(`notifyOfflineChat failed: ${err?.message ?? err}`))
+		}
+	})()
+}
+
 export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     if (!pgpMessage || !clentKeyID) return
 
@@ -690,6 +735,9 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     // 写回文件
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8')
     logger(`${clentKeyID} messages ${list.length } save to Local`)
+
+	// Fire-and-forget badge notify (must not block / fail saveLocal)
+	notifyOfflineChatPush(clentKeyID)
 }
 
 export const forWardPGPMessageToClient = (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj, callback: (err: boolean) => void) => {
