@@ -225,4 +225,8 @@ interface livenessListeningPoolObj {
 	res: Socket|TLSSocket
 	ipaddress: string
 	wallet: string
+	/** Mailbox listen join time — gossip delivery must not trust forever-writable zombie pipes. */
+	connectedAt?: number
+	/** User PGP key id (hex) for this listen session; used to clear PGP pool on write failure. */
+	pgpKeyId?: string
 }

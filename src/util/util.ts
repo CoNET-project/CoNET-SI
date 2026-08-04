@@ -5,6 +5,7 @@ import { logger } from './logger'
 import Colors from 'colors/safe'
 import {getAllNodeWallets} from './localNodeCommand'
 import type { Socket } from 'net'
+import type { TLSSocket } from 'tls'
 import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import type {RequestOptions} from 'http'
@@ -740,30 +741,77 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
 	notifyOfflineChatPush(clentKeyID)
 }
 
-export const forWardPGPMessageToClient = (pgpMessage: string, clentKeyID: string, clent: livenessListeningPoolObj, callback: (err: boolean) => void) => {
-    
+/** True when the listen SSE socket can no longer be trusted for gossip delivery. */
+export const isLivenessListenSocketStale = (res: Socket | TLSSocket | null | undefined): boolean => {
+	if (!res) return true
+	const s = res as Socket
+	if (s.destroyed || (s as any).writableEnded || (s as any).closed) return true
+	if (!s.writable) return true
+	// Peer half-closed / finished HTTP request body path with no further read interest.
+	if ((s as any).readableEnded || (s as any).errored) return true
+	return false
+}
 
-    
-    const data = JSON.stringify({data: pgpMessage})+'\r\n\r\n'
-    const res = clent.res
+/**
+ * Deliver one gossip PGP frame on the mailbox listen SSE socket.
+ * callback(true) = write accepted; callback(false) = must saveLocal + offline push.
+ * Does not touch entry socketForward — only the mailbox-side client socket in the pool.
+ */
+export const forWardPGPMessageToClient = (
+	pgpMessage: string,
+	clentKeyID: string,
+	clent: livenessListeningPoolObj,
+	callback: (ok: boolean) => void,
+) => {
+	const data = JSON.stringify({ data: pgpMessage }) + '\r\n\r\n'
+	const res = clent.res as Socket
 
-    if (res.writable && !res.closed) {
-		res.write( data, (err: any) => {
-			if (err) {
-				logger(Colors.red (`stratliveness write Error! ${clentKeyID} `), )
-				return callback(false)
-			} 
-            logger(Colors.red (`stratliveness write success! ${clentKeyID} `))
-			return callback(true)
-			
+	if (isLivenessListenSocketStale(res)) {
+		logger(Colors.yellow(`forWardPGPMessageToClient stale socket ${clentKeyID}`))
+		return callback(false)
+	}
+
+	const DRAIN_TIMEOUT_MS = 2_000
+	let settled = false
+	const finish = (ok: boolean) => {
+		if (settled) return
+		settled = true
+		callback(ok)
+	}
+
+	const onWriteDone = (err: Error | null | undefined) => {
+		if (err) {
+			logger(Colors.red(`forWardPGPMessageToClient write Error! ${clentKeyID}`), err.message)
+			return finish(false)
+		}
+		// EPIPE / destroy often surfaces one tick after a "successful" write into a dead pipe.
+		setImmediate(() => {
+			if (isLivenessListenSocketStale(res)) {
+				logger(Colors.yellow(`forWardPGPMessageToClient post-write stale ${clentKeyID}`))
+				return finish(false)
+			}
+			logger(Colors.red(`forWardPGPMessageToClient write success! ${clentKeyID}`))
+			return finish(true)
 		})
-		
-	} else {
-        return callback(false)
-    }
+	}
 
-    
-
+	const canContinue = res.write(data, onWriteDone)
+	// Kernel / proxy buffer full: wait briefly for drain; zombie pipes that never drain → offline.
+	if (!canContinue) {
+		const timer = setTimeout(() => {
+			res.off('drain', onDrain)
+			logger(Colors.yellow(`forWardPGPMessageToClient drain timeout ${clentKeyID} — treat offline`))
+			try {
+				res.destroy()
+			} catch {}
+			finish(false)
+		}, DRAIN_TIMEOUT_MS)
+		const onDrain = () => {
+			clearTimeout(timer)
+			// write callback still owns settle; if it already fired, no-op via settled flag
+		}
+		res.once('drain', onDrain)
+	}
 }
 
 /** Align with SI liveness SSE: frames split on blank line; strip optional `data: ` lines. */

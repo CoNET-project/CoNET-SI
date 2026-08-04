@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -1582,15 +1582,30 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         response200Html(socket, '')
 
         logger(`forwardEncryptedSocket to MySelf!!`)
+        // Gossip delivery on mailbox B only (do not alter entry socketForward / half-close proxy).
+        // Max age: writable zombie C↔B pipes after force-quit must not stay "online" forever.
+        // Must be short: entry↔mailbox zombie pipes stay writable after force-quit.
+        // Live PWA reconnects on SSE drop; force-quit cannot renew → offline push.
+        const LISTEN_SESSION_MAX_MS = 30_000
+        const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
+            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet} — saveLocal`)
+            livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
+            livenessListeningPool.delete(c.wallet)
+            try {
+                const sock = c.res as Socket
+                if (!sock.destroyed) sock.destroy()
+            } catch {}
+        }
+
         const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
 
-        
         if (client) {
-            const sock = client.res as Socket
-            if (sock.destroyed || (sock as any).writableEnded || !sock.writable) {
-                logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has STALE client ${client.wallet} — saveLocal`)
-                livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
-                livenessListeningPool.delete(client.wallet)
+            const ageMs = client.connectedAt != null ? Date.now() - client.connectedAt : 0
+            if (isLivenessListenSocketStale(client.res) || ageMs > LISTEN_SESSION_MAX_MS) {
+                const reason = isLivenessListenSocketStale(client.res)
+                    ? 'has STALE client'
+                    : `has EXPIRED listen session (${Math.round(ageMs / 1000)}s)`
+                evictListenClient(client, reason)
                 await saveLocal(encryptedText, gpgPublicKeyID)
                 return
             }
@@ -1598,11 +1613,10 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
             livenessListeningPool.delete(client.wallet)
         } else {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
-            
-            await saveLocal (encryptedText, gpgPublicKeyID)
+            await saveLocal(encryptedText, gpgPublicKeyID)
             return
         }
-        
+
         const waitRunningBlockProcess = async () => {
             while (stratlivenessV2Process) {
                 await new Promise(resolve => setTimeout(resolve, 1000))
@@ -1611,15 +1625,15 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         await waitRunningBlockProcess()
 
-        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (err) => {
-            if (err && client) {
+        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (ok) => {
+            if (ok && client) {
                 logger(`forWardPGPMessageToClient SUCCESS`, encryptedText)
                 livenessListeningPool.set(client.wallet, client)
-                return 
+                return
             }
-            logger(`forWardPGPMessageToClient online SAVE to LOCAL`, encryptedText)
-            livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
-            await saveLocal (encryptedText, gpgPublicKeyID)
+            logger(`forWardPGPMessageToClient FAIL — SAVE to LOCAL`, encryptedText)
+            evictListenClient(client, 'has dead forward')
+            await saveLocal(encryptedText, gpgPublicKeyID)
         })
 
         return
@@ -1786,7 +1800,11 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     
 
 	const obj: livenessListeningPoolObj = {
-		ipaddress, wallet, res
+		ipaddress,
+		wallet,
+		res,
+		connectedAt: Date.now(),
+		pgpKeyId: keyID || undefined,
 	}
 	
 	logger(`addIpaddressToLivenessListeningPool isMyClient = await isMyRoute(wallet, nodeWallet?.address)`)
@@ -1821,29 +1839,28 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 
 	const responseData = sseHeaders + `data: ${JSON.stringify(returnData)}\r\n\r\n`
 
+	const dropListenPools = (why: string) => {
+		logger(Colors.grey(`Client ${wallet}:${ipaddress} ${why} — delete from listen Pool`))
+		livenessListeningPool.delete(wallet)
+		if (keyID) {
+			livenessListeningPGPKeyIDPool.delete(keyID)
+		}
+		if (isMyClient) {
+			setClientOnline(wallet, false)
+		}
+	}
 
 	s.once('error', (err: Error) => {
-		logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on error! delete from Pool`), err.message)
-		livenessListeningPool.delete(wallet)
-        if (keyID) {
-            livenessListeningPGPKeyIDPool.delete(keyID)
-        }
-        if (isMyClient) {
-            setClientOnline(wallet, false)
-        }
-        
+		dropListenPools(`on error (${err.message})`)
+	})
+
+	// Peer half-close / FIN on mailbox listen socket (not entry socketForward).
+	s.once('end', () => {
+		dropListenPools('on end (peer half-close)')
 	})
 
 	s.once('close', () => {
-		//logger(Colors.grey(`Clisnt ${wallet}:${ipaddress} on close! delete from Pool`))
-		livenessListeningPool.delete(wallet)
-        if (keyID) {
-            livenessListeningPGPKeyIDPool.delete(keyID)
-        }
-
-        if (isMyClient) {
-            setClientOnline(wallet, false)
-        }
+		dropListenPools('on close')
 	})
 
 	//logger (Colors.cyan(` [${ipaddress}:${wallet}] Added to livenessListeningPool [${livenessListeningPool.size}]!`))
@@ -1951,27 +1968,37 @@ const gossipCnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string,
 
 
 
-const testMinerCOnnecting = (res: Socket|TLSSocket, returnData: any, wallet: string, ipaddress: string) => new Promise (resolve=> {
+const testMinerCOnnecting = (
+	res: Socket | TLSSocket,
+	returnData: any,
+	wallet: string,
+	ipaddress: string,
+	pgpKeyId?: string,
+) => new Promise(resolve => {
 	const s = res as Socket
-	//logger(Colors.blue(`testMinerCOnnecting SENT DATA to ${s.remoteAddress}`))
-	// logger(inspect(returnData, false, 3, true))
-	if (s.writable && !(s as any).closed) {
-		return s.write( (typeof returnData === 'string' ? returnData : JSON.stringify(returnData)) + '\r\n\r\n', (err?: Error | null) => {
-			if (err) {
-				//logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
-				livenessListeningPool.delete(wallet)
-			} else {
-				//logger(Colors.grey(`testMinerCOnnecting to${wallet}:${ipaddress} success!`))
-			}
-			
-			return resolve (true)
-		})
-		
+	const drop = () => {
+		livenessListeningPool.delete(wallet)
+		if (pgpKeyId) {
+			livenessListeningPGPKeyIDPool.delete(pgpKeyId)
+		}
 	}
-	livenessListeningPool.delete(wallet)
-
-	logger(Colors.red (`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
-	return resolve (true)
+	if (isLivenessListenSocketStale(s)) {
+		drop()
+		logger(Colors.red(`stratliveness stale! delete ${wallet}:${ipaddress} from listen pools`))
+		return resolve(true)
+	}
+	if (s.writable && !(s as any).closed) {
+		return s.write((typeof returnData === 'string' ? returnData : JSON.stringify(returnData)) + '\r\n\r\n', (err?: Error | null) => {
+			if (err) {
+				drop()
+				logger(Colors.red(`stratliveness write Error! delete ${wallet}:${ipaddress} from listen pools`))
+			}
+			return resolve(true)
+		})
+	}
+	drop()
+	logger(Colors.red(`stratliveness write Error! delete ${wallet}:${ipaddress} from livenessListeningPool [${livenessListeningPool.size}]`))
+	return resolve(true)
 })
 
 let CurrentEpoch = 0
@@ -2396,7 +2423,7 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
             transfer: previousGossipStatus.transfer
 		}
 
-		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress))
+		processPool.push(testMinerCOnnecting(res, returnData, key, n.ipaddress, n.pgpKeyId))
 
 	})
 
