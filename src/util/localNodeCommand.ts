@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, setClientOnline, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -984,6 +984,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return validatorMining(command, socket)
 		}
 
+		case 'gossip_delivery_ack': {
+			return handleGossipDeliveryAck(socket, command, wallet)
+		}
+
 		// case 'mining_gossip': {
 		// 	logger(`mining_gossip...`)
 		// 	return addToGossipPool (socket.remoteAddress||'', command.walletAddress, socket)
@@ -995,6 +999,50 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 	}
 
+}
+
+/**
+ * Client ACK after decrypting a business gossip frame.
+ * Encrypted to mailbox B route PGP (same as mining); removes offline armor by hash.
+ */
+const handleGossipDeliveryAck = async (
+	socket: Socket,
+	command: minerObj,
+	nodeWallet: ethers.Wallet,
+) => {
+	const wallet = (command.walletAddress || '').toLowerCase()
+	const armorHash = typeof (command as any).armorHash === 'string' ? String((command as any).armorHash).trim() : ''
+	const ts = Number((command as any).timestamp)
+	const now = Math.floor(Date.now() / 1000)
+	if (!wallet || !ethers.isAddress(wallet)) {
+		logger(Colors.red(`gossip_delivery_ack invalid wallet`))
+		return distorySocket(socket)
+	}
+	if (!armorHash || !/^0x[0-9a-fA-F]{64}$/.test(armorHash)) {
+		logger(Colors.red(`gossip_delivery_ack invalid armorHash`))
+		return distorySocket(socket)
+	}
+	if (!Number.isFinite(ts) || Math.abs(now - ts) > 600) {
+		logger(Colors.red(`gossip_delivery_ack timestamp out of window wallet=${wallet}`))
+		return distorySocket(socket)
+	}
+	const isMine = await isMyRoute(wallet, nodeWallet.address)
+	if (!isMine) {
+		logger(Colors.yellow(`gossip_delivery_ack not my route wallet=${wallet}`))
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route' }))
+	}
+	const keyID = await getWalletFromKeyID(wallet)
+	if (!keyID) {
+		logger(Colors.yellow(`gossip_delivery_ack no pgp key for ${wallet}`))
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'no_pgp' }))
+	}
+	const removed = removeLocalByArmorHash(String(keyID).toUpperCase(), armorHash)
+	logger(
+		Colors.green(
+			`gossip_delivery_ack wallet=${wallet} key=${keyID} removed=${removed} sendId=${(command as any).sendId || '-'}`,
+		),
+	)
+	return response200Html(socket, JSON.stringify({ ok: true, removed }))
 }
 
 
@@ -1582,13 +1630,13 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
         response200Html(socket, '')
 
         logger(`forwardEncryptedSocket to MySelf!!`)
-        // Gossip delivery on mailbox B only (do not alter entry socketForward / half-close proxy).
-        // Max age: writable zombie C↔B pipes after force-quit must not stay "online" forever.
-        // Must be short: entry↔mailbox zombie pipes stay writable after force-quit.
-        // Live PWA reconnects on SSE drop; force-quit cannot renew → offline push.
+        // Durability first: never trust SSE write alone (zombie C↔B pipes after force-quit).
+        // Do not alter entry socketForward / half-close proxy.
+        await saveLocal(encryptedText, gpgPublicKeyID)
+
         const LISTEN_SESSION_MAX_MS = 30_000
         const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
-            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet} — saveLocal`)
+            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet}`)
             livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
             livenessListeningPool.delete(c.wallet)
             try {
@@ -1599,23 +1647,22 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
 
-        if (client) {
-            const ageMs = client.connectedAt != null ? Date.now() - client.connectedAt : 0
-            if (isLivenessListenSocketStale(client.res) || ageMs > LISTEN_SESSION_MAX_MS) {
-                const reason = isLivenessListenSocketStale(client.res)
-                    ? 'has STALE client'
-                    : `has EXPIRED listen session (${Math.round(ageMs / 1000)}s)`
-                evictListenClient(client, reason)
-                await saveLocal(encryptedText, gpgPublicKeyID)
-                return
-            }
-            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has client ${client.wallet}`)
-            livenessListeningPool.delete(client.wallet)
-        } else {
+        if (!client) {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
-            await saveLocal(encryptedText, gpgPublicKeyID)
             return
         }
+
+        const ageMs = client.connectedAt != null ? Date.now() - client.connectedAt : 0
+        if (isLivenessListenSocketStale(client.res) || ageMs > LISTEN_SESSION_MAX_MS) {
+            const reason = isLivenessListenSocketStale(client.res)
+                ? 'has STALE client'
+                : `has EXPIRED listen session (${Math.round(ageMs / 1000)}s)`
+            evictListenClient(client, reason)
+            return
+        }
+
+        logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has client ${client.wallet}`)
+        livenessListeningPool.delete(client.wallet)
 
         const waitRunningBlockProcess = async () => {
             while (stratlivenessV2Process) {
@@ -1625,15 +1672,15 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         await waitRunningBlockProcess()
 
+        // Best-effort live delivery; offline copy already saved — never second saveLocal on fail.
         forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (ok) => {
             if (ok && client) {
                 logger(`forWardPGPMessageToClient SUCCESS`, encryptedText)
                 livenessListeningPool.set(client.wallet, client)
                 return
             }
-            logger(`forWardPGPMessageToClient FAIL — SAVE to LOCAL`, encryptedText)
+            logger(`forWardPGPMessageToClient FAIL — already saveLocal; evict`, encryptedText)
             evictListenClient(client, 'has dead forward')
-            await saveLocal(encryptedText, gpgPublicKeyID)
         })
 
         return

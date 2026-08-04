@@ -696,6 +696,11 @@ const notifyOfflineChatPush = (pgpKeyId: string): void => {
 	})()
 }
 
+/** Canonical hash of a stored offline PGP armor string (client ACK must match). */
+export const hashPgpArmor = (pgpMessage: string): string => {
+	return ethers.keccak256(ethers.toUtf8Bytes(pgpMessage))
+}
+
 export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
     if (!pgpMessage || !clentKeyID) return
 
@@ -739,6 +744,45 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string) => {
 
 	// Fire-and-forget badge notify (must not block / fail saveLocal)
 	notifyOfflineChatPush(clentKeyID)
+}
+
+/**
+ * Remove one offline armor by keccak256 hash (client gossip_delivery_ack).
+ * Also scans .inflight.json. Idempotent — returns true if anything was removed.
+ */
+export const removeLocalByArmorHash = (clentKeyID: string, armorHashRaw: string): boolean => {
+	if (!clentKeyID || !armorHashRaw) return false
+	const want = String(armorHashRaw).trim().toLowerCase()
+	if (!/^0x[0-9a-f]{64}$/.test(want)) return false
+
+	const safeKey = clentKeyID.replace(/[^a-zA-Z0-9._-]/g, '_').toUpperCase()
+	const baseDir = path.join(os.homedir(), '.data')
+	const paths = [
+		path.join(baseDir, `${safeKey}.json`),
+		path.join(baseDir, `${safeKey}.inflight.json`),
+	]
+
+	let removedAny = false
+	for (const filePath of paths) {
+		if (!fs.existsSync(filePath)) continue
+		let list: string[] = []
+		try {
+			const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'))
+			if (Array.isArray(parsed)) list = parsed.filter(v => typeof v === 'string')
+		} catch {
+			continue
+		}
+		const next = list.filter(item => hashPgpArmor(item).toLowerCase() !== want)
+		if (next.length === list.length) continue
+		removedAny = true
+		if (next.length) {
+			fs.writeFileSync(filePath, JSON.stringify(next, null, 2), 'utf8')
+		} else {
+			try { fs.unlinkSync(filePath) } catch {}
+		}
+		logger(`${clentKeyID} removeLocalByArmorHash removed ${list.length - next.length} from ${path.basename(filePath)}`)
+	}
+	return removedAny
 }
 
 /** True when the listen SSE socket can no longer be trusted for gossip delivery. */
