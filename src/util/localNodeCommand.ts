@@ -1566,7 +1566,15 @@ const customerDataSocket =  async (socket: Socket, encryptedText: string, custom
 	return connect.clientSocket.write(`data: ${encryptedText}\n\n`)
 }
 
-export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[],  pgpData: string, pgpPrivateObj: any, pgpPublicKeyID: string, wallet: ethers.Wallet) => {
+export const postOpenpgpRouteSocket = async (
+	socket: Socket,
+	headers: string[],
+	pgpData: string,
+	pgpPrivateObj: any,
+	pgpPublicKeyID: string,
+	wallet: ethers.Wallet,
+	skipPush = false,
+) => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(pgpData, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
@@ -1590,7 +1598,7 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		// logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
-		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet)
+		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet, skipPush)
 	}
 
 	let content
@@ -1624,9 +1632,19 @@ export const postOpenpgpRouteSocket = async (socket: Socket, headers: string[], 
 }
 
 
-const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data: string, wallet: string|undefined) => {
+const socketForward = (
+	ipAddr: string,
+	port: number,
+	sourceSocket: Socket,
+	data: string,
+	wallet: string|undefined,
+	skipPush = false,
+) => {
 
-	const rawHttpRequest = otherRequestForNet(JSON.stringify({data}), ipAddr, port)
+	const forwardBody = skipPush
+		? JSON.stringify({ data, beamioNoPush: true })
+		: JSON.stringify({ data })
+	const rawHttpRequest = otherRequestForNet(forwardBody, ipAddr, port)
     const infoUp = `socketForward to node=> ${ipAddr}`
     const infoDown = `socketForward to node <= ${ipAddr}`
     const upload = new BandwidthCount(infoUp, wallet||'')
@@ -1688,7 +1706,14 @@ const socketForward = (ipAddr: string, port: number, sourceSocket: Socket, data:
 
 }
 
-export const forwardEncryptedSocket = async (socket: Socket, encryptedText: string, gpgPublicKeyID: string, headers: string[], nodeWallet: ethers.Wallet|null) => {
+export const forwardEncryptedSocket = async (
+	socket: Socket,
+	encryptedText: string,
+	gpgPublicKeyID: string,
+	headers: string[],
+	nodeWallet: ethers.Wallet|null,
+	skipPush = false,
+) => {
 
 
 	//			forward encrypted text
@@ -1703,7 +1728,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
     if (_route === nodeIpAddr) {
         response200Html(socket, '')
 
-        logger(`forwardEncryptedSocket to MySelf!!`)
+        logger(`forwardEncryptedSocket to MySelf!!${skipPush ? ' (skipPush)' : ''}`)
         // Durability first: never trust SSE write alone (zombie C↔B pipes after force-quit).
         // Do not alter entry socketForward / half-close proxy.
 
@@ -1729,8 +1754,10 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
 
         // Already offline (no usable SSE): saveLocal + APNs immediately — skip 2-heartbeat ACK wait.
         // Fresh listen SSE: saveLocal + track pending ACK; APNs only if 2 heartbeats without ack.
+        // skipPush (delivery receipt): durable only — never native icon / APNs queue.
         const armorHash = await saveLocal(encryptedText, gpgPublicKeyID, {
             alreadyOffline: listenUnusable,
+            skipPush,
         })
 
         if (!client) {
@@ -1767,7 +1794,10 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
             logger(`forWardPGPMessageToClient FAIL — already saveLocal; evict → immediate offline APNs`, encryptedText)
             evictListenClient(client, 'has dead forward')
             // Just judged offline (dead SSE); do not wait for heartbeats.
-            notifyOfflineDeliveryImmediate(gpgPublicKeyID, armorHash || hashPgpArmor(encryptedText))
+            // Protocol no-push frames stay durable only.
+            if (!skipPush) {
+                notifyOfflineDeliveryImmediate(gpgPublicKeyID, armorHash || hashPgpArmor(encryptedText))
+            }
         })
 
         return
@@ -1797,7 +1827,7 @@ export const forwardEncryptedSocket = async (socket: Socket, encryptedText: stri
     
 
 
-	return socketForward( _route, 80, socket, encryptedText, wallet)
+	return socketForward( _route, 80, socket, encryptedText, wallet, skipPush)
 }
 
 export const checkSign = (message: string, signMess: string) => {

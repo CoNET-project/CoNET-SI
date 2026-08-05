@@ -762,6 +762,11 @@ export type SaveLocalOptions = {
 	 * (not in pool / stale / expired session). Skip 2-heartbeat ACK grace → APNs now.
 	 */
 	alreadyOffline?: boolean
+	/**
+	 * Protocol frames (e.g. chat delivery receipt) that must stay durable but must **not**
+	 * enter the offline APNs / native icon badge push queue.
+	 */
+	skipPush?: boolean
 }
 
 /** Returns armor hash used for gossip_delivery_ack / pending APNs. */
@@ -807,6 +812,10 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string, opts?: SaveLoc
     logger(`${clentKeyID} messages ${list.length } save to Local`)
 
 	const armorHash = hashPgpArmor(pgpMessage)
+	if (opts?.skipPush) {
+		logger(Colors.cyan(`${clentKeyID} saveLocal skipPush — no APNs / badge queue`))
+		return armorHash
+	}
 	if (opts?.alreadyOffline) {
 		// Already offline + no new SSE: do not wait for liveness heartbeats.
 		notifyOfflineDeliveryImmediate(clentKeyID, armorHash)
