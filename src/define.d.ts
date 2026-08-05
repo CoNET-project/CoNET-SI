@@ -213,6 +213,8 @@ interface minerObj extends SICommandObj{
 	hash?: string
 	data?: any
 	allWallets?: string[]
+	/** Distinguish PWA chat presence listen ('chat') from LayerMinus mining gossip (default 'mining'). */
+	listenKind?: 'chat' | 'mining'
 }
 
 
@@ -235,4 +237,6 @@ interface livenessListeningPoolObj {
 	connectedAt?: number
 	/** User PGP key id (hex) for this listen session; used to clear PGP pool on write failure. */
 	pgpKeyId?: string
+	/** 'chat' = PWA presence/mailbox listen; 'mining' = LayerMinus gossip. Default 'mining'. */
+	kind?: 'chat' | 'mining'
 }

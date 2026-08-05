@@ -873,8 +873,11 @@ export const isLivenessListenSocketStale = (res: Socket | TLSSocket | null | und
 	const s = res as Socket
 	if (s.destroyed || (s as any).writableEnded || (s as any).closed) return true
 	if (!s.writable) return true
-	// Peer half-closed / finished HTTP request body path with no further read interest.
-	if ((s as any).readableEnded || (s as any).errored) return true
+	// NOTE: do NOT treat `readableEnded` as stale. Both LayerMinus mining clients and PWA chat
+	// listeners finish their HTTP request body (our READ side ends) and then keep the connection
+	// open only to RECEIVE server-pushed frames. The socket is still fully writable; treating
+	// readableEnded as stale evicted healthy mining SSE and caused fleet-wide gossip Idle Timeout.
+	if ((s as any).errored) return true
 	return false
 }
 

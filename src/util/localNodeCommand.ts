@@ -976,8 +976,12 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return 
 		}
 
-		case 'mining': {		
-			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket)
+		case 'mining': {
+			// PWA chat presence listens with the same 'mining' command but tags listenKind:'chat'.
+			// LayerMinus mining omits it → default 'mining'. Both share livenessListeningPool but are
+			// now labelled so chat-only session/zombie policy never evicts LayerMinus gossip pipes.
+			const listenKind = (command as any).listenKind === 'chat' ? 'chat' : 'mining'
+			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, listenKind)
 		}
 
 		case 'mining_validator': {
@@ -1949,7 +1953,7 @@ async function writeLinesWithBackpressure(
 }
 
 
-const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket) => {
+const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket, kind: 'chat' | 'mining' = 'mining') => {
 	const s = res as Socket
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
@@ -1958,7 +1962,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 			;(o as any).end().destroy()
 		}
 	}
-    logger(`addIpaddressToLivenessListeningPool started for ${ipaddress}:${wallet} try process getWalletFromKeyID`)
+    logger(`addIpaddressToLivenessListeningPool [kind=${kind}] started for ${ipaddress}:${wallet} try process getWalletFromKeyID`)
     
     const keyID = await getWalletFromKeyID(wallet)
     
@@ -1969,6 +1973,7 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		res,
 		connectedAt: Date.now(),
 		pgpKeyId: keyID || undefined,
+		kind,
 	}
 	
 	logger(`addIpaddressToLivenessListeningPool isMyClient = await isMyRoute(wallet, nodeWallet?.address)`)
@@ -2011,9 +2016,13 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 		dropListenPools(`on error (${err.message})`)
 	})
 
-	// Peer half-close / FIN on mailbox listen socket (not entry socketForward).
+	// Peer half-close / FIN only ends OUR read side; the socket is still writable for
+	// server-pushed gossip/epoch frames. LayerMinus mining clients (and some PWA listeners)
+	// finish their request body → 'end' fires while delivery is still healthy. Do NOT drop the
+	// pool here (that caused fleet-wide mining Idle Timeout). A genuinely dead peer is evicted on
+	// the next write failure (testMinerCOnnecting / forWardPGPMessageToClient) or on 'close'/'error'.
 	s.once('end', () => {
-		dropListenPools('on end (peer half-close)')
+		logger(Colors.grey(`Client ${wallet}:${ipaddress} on end (peer half-close) — keep in listen Pool (still writable)`))
 	})
 
 	s.once('close', () => {
