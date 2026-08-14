@@ -1546,17 +1546,47 @@ const asPgpMessageArmor = (text: string): string | null => {
 	return trimmed.slice(0, end + '-----END PGP MESSAGE-----'.length)
 }
 
-const extractInnerPgpArmor = (decrypted: string): string | null => {
-	const direct = asPgpMessageArmor(decrypted)
-	if (direct) {
-		return direct
+const decryptedPayloadToUtf8 = (data: unknown): string => {
+	if (typeof data === 'string') {
+		return data
 	}
-	try {
-		const decoded = Buffer.from(decrypted.trim(), 'base64').toString('utf8')
-		if (!decoded || decoded === decrypted.trim()) {
+	if (data instanceof Uint8Array) {
+		return Buffer.from(data).toString('utf8')
+	}
+	return String(data ?? '')
+}
+
+const tryReadInnerPgpMessage = async (data: unknown): Promise<Message<string | Uint8Array> | null> => {
+	const text = decryptedPayloadToUtf8(data)
+	const armor = asPgpMessageArmor(text)
+	if (armor) {
+		try {
+			return await readMessage({ armoredMessage: armor })
+		} catch {
 			return null
 		}
-		return asPgpMessageArmor(decoded)
+	}
+	if (data instanceof Uint8Array) {
+		try {
+			return await readMessage({ binaryMessage: data })
+		} catch {
+			/* fall through to base64 */
+		}
+	}
+	const trimmed = text.trim()
+	if (!trimmed) {
+		return null
+	}
+	try {
+		const decoded = Buffer.from(trimmed, 'base64')
+		const decodedText = decoded.toString('utf8')
+		if (decodedText && decodedText !== trimmed) {
+			const nestedArmor = asPgpMessageArmor(decodedText)
+			if (nestedArmor) {
+				return await readMessage({ armoredMessage: nestedArmor })
+			}
+		}
+		return await readMessage({ binaryMessage: new Uint8Array(decoded) })
 	} catch {
 		return null
 	}
@@ -1650,7 +1680,7 @@ export const postOpenpgpRouteSocket = async (
 	wallet: ethers.Wallet,
 	skipPush = false,
 	hopDepth = 0,
-) => {
+): Promise<void> => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(pgpData, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
@@ -1683,11 +1713,13 @@ export const postOpenpgpRouteSocket = async (
 	}
 
 	let decryptedRaw = ''
+	let decryptedData: unknown
 	let content
 
 	try {
 		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
-		decryptedRaw = decryptedObj.data.toString()
+		decryptedData = decryptedObj.data
+		decryptedRaw = decryptedPayloadToUtf8(decryptedData)
 	} catch (ex: any) {
 		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
         console.log(JSON.stringify(pgpData))
@@ -1695,13 +1727,15 @@ export const postOpenpgpRouteSocket = async (
 		return distorySocket(socket)
 	}
 
-	const innerArmor = extractInnerPgpArmor(decryptedRaw)
-	if (innerArmor) {
-		try {
-			const innerMsg = await readMessage({ armoredMessage: innerArmor })
+	// Onion peel: after local decrypt, if plaintext is still OpenPGP and the
+	// inner side-channel key ID is not this node, forward the inner armor.
+	try {
+		const innerMsg = await tryReadInnerPgpMessage(decryptedData)
+		if (innerMsg) {
 			const innerKeyIDs: typeOpenPGPKeyID[] = innerMsg.getEncryptionKeyIDs()
 			if (innerKeyIDs?.length) {
 				const innerKeyID = innerKeyIDs[0].toHex().toUpperCase()
+				const innerArmor = innerMsg.armor()
 				if (innerKeyID !== pgpPublicKeyID) {
 					logger(Colors.blue(`postOpenpgpRouteSocket peeled outer envelope; inner key ${innerKeyID} is not local ${pgpPublicKeyID}; forward ${socket.remoteAddressShow}`))
 					return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet, skipPush)
@@ -1717,9 +1751,9 @@ export const postOpenpgpRouteSocket = async (
 					hopDepth + 1,
 				)
 			}
-		} catch (ex: any) {
-			logger(Colors.yellow(`postOpenpgpRouteSocket inner PGP parse failed after local decrypt; try command JSON ${socket.remoteAddressShow} ${ex?.message || ''}`))
 		}
+	} catch (ex: any) {
+		logger(Colors.yellow(`postOpenpgpRouteSocket onion peel failed; try command JSON ${socket.remoteAddressShow} ${ex?.message || ''}`))
 	}
 
 	try {
