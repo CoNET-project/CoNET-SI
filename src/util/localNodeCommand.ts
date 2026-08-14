@@ -38,6 +38,16 @@ import nodeRestartABI from './nodeRestartABI.json'
 import { mapLimit, until } from 'async'
 import {BandwidthCount} from './socks5Connect_v2'
 import {
+	MAX_SI_HOP_SIGS,
+	cannotAppendAnotherHop,
+	hopSigCountExceedsLimit,
+	parseHopSigsFromHeaders,
+	signAndAppendHop,
+	hopSigsHeaderLine,
+	verifyHopSigs,
+	type SiHopSig,
+} from './siHopSigs'
+import {
 	handleUdpListen,
 	handleUdpRelay,
 	handleUdpServerListen,
@@ -486,11 +496,12 @@ export type IclientPool = {
 	command: SICommandObj
 }
 
-const otherRequestForNet = ( data: string, host: string, port: number ) => {
-
+const otherRequestForNet = ( data: string, host: string, port: number, extraHeaders: string[] = [] ) => {
+	const extras = extraHeaders.length ? extraHeaders.join('\r\n') + '\r\n' : ''
 	return 	`POST /post HTTP/1.1\r\n` +
 			`Host: ${ host }${ port !== 80 ? ':'+ port : '' }\r\n` +
 			`User-Agent:'Mozilla/5.0' }\r\n` +
+			extras +
 			`Content-Type: application/json;charset=UTF-8\r\n` +
 			`Connection: keep-alive\r\n` +
 			`Content-Length: ${ data.length }\r\n\r\n` +
@@ -1532,7 +1543,47 @@ export function safeClose(s: Socket, idleMs = 200, hardCapMs = 10_000): void {
   } catch {}
 }
 
-const NESTED_PGP_HOP_MAX = 8
+const terminateByEnd = (socket: Socket, reason: string): void => {
+	logger(Colors.red(`terminateByEnd ${reason} ${socket.remoteAddressShow}`))
+	try {
+		if (!socket.destroyed) {
+			socket.end()
+		}
+	} catch {}
+	try {
+		if (!socket.destroyed) {
+			socket.destroy()
+		}
+	} catch {}
+}
+
+const incomingHopSigsOrAttack = (headers: string[], socket: Socket): SiHopSig[] | null => {
+	const hops = parseHopSigsFromHeaders(headers)
+	if (hops === 'invalid') {
+		terminateByEnd(socket, 'invalid hop-signature header')
+		return null
+	}
+	if (hopSigCountExceedsLimit(hops.length)) {
+		terminateByEnd(socket, `hop signatures ${hops.length} > ${MAX_SI_HOP_SIGS}`)
+		return null
+	}
+	return hops
+}
+
+const creditUserGbFromHopSigs = (userWallet: string, hops: SiHopSig[]): void => {
+	const verified = verifyHopSigs(hops)
+	let bytes = 0
+	for (const hop of verified) {
+		bytes += hop.n
+	}
+	if (!bytes || !userWallet) {
+		return
+	}
+	const key = userWallet.toLowerCase()
+	const total = (transferCount.get(key) || 0) + bytes
+	transferCount.set(key, total)
+	logger(Colors.blue(`creditUserGbFromHopSigs ${key} hops=${verified.length}/${hops.length} bytes=${bytes}`))
+}
 
 const asPgpMessageArmor = (text: string): string | null => {
 	const trimmed = text.trim()
@@ -1679,14 +1730,13 @@ export const postOpenpgpRouteSocket = async (
 	pgpPublicKeyID: string,
 	wallet: ethers.Wallet,
 	skipPush = false,
-	hopDepth = 0,
 ): Promise<void> => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(pgpData, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
 
-	if (hopDepth > NESTED_PGP_HOP_MAX) {
-		logger (Colors.red(`postOpenpgpRoute nested PGP hop depth ${hopDepth} exceeds ${NESTED_PGP_HOP_MAX} ${socket.remoteAddressShow}`))
-		return distorySocket(socket)
+	const hopSigs = incomingHopSigsOrAttack(headers, socket)
+	if (!hopSigs) {
+		return
 	}
 
 	let messObj
@@ -1727,8 +1777,8 @@ export const postOpenpgpRouteSocket = async (
 		return distorySocket(socket)
 	}
 
-	// Onion peel: after local decrypt, if plaintext is still OpenPGP and the
-	// inner side-channel key ID is not this node, forward the inner armor.
+	// Decrypt once per hop. Same-node inner PGP is an attack. Another forward
+	// requires hop signatures ≤ 3; more than 3 means a flood of the whole set.
 	try {
 		const innerMsg = await tryReadInnerPgpMessage(decryptedData)
 		if (innerMsg) {
@@ -1736,20 +1786,14 @@ export const postOpenpgpRouteSocket = async (
 			if (innerKeyIDs?.length) {
 				const innerKeyID = innerKeyIDs[0].toHex().toUpperCase()
 				const innerArmor = innerMsg.armor()
-				if (innerKeyID !== pgpPublicKeyID) {
-					logger(Colors.blue(`postOpenpgpRouteSocket peeled outer envelope; inner key ${innerKeyID} is not local ${pgpPublicKeyID}; forward ${socket.remoteAddressShow}`))
-					return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet, skipPush)
+				if (innerKeyID === pgpPublicKeyID) {
+					return terminateByEnd(socket, 'same-node inner PGP after local decrypt')
 				}
-				return postOpenpgpRouteSocket(
-					socket,
-					headers,
-					innerArmor,
-					pgpPrivateObj,
-					pgpPublicKeyID,
-					wallet,
-					skipPush,
-					hopDepth + 1,
-				)
+				if (hopSigCountExceedsLimit(hopSigs.length) || cannotAppendAnotherHop(hopSigs.length)) {
+					return terminateByEnd(socket, `refuse further forward; hop signatures ${hopSigs.length} (max ${MAX_SI_HOP_SIGS})`)
+				}
+				logger(Colors.blue(`postOpenpgpRouteSocket peeled outer envelope; inner key ${innerKeyID} is not local ${pgpPublicKeyID}; forward ${socket.remoteAddressShow}`))
+				return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet, skipPush)
 			}
 		}
 	} catch (ex: any) {
@@ -1778,6 +1822,8 @@ export const postOpenpgpRouteSocket = async (
 		logger(Colors.red(`checkSignObj Error! ${socket.remoteAddressShow}`))
 		return distorySocket(socket)
 	}
+
+	creditUserGbFromHopSigs(command.walletAddress, hopSigs)
 	
 	return localNodeCommandSocket(socket, headers, command, wallet )
 	
@@ -1791,12 +1837,14 @@ const socketForward = (
 	data: string,
 	wallet: string|undefined,
 	skipPush = false,
+	hopSigHeaderLine = '',
 ) => {
 
 	const forwardBody = skipPush
 		? JSON.stringify({ data, beamioNoPush: true })
 		: JSON.stringify({ data })
-	const rawHttpRequest = otherRequestForNet(forwardBody, ipAddr, port)
+	const extraHeaders = hopSigHeaderLine ? [hopSigHeaderLine] : []
+	const rawHttpRequest = otherRequestForNet(forwardBody, ipAddr, port, extraHeaders)
     const infoUp = `socketForward to node=> ${ipAddr}`
     const infoDown = `socketForward to node <= ${ipAddr}`
     const upload = new BandwidthCount(infoUp, wallet||'')
@@ -1842,6 +1890,14 @@ const socketForward = (
 			}
 		} else {
 			safeClose(sourceSocket)
+		}
+	})
+
+	conn.once ('end', () => {
+		logger(Colors.magenta(`socketForward dest SI end ${ ipAddr }:${port}; free sockets`))
+		safeClose(sourceSocket)
+		if (!conn.destroyed) {
+			conn.destroy()
 		}
 	})
 
@@ -1976,10 +2032,19 @@ export const forwardEncryptedSocket = async (
         return logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!!******************************`)
     }
 
-    
+	const incomingHops = incomingHopSigsOrAttack(headers, socket)
+	if (!incomingHops) {
+		return
+	}
+	if (!nodeWallet) {
+		return logger(`**************** forwardEncryptedSocket Error! nodeWallet NULL; cannot sign hop header ******************************`)
+	}
+	const nextHops = await signAndAppendHop(incomingHops, nodeWallet, gpgPublicKeyID, encryptedText)
+	if (!nextHops) {
+		return terminateByEnd(socket, `refuse SI forward; hop signatures ${incomingHops.length} (max ${MAX_SI_HOP_SIGS})`)
+	}
 
-
-	return socketForward( _route, 80, socket, encryptedText, wallet, skipPush)
+	return socketForward( _route, 80, socket, encryptedText, wallet, skipPush, hopSigsHeaderLine(nextHops))
 }
 
 export const checkSign = (message: string, signMess: string) => {
