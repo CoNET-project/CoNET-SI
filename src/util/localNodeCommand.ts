@@ -37,6 +37,15 @@ import epoch_info_ABI from './epoch_info_managerABI.json'
 import nodeRestartABI from './nodeRestartABI.json'
 import { mapLimit, until } from 'async'
 import {BandwidthCount} from './socks5Connect_v2'
+import {
+	handleUdpListen,
+	handleUdpRelay,
+	handleUdpServerListen,
+	handleUdpSubscribeMisrouted,
+	handleUdpUplink,
+	handleUdpUnlisten,
+	setUdpServerChatNotify,
+} from './udpForward'
 
 
 
@@ -980,8 +989,40 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			// PWA chat presence listens with the same 'mining' command but tags listenKind:'chat'.
 			// LayerMinus mining omits it → default 'mining'. Both share livenessListeningPool but are
 			// now labelled so chat-only session/zombie policy never evicts LayerMinus gossip pipes.
-			const listenKind = (command as any).listenKind === 'chat' ? 'chat' : 'mining'
+			// UDP mailbox listen is a separate pool — never mix into mining/chat.
+			const listenKindRaw = (command as any).listenKind
+			if (listenKindRaw === 'udp') {
+				return handleUdpListen(socket, command, wallet)
+			}
+			if (listenKindRaw === 'udp_server') {
+				return handleUdpServerListen(socket, command, wallet)
+			}
+			const listenKind = listenKindRaw === 'chat' ? 'chat' : 'mining'
 			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, listenKind)
+		}
+
+		case 'udp_listen': {
+			return handleUdpListen(socket, command, wallet)
+		}
+
+		case 'udp_server_listen': {
+			return handleUdpServerListen(socket, command, wallet)
+		}
+
+		case 'udp_subscribe': {
+			return handleUdpSubscribeMisrouted(socket)
+		}
+
+		case 'udp_relay': {
+			return handleUdpRelay(socket, command, wallet)
+		}
+
+		case 'udp_uplink': {
+			return handleUdpUplink(socket, command, wallet)
+		}
+
+		case 'udp_unlisten': {
+			return handleUdpUnlisten(socket, command)
 		}
 
 		case 'mining_validator': {
@@ -1922,6 +1963,30 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
+
+const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
+	const s = res as Socket
+	if (isLivenessListenSocketStale(s)) return false
+	try {
+		return s.write(`data: ${JSON.stringify(obj)}\r\n\r\n`)
+	} catch {
+		return false
+	}
+}
+
+setUdpServerChatNotify((serverWallet, frame) => {
+	let client = livenessListeningPool.get(serverWallet)
+	if (!client) {
+		try {
+			client = livenessListeningPool.get(ethers.getAddress(serverWallet))
+		} catch {
+			client = undefined
+		}
+	}
+	if (!client || client.kind === 'mining') return false
+	if (isLivenessListenSocketStale(client.res)) return false
+	return writeLivenessSseJson(client.res, frame)
+})
 
 /** Write offline PGP frames; returns lines not confirmed written (caller must rollback). */
 async function writeLinesWithBackpressure(

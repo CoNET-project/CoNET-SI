@@ -88,11 +88,11 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
-	algorithm: 'aes-256-cbc'
+	algorithm: 'aes-256-cbc'|'aes-256-gcm'
 	Securitykey: string
 	requestData: any
 	/** gossip_delivery_ack: keccak256(utf8(PGP armor)) */
@@ -101,6 +101,12 @@ interface SICommandObj {
 	timestamp?: number
 	/** wallet_online_query: wallet to check (signer is walletAddress) */
 	targetWallet?: string
+	/** UDP mailbox session (uuid / hex). Never put Securitykey on route-B commands. */
+	sessionId?: string
+	/** UDP server EOA whose mailbox hosts the client listen. */
+	udpServerWallet?: string
+	/** udp_relay / udp_uplink: AES-GCM blob (base64). Mailbox must not decrypt. */
+	payload?: string
 }
 
 
@@ -213,8 +219,8 @@ interface minerObj extends SICommandObj{
 	hash?: string
 	data?: any
 	allWallets?: string[]
-	/** Distinguish PWA chat presence listen ('chat') from LayerMinus mining gossip (default 'mining'). */
-	listenKind?: 'chat' | 'mining'
+	/** Distinguish PWA chat ('chat'), LayerMinus mining (default 'mining'), and UDP mailbox listen. */
+	listenKind?: 'chat' | 'mining' | 'udp' | 'udp_server'
 }
 
 
