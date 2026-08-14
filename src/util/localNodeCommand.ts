@@ -1532,6 +1532,36 @@ export function safeClose(s: Socket, idleMs = 200, hardCapMs = 10_000): void {
   } catch {}
 }
 
+const NESTED_PGP_HOP_MAX = 8
+
+const asPgpMessageArmor = (text: string): string | null => {
+	const trimmed = text.trim()
+	if (!trimmed.startsWith('-----BEGIN PGP MESSAGE-----')) {
+		return null
+	}
+	const end = trimmed.indexOf('-----END PGP MESSAGE-----')
+	if (end < 0) {
+		return null
+	}
+	return trimmed.slice(0, end + '-----END PGP MESSAGE-----'.length)
+}
+
+const extractInnerPgpArmor = (decrypted: string): string | null => {
+	const direct = asPgpMessageArmor(decrypted)
+	if (direct) {
+		return direct
+	}
+	try {
+		const decoded = Buffer.from(decrypted.trim(), 'base64').toString('utf8')
+		if (!decoded || decoded === decrypted.trim()) {
+			return null
+		}
+		return asPgpMessageArmor(decoded)
+	} catch {
+		return null
+	}
+}
+
 const decryptMessage = async (encryptedText: Message<string>, decryptionKeys: any ) => {
 	
 	const decrypted = await decrypt ({
@@ -1619,9 +1649,15 @@ export const postOpenpgpRouteSocket = async (
 	pgpPublicKeyID: string,
 	wallet: ethers.Wallet,
 	skipPush = false,
+	hopDepth = 0,
 ) => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(pgpData, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
+
+	if (hopDepth > NESTED_PGP_HOP_MAX) {
+		logger (Colors.red(`postOpenpgpRoute nested PGP hop depth ${hopDepth} exceeds ${NESTED_PGP_HOP_MAX} ${socket.remoteAddressShow}`))
+		return distorySocket(socket)
+	}
 
 	let messObj
 	
@@ -1646,11 +1682,48 @@ export const postOpenpgpRouteSocket = async (
 		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet, skipPush)
 	}
 
+	let decryptedRaw = ''
 	let content
 
 	try {
 		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
-		content = JSON.parse(Buffer.from(decryptedObj.data.toString(),'base64').toString())
+		decryptedRaw = decryptedObj.data.toString()
+	} catch (ex: any) {
+		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
+        console.log(JSON.stringify(pgpData))
+        
+		return distorySocket(socket)
+	}
+
+	const innerArmor = extractInnerPgpArmor(decryptedRaw)
+	if (innerArmor) {
+		try {
+			const innerMsg = await readMessage({ armoredMessage: innerArmor })
+			const innerKeyIDs: typeOpenPGPKeyID[] = innerMsg.getEncryptionKeyIDs()
+			if (innerKeyIDs?.length) {
+				const innerKeyID = innerKeyIDs[0].toHex().toUpperCase()
+				if (innerKeyID !== pgpPublicKeyID) {
+					logger(Colors.blue(`postOpenpgpRouteSocket peeled outer envelope; inner key ${innerKeyID} is not local ${pgpPublicKeyID}; forward ${socket.remoteAddressShow}`))
+					return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet, skipPush)
+				}
+				return postOpenpgpRouteSocket(
+					socket,
+					headers,
+					innerArmor,
+					pgpPrivateObj,
+					pgpPublicKeyID,
+					wallet,
+					skipPush,
+					hopDepth + 1,
+				)
+			}
+		} catch (ex: any) {
+			logger(Colors.yellow(`postOpenpgpRouteSocket inner PGP parse failed after local decrypt; try command JSON ${socket.remoteAddressShow} ${ex?.message || ''}`))
+		}
+	}
+
+	try {
+		content = JSON.parse(Buffer.from(decryptedRaw, 'base64').toString())
 	} catch (ex: any) {
 		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
         console.log(JSON.stringify(pgpData))
