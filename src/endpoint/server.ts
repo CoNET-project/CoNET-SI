@@ -160,7 +160,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
 
     // 处理 POST 请求的逻辑
     if (method === 'POST') {
-        let body: { data?: string; beamioNoPush?: boolean }
+        let body: { data?: string }
         try {
             body = JSON.parse(bodyStr)
         } catch (ex) {
@@ -175,7 +175,6 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
         }
 		//console.log(`postOpenpgpRouteSocket from ${socket.remoteAddress}\n`, inspect({ request: bodyStr, addr: socket.remoteAddress }, false, 3, true))
         if (conet_si_server.nodeWallet) {
-            const skipPush = body.beamioNoPush === true
             return postOpenpgpRouteSocket(
                 socket,
                 headerLines,
@@ -183,7 +182,6 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
                 conet_si_server.initData.pgpKeyObj.privateKeyObj,
                 conet_si_server.publicKeyID,
                 conet_si_server.nodeWallet,
-                skipPush,
             )
         }
 

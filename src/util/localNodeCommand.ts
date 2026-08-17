@@ -1597,6 +1597,39 @@ const asPgpMessageArmor = (text: string): string | null => {
 	return trimmed.slice(0, end + '-----END PGP MESSAGE-----'.length)
 }
 
+/** Mailbox work: `{ data: <user-PGP armor>, NoPush?: true }` encrypted to this node's route PGP. */
+const tryParseMailboxWorkEnvelope = (plain: string): { data: string; NoPush: boolean } | null => {
+	const trimmed = String(plain || '').trim()
+	if (!trimmed) {
+		return null
+	}
+	let rec: unknown
+	try {
+		rec = JSON.parse(trimmed)
+	} catch {
+		try {
+			rec = JSON.parse(Buffer.from(trimmed, 'base64').toString())
+		} catch {
+			return null
+		}
+	}
+	if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
+		return null
+	}
+	const row = rec as { data?: unknown; message?: unknown; signMessage?: unknown; NoPush?: unknown }
+	if (typeof row.message === 'string' && row.signMessage) {
+		return null
+	}
+	if (typeof row.data !== 'string') {
+		return null
+	}
+	const inner = asPgpMessageArmor(row.data)
+	if (!inner) {
+		return null
+	}
+	return { data: inner, NoPush: row.NoPush === true }
+}
+
 const decryptedPayloadToUtf8 = (data: unknown): string => {
 	if (typeof data === 'string') {
 		return data
@@ -1729,7 +1762,6 @@ export const postOpenpgpRouteSocket = async (
 	pgpPrivateObj: any,
 	pgpPublicKeyID: string,
 	wallet: ethers.Wallet,
-	skipPush = false,
 ): Promise<void> => {
 
 	//logger (Colors.red(`postOpenpgpRoute clientReq headers = `), inspect(pgpData, false, 3, true ), Colors.grey (`Body length = [${pgpData?.length}]`))
@@ -1759,7 +1791,7 @@ export const postOpenpgpRouteSocket = async (
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		// logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
-		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet, skipPush)
+		return forwardEncryptedSocket(socket, pgpData, customerKeyID, headers, wallet)
 	}
 
 	let decryptedRaw = ''
@@ -1793,11 +1825,32 @@ export const postOpenpgpRouteSocket = async (
 					return terminateByEnd(socket, `refuse further forward; hop signatures ${hopSigs.length} (max ${MAX_SI_HOP_SIGS})`)
 				}
 				logger(Colors.blue(`postOpenpgpRouteSocket peeled outer envelope; inner key ${innerKeyID} is not local ${pgpPublicKeyID}; forward ${socket.remoteAddressShow}`))
-				return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet, skipPush)
+				return forwardEncryptedSocket(socket, innerArmor, innerKeyID, headers, wallet)
 			}
 		}
 	} catch (ex: any) {
-		logger(Colors.yellow(`postOpenpgpRouteSocket onion peel failed; try command JSON ${socket.remoteAddressShow} ${ex?.message || ''}`))
+		logger(Colors.yellow(`postOpenpgpRouteSocket onion peel failed; try mailbox work / command JSON ${socket.remoteAddressShow} ${ex?.message || ''}`))
+	}
+
+	const mailboxWork = tryParseMailboxWorkEnvelope(decryptedRaw)
+	if (mailboxWork) {
+		try {
+			const workMsg = await readMessage({ armoredMessage: mailboxWork.data })
+			const workKeyIDs: typeOpenPGPKeyID[] = workMsg.getEncryptionKeyIDs()
+			if (!workKeyIDs?.length) {
+				logger(Colors.red(`mailbox work envelope has no inner key ${socket.remoteAddressShow}`))
+				return distorySocket(socket)
+			}
+			const workKeyID = workKeyIDs[0].toHex().toUpperCase()
+			if (workKeyID === pgpPublicKeyID) {
+				return terminateByEnd(socket, 'same-node inner PGP after mailbox work unwrap')
+			}
+			logger(Colors.blue(`postOpenpgpRouteSocket mailbox work unwrap; inner key ${workKeyID} NoPush=${mailboxWork.NoPush} ${socket.remoteAddressShow}`))
+			return forwardEncryptedSocket(socket, mailboxWork.data, workKeyID, headers, wallet, mailboxWork.NoPush)
+		} catch (ex: any) {
+			logger(Colors.red(`mailbox work unwrap failed ${socket.remoteAddressShow} ${ex?.message || ''}`))
+			return distorySocket(socket)
+		}
 	}
 
 	try {
@@ -1836,13 +1889,10 @@ const socketForward = (
 	sourceSocket: Socket,
 	data: string,
 	wallet: string|undefined,
-	skipPush = false,
 	hopSigHeaderLine = '',
 ) => {
 
-	const forwardBody = skipPush
-		? JSON.stringify({ data, beamioNoPush: true })
-		: JSON.stringify({ data })
+	const forwardBody = JSON.stringify({ data })
 	const extraHeaders = hopSigHeaderLine ? [hopSigHeaderLine] : []
 	const rawHttpRequest = otherRequestForNet(forwardBody, ipAddr, port, extraHeaders)
     const infoUp = `socketForward to node=> ${ipAddr}`
@@ -2044,7 +2094,7 @@ export const forwardEncryptedSocket = async (
 		return terminateByEnd(socket, `refuse SI forward; hop signatures ${incomingHops.length} (max ${MAX_SI_HOP_SIGS})`)
 	}
 
-	return socketForward( _route, 80, socket, encryptedText, wallet, skipPush, hopSigsHeaderLine(nextHops))
+	return socketForward( _route, 80, socket, encryptedText, wallet, hopSigsHeaderLine(nextHops))
 }
 
 export const checkSign = (message: string, signMess: string) => {
