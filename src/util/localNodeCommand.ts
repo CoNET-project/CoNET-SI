@@ -42,6 +42,7 @@ import {
 	cannotAppendAnotherHop,
 	hopSigCountExceedsLimit,
 	parseHopSigsFromHeaders,
+	pgpArmorToUtf8String,
 	signAndAppendHop,
 	hopSigsHeaderLine,
 	verifyHopSigs,
@@ -1640,19 +1641,26 @@ const decryptedPayloadToUtf8 = (data: unknown): string => {
 	return String(data ?? '')
 }
 
-const tryReadInnerPgpMessage = async (data: unknown): Promise<Message<string | Uint8Array> | null> => {
+type InnerPgpForward = {
+	message: Message<string | Uint8Array>
+	armor: string
+}
+
+const tryReadInnerPgpMessage = async (data: unknown): Promise<InnerPgpForward | null> => {
 	const text = decryptedPayloadToUtf8(data)
 	const armor = asPgpMessageArmor(text)
 	if (armor) {
 		try {
-			return await readMessage({ armoredMessage: armor })
+			const message = await readMessage({ armoredMessage: armor })
+			return { message, armor }
 		} catch {
 			return null
 		}
 	}
 	if (data instanceof Uint8Array) {
 		try {
-			return await readMessage({ binaryMessage: data })
+			const message = await readMessage({ binaryMessage: data })
+			return { message, armor: await pgpArmorToUtf8String(message.armor()) }
 		} catch {
 			/* fall through to base64 */
 		}
@@ -1667,10 +1675,12 @@ const tryReadInnerPgpMessage = async (data: unknown): Promise<Message<string | U
 		if (decodedText && decodedText !== trimmed) {
 			const nestedArmor = asPgpMessageArmor(decodedText)
 			if (nestedArmor) {
-				return await readMessage({ armoredMessage: nestedArmor })
+				const message = await readMessage({ armoredMessage: nestedArmor })
+				return { message, armor: nestedArmor }
 			}
 		}
-		return await readMessage({ binaryMessage: new Uint8Array(decoded) })
+		const message = await readMessage({ binaryMessage: new Uint8Array(decoded) })
+		return { message, armor: await pgpArmorToUtf8String(message.armor()) }
 	} catch {
 		return null
 	}
@@ -1814,10 +1824,10 @@ export const postOpenpgpRouteSocket = async (
 	try {
 		const innerMsg = await tryReadInnerPgpMessage(decryptedData)
 		if (innerMsg) {
-			const innerKeyIDs: typeOpenPGPKeyID[] = innerMsg.getEncryptionKeyIDs()
+			const innerKeyIDs: typeOpenPGPKeyID[] = innerMsg.message.getEncryptionKeyIDs()
 			if (innerKeyIDs?.length) {
 				const innerKeyID = innerKeyIDs[0].toHex().toUpperCase()
-				const innerArmor = innerMsg.armor()
+				const innerArmor = innerMsg.armor
 				if (innerKeyID === pgpPublicKeyID) {
 					return terminateByEnd(socket, 'same-node inner PGP after local decrypt')
 				}
@@ -1900,8 +1910,23 @@ const socketForward = (
     const upload = new BandwidthCount(infoUp, wallet||'')
     const download = new BandwidthCount(infoDown, wallet||'')
 	let opened = false
+	const connectTimer = setTimeout(() => {
+		if (opened || conn.destroyed) {
+			return
+		}
+		logger(Colors.red(`socketForward connect timeout ${ipAddr}:${port}; return 404`))
+		try {
+			conn.destroy()
+		} catch {}
+		try {
+			distorySocket(sourceSocket)
+		} catch {
+			safeClose(sourceSocket)
+		}
+	}, 8_000)
 	const conn = createConnection ( port, ipAddr, () => {
 		opened = true
+		clearTimeout(connectTimer)
 		logger (Colors.blue (`socketForward packet to node ${ ipAddr }:${port} success !`))
 		
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
@@ -1930,6 +1955,7 @@ const socketForward = (
 
 	
 	conn.on ('error', err => {
+		clearTimeout(connectTimer)
 		logger (Colors.red(`Fardward node ${ ipAddr }:${port} on error [${err.message}] STOP connect \n`) )
 		if (!opened) {
 			// Pre-connect failure: return CORS-aware 404 so browser fetch is readable.
@@ -1944,6 +1970,7 @@ const socketForward = (
 	})
 
 	conn.once ('end', () => {
+		clearTimeout(connectTimer)
 		logger(Colors.magenta(`socketForward dest SI end ${ ipAddr }:${port}; free sockets`))
 		safeClose(sourceSocket)
 		if (!conn.destroyed) {
@@ -1952,6 +1979,7 @@ const socketForward = (
 	})
 
 	conn.once ('close', () => {
+		clearTimeout(connectTimer)
 		logger(Colors.magenta(`Fardward node ${ ipAddr }:${port} on Close!`))
 		safeClose(sourceSocket)
 	})
@@ -2085,12 +2113,25 @@ export const forwardEncryptedSocket = async (
 	if (!nodeWallet) {
 		return logger(`**************** forwardEncryptedSocket Error! nodeWallet NULL; cannot sign hop header ******************************`)
 	}
-	const nextHops = await signAndAppendHop(incomingHops, nodeWallet, gpgPublicKeyID, encryptedText)
+	let armorText: string
+	try {
+		armorText = await pgpArmorToUtf8String(encryptedText)
+	} catch (ex: any) {
+		logger(Colors.red(`forwardEncryptedSocket armor is not utf8 text ${gpgPublicKeyID} ${ex?.message || ex}`))
+		return distorySocket(socket)
+	}
+	let nextHops: SiHopSig[] | null
+	try {
+		nextHops = await signAndAppendHop(incomingHops, nodeWallet, gpgPublicKeyID, armorText)
+	} catch (ex: any) {
+		logger(Colors.red(`forwardEncryptedSocket hop-sig failed ${gpgPublicKeyID} ${ex?.message || ex}`))
+		return distorySocket(socket)
+	}
 	if (!nextHops) {
 		return terminateByEnd(socket, `refuse SI forward; hop signatures ${incomingHops.length} (max ${MAX_SI_HOP_SIGS})`)
 	}
 
-	return socketForward( _route, 80, socket, encryptedText, wallet, hopSigsHeaderLine(nextHops))
+	return socketForward( _route, 80, socket, armorText, wallet, hopSigsHeaderLine(nextHops))
 }
 
 export const checkSign = (message: string, signMess: string) => {

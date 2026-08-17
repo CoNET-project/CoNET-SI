@@ -15,7 +15,69 @@ export type SiHopSig = {
 	s: string
 }
 
+/** OpenPGP.js 6 `Message.armor()` is typed as string but often returns a stream / thenable. */
+export const pgpArmorToUtf8String = async (value: unknown): Promise<string> => {
+	let current: unknown = value
+	for (let depth = 0; depth < 4; depth++) {
+		if (typeof current === 'string') {
+			if (!current.includes('-----BEGIN PGP MESSAGE-----')) {
+				throw new Error('pgp armor missing BEGIN header')
+			}
+			return current
+		}
+		if (current instanceof Uint8Array || Buffer.isBuffer(current)) {
+			current = Buffer.from(current).toString('utf8')
+			continue
+		}
+		if (current && typeof (current as Promise<unknown>).then === 'function') {
+			current = await (current as Promise<unknown>)
+			continue
+		}
+		if (current && typeof (current as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function') {
+			const parts: Buffer[] = []
+			for await (const chunk of current as AsyncIterable<unknown>) {
+				if (typeof chunk === 'string') {
+					parts.push(Buffer.from(chunk))
+				} else if (chunk instanceof Uint8Array || Buffer.isBuffer(chunk)) {
+					parts.push(Buffer.from(chunk))
+				} else {
+					const name = chunk == null ? String(chunk) : (chunk as object).constructor?.name || typeof chunk
+					throw new Error(`pgp armor stream chunk is ${name}`)
+				}
+			}
+			current = Buffer.concat(parts).toString('utf8')
+			continue
+		}
+		if (current && typeof (current as { getReader?: () => ReadableStreamDefaultReader<unknown> }).getReader === 'function') {
+			const reader = (current as ReadableStream<unknown>).getReader()
+			const parts: Buffer[] = []
+			for (;;) {
+				const { done, value: chunk } = await reader.read()
+				if (done) {
+					break
+				}
+				if (typeof chunk === 'string') {
+					parts.push(Buffer.from(chunk))
+				} else if (chunk instanceof Uint8Array || Buffer.isBuffer(chunk)) {
+					parts.push(Buffer.from(chunk))
+				} else {
+					const name = chunk == null ? String(chunk) : (chunk as object).constructor?.name || typeof chunk
+					throw new Error(`pgp armor reader chunk is ${name}`)
+				}
+			}
+			current = Buffer.concat(parts).toString('utf8')
+			continue
+		}
+		const name = current == null ? String(current) : (current as object).constructor?.name || typeof current
+		throw new Error(`pgp armor is not utf8 text (got ${name})`)
+	}
+	throw new Error('pgp armor unwrap exceeded depth')
+}
+
 export const hopArmorHash = (armor: string): string => {
+	if (typeof armor !== 'string') {
+		throw new Error('hopArmorHash requires a utf8 armor string')
+	}
 	return ethers.keccak256(ethers.toUtf8Bytes(armor))
 }
 
@@ -131,11 +193,12 @@ export const signAndAppendHop = async (
 	if (hopChainIncludesWallet(incoming, nodeWallet.address)) {
 		return null
 	}
+	const armorText = await pgpArmorToUtf8String(armor)
 	const unsigned: Omit<SiHopSig, 's'> = {
 		w: nodeWallet.address,
 		t: Math.floor(Date.now() / 1000),
-		n: Buffer.byteLength(armor, 'utf8'),
-		h: hopArmorHash(armor),
+		n: Buffer.byteLength(armorText, 'utf8'),
+		h: hopArmorHash(armorText),
 		k: nextKeyID.toUpperCase(),
 	}
 	const hop: SiHopSig = {
