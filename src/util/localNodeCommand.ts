@@ -1989,13 +1989,16 @@ export const forwardEncryptedSocket = async (
         logger(`forwardEncryptedSocket to MySelf!!${skipPush ? ' (skipPush)' : ''}`)
         // Durability first: never trust SSE write alone (zombie C↔B pipes after force-quit).
         // Do not alter entry socketForward / half-close proxy.
-
-        // Force-quit leaves the listen socket in-pool for a few seconds; expire quickly so
-        // "send immediately after kill" takes the offline → APNs path instead of zombie SSE.
-        const LISTEN_SESSION_MAX_MS = 8_000
+        // Healthy chat SSE can stay open for minutes (clients keep seeing epoch heartbeats).
+        // Do NOT expire by connectedAt wall-clock — that stored armor and skipped live
+        // forWard while the listing heartbeat pipe was still writable.
         const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet}`)
-            livenessListeningPGPKeyIDPool.delete(gpgPublicKeyID)
+            const pgpIds = [gpgPublicKeyID, c.pgpKeyId].filter(Boolean) as string[]
+            for (const id of pgpIds) {
+                livenessListeningPGPKeyIDPool.delete(id)
+                livenessListeningPGPKeyIDPool.delete(normalizeListenPgpKeyId(id))
+            }
             livenessListeningPool.delete(c.wallet)
             try {
                 const sock = c.res as Socket
@@ -2003,12 +2006,8 @@ export const forwardEncryptedSocket = async (
             } catch {}
         }
 
-        const client = livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
-        const ageMs = client?.connectedAt != null ? Date.now() - client.connectedAt : 0
-        const listenUnusable =
-            !client ||
-            isLivenessListenSocketStale(client.res) ||
-            ageMs > LISTEN_SESSION_MAX_MS
+        const client = findListenClientByPgpKeyId(gpgPublicKeyID)
+        const listenUnusable = !client || isLivenessListenSocketStale(client.res)
 
         // Already offline (no usable SSE): saveLocal + APNs immediately — skip 2-heartbeat ACK wait.
         // Fresh listen SSE: saveLocal + track pending ACK; APNs only if 2 heartbeats without ack.
@@ -2023,11 +2022,8 @@ export const forwardEncryptedSocket = async (
             return
         }
 
-        if (isLivenessListenSocketStale(client.res) || ageMs > LISTEN_SESSION_MAX_MS) {
-            const reason = isLivenessListenSocketStale(client.res)
-                ? 'has STALE client'
-                : `has EXPIRED listen session (${Math.round(ageMs / 1000)}s)`
-            evictListenClient(client, reason)
+        if (isLivenessListenSocketStale(client.res)) {
+            evictListenClient(client, 'has STALE client')
             return
         }
 
@@ -2186,6 +2182,24 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
 
+function normalizeListenPgpKeyId(id: string): string {
+	return String(id || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+}
+
+function findListenClientByPgpKeyId(gpgPublicKeyID: string): livenessListeningPoolObj | undefined {
+	const want = normalizeListenPgpKeyId(gpgPublicKeyID)
+	if (!want) return undefined
+	const direct = livenessListeningPGPKeyIDPool.get(want) ?? livenessListeningPGPKeyIDPool.get(gpgPublicKeyID)
+	if (direct) return direct
+	for (const [storedId, obj] of livenessListeningPGPKeyIDPool) {
+		if (normalizeListenPgpKeyId(storedId) === want) return obj
+	}
+	for (const obj of livenessListeningPool.values()) {
+		if (obj.pgpKeyId && normalizeListenPgpKeyId(obj.pgpKeyId) === want) return obj
+	}
+	return undefined
+}
+
 const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
 	const s = res as Socket
 	if (isLivenessListenSocketStale(s)) return false
@@ -2251,7 +2265,8 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 	}
     logger(`addIpaddressToLivenessListeningPool [kind=${kind}] started for ${ipaddress}:${wallet} try process getWalletFromKeyID`)
     
-    const keyID = await getWalletFromKeyID(wallet)
+    const keyIDRaw = await getWalletFromKeyID(wallet)
+    const keyID = keyIDRaw ? normalizeListenPgpKeyId(keyIDRaw) : null
     
 
 	const obj: livenessListeningPoolObj = {
