@@ -239,40 +239,49 @@ const socketData = async (socket: Socket | TLSSocket, serverClass: conet_si_serv
     logger(`startServer total connect =**************************  ${await totalCOnnect(server)} ${s.remoteAddressShow}`)
 
     // 使用 .on 来持续监听数据，而不是 .once
-    s.on ('data', (chunk: Buffer) => {
-        buffer = Buffer.concat([buffer, chunk])
-        
+    const processIncoming = () => {
         const peek = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii')
         const separator = '\r\n\r\n'
+        const end = peek.indexOf(separator)
 
-        if (!handledOptions && peek.startsWith('OPTIONS')) {
-            const end = peek.indexOf(separator)
-
-            // 头还没收全：继续等待下一包（但本轮必须 return，别往下走）
-            if (end === -1) {
-                return
+        // Wait for a full HTTP header block. A partial first TLS record ("OP", "OPTI"…)
+        // must not fall through to distorySocket — browsers OPTIONS-preflight /post
+        // in 2 records during cold init; 404+CORS made Chrome log red while Chat still
+        // started after the next complete OPTIONS/POST.
+        if (end === -1) {
+            if (buffer.length >= 2048) {
+                const head = peek.trim()
+                if (!/^(OPTIONS|POST|GET|HEAD|PUT|DELETE|PATCH)\b/i.test(head)) {
+                    return distorySocket(s)
+                }
             }
-
-            // 头收全：正常回 OPTIONS
-            const requestText = peek.substring(0, end)
-            const lines = requestText.split('\r\n').filter(Boolean)
-            responseOPTIONS(s, lines)
-
-            buffer = buffer.subarray(end + separator.length)
-            handledOptions = true
             return
         }
 
-        // 识别 POST/GET 起始
-        const headStr = buffer.subarray(0, Math.min(buffer.length, 2048)).toString('ascii').trim()
-        
-        if (headStr.length > 0 && (headStr.startsWith('POST') || headStr.startsWith('GET'))) {
+        const headerBlock = peek.substring(0, end)
+        const requestLine = headerBlock.split('\r\n')[0] || ''
+        const method = (requestLine.split(' ')[0] || '').toUpperCase()
+
+        if (!handledOptions && method === 'OPTIONS') {
+            const lines = headerBlock.split('\r\n').filter(Boolean)
+            responseOPTIONS(s, lines)
+            buffer = buffer.subarray(end + separator.length)
+            handledOptions = true
+            if (buffer.length) processIncoming()
+            return
+        }
+
+        if (method === 'POST' || method === 'GET') {
             s.removeAllListeners('data')
-            // 直接把当前 Buffer 交给 getDataPOST（它会继续按 Buffer 读取）
             return getDataPOST(s, serverClass, buffer)
         }
-       
+
         return distorySocket(s)
+    }
+
+    s.on('data', (chunk: Buffer) => {
+        buffer = Buffer.concat([buffer, chunk])
+        processIncoming()
     })
 
 
