@@ -88,7 +88,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'l0_listen'|'l0_connect'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
@@ -220,7 +220,7 @@ interface minerObj extends SICommandObj{
 	data?: any
 	allWallets?: string[]
 	/** Distinguish PWA chat ('chat'), LayerMinus mining (default 'mining'), and UDP mailbox listen. */
-	listenKind?: 'chat' | 'mining' | 'udp' | 'udp_server'
+	listenKind?: 'chat' | 'mining' | 'udp' | 'udp_server' | 'l0'
 }
 
 

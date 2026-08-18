@@ -57,6 +57,14 @@ import {
 	handleUdpUnlisten,
 	setUdpServerChatNotify,
 } from './udpForward'
+import {
+	handleL0Listen,
+	handleL0Connect,
+	l0ListenOccupiedByPgp,
+	findIdleL0ListenByPgp,
+	writeGossipToIdleL0,
+	rejectOccupiedInflow,
+} from './l0Exclusive'
 
 
 
@@ -1009,8 +1017,19 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			if (listenKindRaw === 'udp_server') {
 				return handleUdpServerListen(socket, command, wallet)
 			}
+			if (listenKindRaw === 'l0') {
+				return handleL0Listen(socket, command, wallet)
+			}
 			const listenKind = listenKindRaw === 'chat' ? 'chat' : 'mining'
 			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, listenKind)
+		}
+
+		case 'l0_listen': {
+			return handleL0Listen(socket, command, wallet)
+		}
+
+		case 'l0_connect': {
+			return handleL0Connect(socket, command, wallet)
 		}
 
 		case 'udp_listen': {
@@ -2012,6 +2031,18 @@ export const forwardEncryptedSocket = async (
 	}
 
     if (_route === nodeIpAddr) {
+        if (l0ListenOccupiedByPgp(gpgPublicKeyID)) {
+            logger(Colors.yellow(`forwardEncryptedSocket occupied l0 listen — 409 ${gpgPublicKeyID}`))
+            return rejectOccupiedInflow(socket)
+        }
+        const idleL0 = findIdleL0ListenByPgp(gpgPublicKeyID)
+        if (idleL0) {
+            response200Html(socket, '')
+            const ok = writeGossipToIdleL0(idleL0, encryptedText)
+            logger(`forwardEncryptedSocket idle l0 gossip wallet=${idleL0.wallet} ok=${ok}`)
+            return
+        }
+
         response200Html(socket, '')
 
         logger(`forwardEncryptedSocket to MySelf!!${skipPush ? ' (skipPush)' : ''}`)
