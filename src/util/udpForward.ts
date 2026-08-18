@@ -6,6 +6,7 @@
  * Client listen / server listen / relay commands are encrypted to **B route** PGP
  * and arrive here after checkSign.
  *
+ * SSE writes: `socket.write() === false` is backpressure (wait for `drain`), not failure.
  * See `.cursor/rules/conet-depin-udp-forward-protocol.mdc`.
  */
 import type { Socket } from 'net'
@@ -25,7 +26,34 @@ const UDP_MAX_SESSIONS_GLOBAL = 256
 const UDP_TIMESTAMP_SKEW_SEC = 600
 const SESSION_ID_RE = /^[0-9a-fA-F-]{16,64}$/
 
+/** Per-session outbound SSE queue (UDP may drop oldest under load). */
+const UDP_MAX_QUEUED_FRAMES = 64
+const UDP_MAX_QUEUED_BYTES = 256 * 1024
+const UDP_MAX_QUEUE_AGE_MS = 2_000
+/** If highWaterMark never drains, treat the listen socket as dead. */
+const UDP_DRAIN_TIMEOUT_MS = 2_000
+
 export type UdpListenKind = 'udp' | 'udp_server'
+
+/** Node write semantics for SSE lines (not “ok / fail”). */
+export type UdpSseWriteResult = 'accepted' | 'backpressured' | 'closed' | 'queued'
+
+interface UdpQueuedFrame {
+	line: string
+	enqueuedAt: number
+	bytes: number
+}
+
+interface UdpSseWriter {
+	res: Socket | TLSSocket
+	paused: boolean
+	queue: UdpQueuedFrame[]
+	queuedBytes: number
+	drainBound: boolean
+	drainTimer: ReturnType<typeof setTimeout> | undefined
+	/** Called when the socket is closed / drain times out. */
+	onClosed: (why: string) => void
+}
 
 export interface UdpClientSession {
 	sessionId: string
@@ -36,6 +64,7 @@ export interface UdpClientSession {
 	connectedAt: number
 	lastActivityAt: number
 	seqDown: number
+	writer: UdpSseWriter
 }
 
 export interface UdpServerListen {
@@ -44,6 +73,7 @@ export interface UdpServerListen {
 	ipaddress: string
 	connectedAt: number
 	lastActivityAt: number
+	writer: UdpSseWriter
 }
 
 const udpClientPool: Map<string, UdpClientSession> = new Map()
@@ -117,16 +147,152 @@ const sseHeaders = (): string =>
 	`Access-Control-Allow-Origin: *\r\n` +
 	`\r\n`
 
-const writeSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
-	const s = res as Socket
-	if (isLivenessListenSocketStale(s)) return false
-	const line = `data: ${JSON.stringify(obj)}\r\n\r\n`
-	try {
-		return s.write(line)
-	} catch {
-		return false
+const formatSseJsonLine = (obj: Record<string, unknown>): string =>
+	`data: ${JSON.stringify(obj)}\r\n\r\n`
+
+const clearDrainTimer = (w: UdpSseWriter) => {
+	if (w.drainTimer !== undefined) {
+		clearTimeout(w.drainTimer)
+		w.drainTimer = undefined
 	}
 }
+
+const resetWriterQueue = (w: UdpSseWriter) => {
+	clearDrainTimer(w)
+	w.paused = false
+	w.drainBound = false
+	w.queue = []
+	w.queuedBytes = 0
+	const s = w.res as Socket
+	s.removeAllListeners('drain')
+}
+
+/**
+ * Attempt one SSE line write.
+ * `false` from `socket.write` means the line was accepted into the buffer but
+ * highWaterMark was hit — callers must wait for `drain`, not tear down the session.
+ */
+const tryWriteSseLine = (res: Socket | TLSSocket, line: string): UdpSseWriteResult => {
+	const s = res as Socket
+	if (isLivenessListenSocketStale(s)) return 'closed'
+	try {
+		const ok = s.write(line)
+		return ok ? 'accepted' : 'backpressured'
+	} catch {
+		return 'closed'
+	}
+}
+
+const dropOldestQueued = (w: UdpSseWriter, why: string) => {
+	const dropped = w.queue.shift()
+	if (!dropped) return
+	w.queuedBytes = Math.max(0, w.queuedBytes - dropped.bytes)
+	logger(Colors.grey(`udp SSE drop-old ${why} bytes=${dropped.bytes} remain=${w.queue.length}`))
+}
+
+const trimQueueLimits = (w: UdpSseWriter) => {
+	const now = nowMs()
+	while (w.queue.length > 0) {
+		const head = w.queue[0]
+		if (now - head.enqueuedAt <= UDP_MAX_QUEUE_AGE_MS) break
+		dropOldestQueued(w, 'age')
+	}
+	while (
+		w.queue.length > UDP_MAX_QUEUED_FRAMES ||
+		w.queuedBytes > UDP_MAX_QUEUED_BYTES
+	) {
+		dropOldestQueued(w, 'limit')
+	}
+}
+
+const enqueueFrame = (w: UdpSseWriter, line: string) => {
+	const bytes = Buffer.byteLength(line, 'utf8')
+	w.queue.push({ line, enqueuedAt: nowMs(), bytes })
+	w.queuedBytes += bytes
+	trimQueueLimits(w)
+}
+
+const bindDrain = (w: UdpSseWriter) => {
+	if (w.drainBound) return
+	w.drainBound = true
+	const s = w.res as Socket
+	clearDrainTimer(w)
+	w.drainTimer = setTimeout(() => {
+		w.drainTimer = undefined
+		w.drainBound = false
+		logger(Colors.yellow(`udp SSE drain timeout — closing listen`))
+		w.onClosed('drain_timeout')
+		try {
+			if (!s.destroyed) s.destroy()
+		} catch {
+			/* ignore */
+		}
+	}, UDP_DRAIN_TIMEOUT_MS)
+	s.once('drain', () => {
+		clearDrainTimer(w)
+		w.drainBound = false
+		w.paused = false
+		flushWriterQueue(w)
+	})
+}
+
+const flushWriterQueue = (w: UdpSseWriter) => {
+	while (w.queue.length > 0) {
+		if (isLivenessListenSocketStale(w.res)) {
+			w.onClosed('stale_on_flush')
+			return
+		}
+		trimQueueLimits(w)
+		const next = w.queue[0]
+		if (!next) break
+		const result = tryWriteSseLine(w.res, next.line)
+		if (result === 'closed') {
+			w.onClosed('write_closed_on_flush')
+			return
+		}
+		// accepted or backpressured: line left the JS queue into the socket buffer
+		w.queue.shift()
+		w.queuedBytes = Math.max(0, w.queuedBytes - next.bytes)
+		if (result === 'backpressured') {
+			w.paused = true
+			bindDrain(w)
+			return
+		}
+	}
+}
+
+/**
+ * Deliver one JSON SSE frame. Never treats `write()===false` as hard failure.
+ * Under backpressure, further frames queue with drop-oldest UDP semantics.
+ */
+const deliverSseJson = (w: UdpSseWriter, obj: Record<string, unknown>): UdpSseWriteResult => {
+	if (isLivenessListenSocketStale(w.res)) return 'closed'
+	const line = formatSseJsonLine(obj)
+
+	if (w.paused) {
+		enqueueFrame(w, line)
+		return 'queued'
+	}
+
+	const result = tryWriteSseLine(w.res, line)
+	if (result === 'closed') return 'closed'
+	if (result === 'backpressured') {
+		w.paused = true
+		bindDrain(w)
+		return 'backpressured'
+	}
+	return 'accepted'
+}
+
+const makeWriter = (res: Socket | TLSSocket, onClosed: (why: string) => void): UdpSseWriter => ({
+	res,
+	paused: false,
+	queue: [],
+	queuedBytes: 0,
+	drainBound: false,
+	drainTimer: undefined,
+	onClosed,
+})
 
 const destroyListenSocket = (res: Socket | TLSSocket) => {
 	try {
@@ -141,6 +307,7 @@ const dropClientSession = (sessionId: string, why: string) => {
 	const s = udpClientPool.get(sessionId)
 	if (!s) return
 	udpClientPool.delete(sessionId)
+	resetWriterQueue(s.writer)
 	logger(Colors.grey(`udp_listen drop session=${sessionId} client=${s.clientWallet} ${why}`))
 	destroyListenSocket(s.res)
 }
@@ -149,6 +316,7 @@ const dropServerListen = (serverWallet: string, why: string) => {
 	const s = udpServerPool.get(serverWallet)
 	if (!s) return
 	udpServerPool.delete(serverWallet)
+	resetWriterQueue(s.writer)
 	logger(Colors.grey(`udp_server_listen drop server=${serverWallet} ${why}`))
 	destroyListenSocket(s.res)
 }
@@ -183,7 +351,10 @@ const notifyServer = (serverWallet: string, frame: Record<string, unknown>) => {
 	const dedicated = udpServerPool.get(serverWallet)
 	if (dedicated && !isLivenessListenSocketStale(dedicated.res)) {
 		dedicated.lastActivityAt = nowMs()
-		writeSseJson(dedicated.res, frame)
+		const wr = deliverSseJson(dedicated.writer, frame)
+		if (wr === 'closed') {
+			dropServerListen(serverWallet, 'notify_write_closed')
+		}
 	}
 	if (notifyUdpServerChatListen) {
 		notifyUdpServerChatListen(serverWallet, frame)
@@ -235,10 +406,17 @@ export const handleUdpListen = async (
 			return response200Html(socket, JSON.stringify({ ok: false, error: 'session_conflict' }))
 		}
 		destroyListenSocket(existing.res)
+		resetWriterQueue(existing.writer)
 		udpClientPool.delete(sessionId)
 	}
 
 	const ipaddress = socket.remoteAddressShow || ''
+	const writer = makeWriter(socket, (why) => {
+		const cur = udpClientPool.get(sessionId)
+		if (cur && cur.res === socket) {
+			dropClientSession(sessionId, why)
+		}
+	})
 	const session: UdpClientSession = {
 		sessionId,
 		clientWallet,
@@ -248,10 +426,12 @@ export const handleUdpListen = async (
 		connectedAt: nowMs(),
 		lastActivityAt: nowMs(),
 		seqDown: 0,
+		writer,
 	}
 	bindListenLifecycle(socket, (why) => {
 		const cur = udpClientPool.get(sessionId)
 		if (cur && cur.res === socket) {
+			resetWriterQueue(cur.writer)
 			udpClientPool.delete(sessionId)
 			logger(Colors.grey(`udp_listen ${sessionId} ${why}`))
 		}
@@ -310,19 +490,28 @@ export const handleUdpServerListen = async (
 	}
 	const prev = udpServerPool.get(serverWallet)
 	if (prev) {
+		resetWriterQueue(prev.writer)
 		destroyListenSocket(prev.res)
 		udpServerPool.delete(serverWallet)
 	}
+	const writer = makeWriter(socket, (why) => {
+		const cur = udpServerPool.get(serverWallet)
+		if (cur && cur.res === socket) {
+			dropServerListen(serverWallet, why)
+		}
+	})
 	const rec: UdpServerListen = {
 		serverWallet,
 		res: socket,
 		ipaddress: socket.remoteAddressShow || '',
 		connectedAt: nowMs(),
 		lastActivityAt: nowMs(),
+		writer,
 	}
 	bindListenLifecycle(socket, (why) => {
 		const cur = udpServerPool.get(serverWallet)
 		if (cur && cur.res === socket) {
+			resetWriterQueue(cur.writer)
 			udpServerPool.delete(serverWallet)
 			logger(Colors.grey(`udp_server_listen ${serverWallet} ${why}`))
 		}
@@ -403,12 +592,22 @@ export const handleUdpRelay = async (
 		payload,
 		timestamp: Math.floor(Date.now() / 1000),
 	}
-	const ok = writeSseJson(session.res, frame)
-	if (!ok) {
-		dropClientSession(sessionId, 'relay_write_fail')
+	const wr = deliverSseJson(session.writer, frame)
+	if (wr === 'closed') {
+		dropClientSession(sessionId, 'relay_write_closed')
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'client_not_listening', sessionId }))
 	}
-	return response200Html(socket, JSON.stringify({ ok: true, sessionId, seq: session.seqDown, delivered: true }))
+	// accepted | backpressured | queued — frame is on the wire buffer or in the session queue
+	return response200Html(
+		socket,
+		JSON.stringify({
+			ok: true,
+			sessionId,
+			seq: session.seqDown,
+			delivered: wr === 'accepted' || wr === 'backpressured',
+			queued: wr === 'queued' || wr === 'backpressured',
+		}),
+	)
 }
 
 /** Client → UDP server: AES blob, B cannot decrypt. */
@@ -448,17 +647,28 @@ export const handleUdpUplink = async (
 	}
 	const dedicated = udpServerPool.get(session.serverWallet)
 	let delivered = false
+	let queued = false
 	if (dedicated && !isLivenessListenSocketStale(dedicated.res)) {
 		dedicated.lastActivityAt = nowMs()
-		delivered = writeSseJson(dedicated.res, frame)
+		const wr = deliverSseJson(dedicated.writer, frame)
+		if (wr === 'closed') {
+			dropServerListen(session.serverWallet, 'uplink_write_closed')
+		} else {
+			// accepted | backpressured | queued — frame retained
+			delivered = true
+			queued = wr === 'queued' || wr === 'backpressured'
+		}
 	}
-	if (!delivered && notifyUdpServerChatListen) {
+	if (!delivered && !queued && notifyUdpServerChatListen) {
 		delivered = notifyUdpServerChatListen(session.serverWallet, frame)
 	}
-	if (!delivered) {
+	if (!delivered && !queued) {
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'server_not_listening', sessionId }))
 	}
-	return response200Html(socket, JSON.stringify({ ok: true, sessionId, delivered: true }))
+	return response200Html(
+		socket,
+		JSON.stringify({ ok: true, sessionId, delivered: true, queued }),
+	)
 }
 
 export const handleUdpUnlisten = (

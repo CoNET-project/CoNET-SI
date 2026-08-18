@@ -1951,7 +1951,18 @@ const socketForward = (
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
-        conn.setTimeout(60_000, () => { if (!conn.destroyed) conn.destroy() })
+		// Long-lived C→B pipes carry Chat / mining / l0_listen SSE and occupied L0
+		// AES streams. Idle receive gaps of minutes are normal (heartbeat may be
+		// sparse). Do **not** destroy on 60s receive-idle — that killed L0 occupy
+		// after ~60s (listen SSE end → dropL0Listen → l0_connect 404). Short HTTP
+		// still completes via 'end'/'close'. Keepalive + error/close reclaim dead
+		// peers. 24h is only a runaway-socket safety net.
+		conn.setTimeout(24 * 60 * 60 * 1000, () => {
+			logger(Colors.yellow(`socketForward 24h idle safety ${ipAddr}:${port}; destroy`))
+			if (!conn.destroyed) {
+				conn.destroy()
+			}
+		})
 
 
         // 首包可能较大，处理写背压，避免被内核缓冲憋住

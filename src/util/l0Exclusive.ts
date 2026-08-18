@@ -62,25 +62,24 @@ const sseHeaders = (): string =>
 	`Access-Control-Allow-Origin: *\r\n` +
 	`\r\n`
 
-const writeSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
+/** `write()===false` is backpressure, not failure. */
+type L0SseWriteResult = 'accepted' | 'backpressured' | 'closed'
+
+const tryWriteSse = (res: Socket | TLSSocket, payload: string): L0SseWriteResult => {
 	const s = res as Socket
-	if (isLivenessListenSocketStale(s)) return false
+	if (isLivenessListenSocketStale(s)) return 'closed'
 	try {
-		return s.write(`data: ${JSON.stringify(obj)}\r\n\r\n`)
+		return s.write(payload) ? 'accepted' : 'backpressured'
 	} catch {
-		return false
+		return 'closed'
 	}
 }
 
-const writeSseLine = (res: Socket | TLSSocket, line: string): boolean => {
-	const s = res as Socket
-	if (isLivenessListenSocketStale(s)) return false
-	try {
-		return s.write(`data: ${line}\r\n\r\n`)
-	} catch {
-		return false
-	}
-}
+const writeSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): L0SseWriteResult =>
+	tryWriteSse(res, `data: ${JSON.stringify(obj)}\r\n\r\n`)
+
+const writeSseLine = (res: Socket | TLSSocket, line: string): L0SseWriteResult =>
+	tryWriteSse(res, `data: ${line}\r\n\r\n`)
 
 const destroySock = (res?: Socket | TLSSocket) => {
 	if (!res) return
@@ -138,7 +137,9 @@ export const findIdleL0ListenByPgp = (gpgPublicKeyID: string): L0Listen | undefi
 export const writeGossipToIdleL0 = (listen: L0Listen, armor: string): boolean => {
 	if (listen.occupied) return false
 	const data = JSON.stringify({ data: armor })
-	return writeSseLine(listen.res, data)
+	const wr = writeSseLine(listen.res, data)
+	// backpressured = line accepted into socket buffer; only closed is hard fail
+	return wr === 'accepted' || wr === 'backpressured'
 }
 
 export const rejectOccupiedInflow = (socket: Socket) => {
@@ -263,30 +264,60 @@ export const handleL0Connect = async (
 	listen.inbound = socket
 	logger(Colors.cyan(`l0_connect occupy target=${target} connector=${connector} — SI relinquishes`))
 
-	if (!writeSseJson(listen.res, {
+	const occupyWr = writeSseJson(listen.res, {
 		type: 'l0_occupied',
 		wallet: target,
 		connector,
-	})) {
-		dropL0Listen(target, 'occupy_write_fail')
+	})
+	if (occupyWr === 'closed') {
+		dropL0Listen(target, 'occupy_write_closed')
 		return distorySocket(socket)
 	}
 
 	const inbound = socket as Socket
 	const sse = listen.res as Socket
 	let carry = ''
-	const flushCarry = () => {
+	let ssePaused = occupyWr === 'backpressured'
+	let drainBound = false
+
+	const bindSseDrain = () => {
+		if (drainBound) return
+		drainBound = true
+		sse.once('drain', () => {
+			drainBound = false
+			ssePaused = false
+			if (typeof inbound.resume === 'function') inbound.resume()
+			flushCarry()
+		})
+	}
+
+	const flushCarry = (): boolean => {
 		const parts = carry.split(/\r?\n/)
 		carry = parts.pop() || ''
 		for (const line of parts) {
 			const trimmed = line.trim()
 			if (!trimmed) continue
-			if (!writeSseLine(sse, trimmed)) {
-				dropL0Listen(target, 'pipe_write_fail')
+			if (ssePaused) {
+				carry = `${trimmed}\n${carry}`
+				return true
+			}
+			const wr = writeSseLine(sse, trimmed)
+			if (wr === 'closed') {
+				dropL0Listen(target, 'pipe_write_closed')
 				return false
+			}
+			if (wr === 'backpressured') {
+				ssePaused = true
+				if (typeof inbound.pause === 'function') inbound.pause()
+				bindSseDrain()
 			}
 		}
 		return true
+	}
+
+	if (ssePaused) {
+		if (typeof inbound.pause === 'function') inbound.pause()
+		bindSseDrain()
 	}
 
 	inbound.on('data', (buf: Buffer) => {
@@ -299,5 +330,5 @@ export const handleL0Connect = async (
 	inbound.once('close', () => dropL0Listen(target, 'inbound_close'))
 	sse.once('close', () => destroySock(inbound))
 	// getDataPOST unshifts bytes after Content-Length; emit them now that we listen.
-	if (typeof inbound.resume === 'function') inbound.resume()
+	if (!ssePaused && typeof inbound.resume === 'function') inbound.resume()
 }
