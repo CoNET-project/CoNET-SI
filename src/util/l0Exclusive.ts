@@ -91,9 +91,35 @@ const destroySock = (res?: Socket | TLSSocket) => {
 	}
 }
 
+/** Best-effort JSON line on occupied inbound TCP so connector knows SI released the pipe. */
+const emitL0PipeEnd = (listen: L0Listen, reason: string) => {
+	if (!listen.occupied || !listen.inbound) return
+	const payload =
+		JSON.stringify({
+			type: 'l0_pipe_end',
+			wallet: listen.wallet,
+			connector: listen.occupiedBy,
+			reason,
+		}) + '\n'
+	try {
+		const inbound = listen.inbound as Socket
+		if (!inbound.destroyed) inbound.write(payload)
+	} catch {
+		/* best-effort */
+	}
+}
+
 const dropL0Listen = (wallet: string, why: string) => {
 	const obj = l0ListenPool.get(wallet)
 	if (!obj) return
+	if (obj.occupied) {
+		emitL0PipeEnd(obj, why)
+		writeSseJson(obj.res, {
+			type: 'l0_listen_released',
+			wallet: obj.wallet,
+			reason: why,
+		})
+	}
 	l0ListenPool.delete(wallet)
 	if (obj.pgpKeyId) {
 		l0ListenByPgp.delete(obj.pgpKeyId)
