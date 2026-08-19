@@ -2033,7 +2033,7 @@ export const forwardEncryptedSocket = async (
 
 
 	//			forward encrypted text
-	const [_route, wallet] = await getRoute (gpgPublicKeyID)
+	let [_route, wallet] = await getRoute (gpgPublicKeyID)
 
 
 	if ( !_route ) {
@@ -2144,8 +2144,26 @@ export const forwardEncryptedSocket = async (
 	// }
 
     if (!wallet) {
-        reScanAllWallets()
-        return logger(`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route reScanAllWallets !!!!******************************`)
+		// Await rescan so a healthy apiv4 miningRate can fill routerInfo.wallet
+		// before we give up. Never leave the client socket open with no response
+		// (lab symptom: listen POST / P1 hang until 8s–15s client timeout).
+		await reScanAllWallets()
+		const retry = await getRoute(gpgPublicKeyID)
+		wallet = retry[1] || ''
+		if (retry[0]) {
+			_route = retry[0]
+		}
+		if (!wallet) {
+			logger(
+				`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route after reScanAllWallets — closing client ******************************`,
+			)
+			return distorySocket(socket)
+		}
+		logger(
+			Colors.green(
+				`forwardEncryptedSocket recovered wallet for ${gpgPublicKeyID} after reScanAllWallets`,
+			),
+		)
     }
 
 	const incomingHops = incomingHopSigsOrAttack(headers, socket)
@@ -2153,7 +2171,8 @@ export const forwardEncryptedSocket = async (
 		return
 	}
 	if (!nodeWallet) {
-		return logger(`**************** forwardEncryptedSocket Error! nodeWallet NULL; cannot sign hop header ******************************`)
+		logger(`**************** forwardEncryptedSocket Error! nodeWallet NULL; cannot sign hop header — closing client ******************************`)
+		return distorySocket(socket)
 	}
 	let armorText: string
 	try {
