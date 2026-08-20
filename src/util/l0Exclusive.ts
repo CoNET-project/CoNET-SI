@@ -8,6 +8,13 @@
  * mining gossip on the same node must continue (do not 409 those).
  *
  * Overlay AES keys must never appear in these B-decryptable commands.
+ *
+ * Teardown is transport-only. SI never emits an application-visible
+ * `l0_pipe_end` line or an SSE `l0_listen_released` event. When either side
+ * becomes unavailable, the currently bound sockets are closed so the peer
+ * observes EOF/FIN/RST and stops its packet loop. This keeps the SI blind to
+ * cross-hop identities and prevents SSE-fed teardown commands from becoming
+ * a packet-amplification primitive.
  */
 import type { Socket } from 'net'
 import type { TLSSocket } from 'tls'
@@ -143,36 +150,10 @@ const destroySock = (res?: Socket | TLSSocket) => {
 	}
 }
 
-/** Best-effort JSON line on occupied inbound TCP so connector knows SI released the pipe. */
-const emitL0PipeEnd = (listen: L0Listen, reason: string) => {
-	if (!listen.occupied || !listen.inbound) return
-	const payload =
-		JSON.stringify({
-			type: 'l0_pipe_end',
-			wallet: listen.wallet,
-			connector: listen.occupiedBy,
-			reason,
-		}) + '\n'
-	try {
-		const inbound = listen.inbound as Socket
-		if (!inbound.destroyed) inbound.write(payload)
-	} catch {
-		/* best-effort */
-	}
-}
-
 const dropL0Listen = (wallet: string, why: string) => {
 	const obj = l0ListenPool.get(wallet)
 	if (!obj) return
 	clearKeepalive(obj)
-	if (obj.occupied) {
-		emitL0PipeEnd(obj, why)
-		writeSseJson(obj.res, {
-			type: 'l0_listen_released',
-			wallet: obj.wallet,
-			reason: why,
-		})
-	}
 	l0ListenPool.delete(wallet)
 	if (obj.pgpKeyId) {
 		l0ListenByPgp.delete(obj.pgpKeyId)
@@ -225,6 +206,15 @@ export const rejectOccupiedInflow = (socket: Socket) => {
 	distorySocket(socket, '409 Conflict')
 }
 
+const occupiedInboundDead = (listen: L0Listen): boolean => {
+	const inbound = listen.inbound as Socket | undefined
+	return !inbound || inbound.destroyed
+}
+
+/** Ghost occupy after client death / Entry C hang. Live pipes stay 409. */
+const occupiedListenSocketsDead = (listen: L0Listen): boolean =>
+	occupiedInboundDead(listen) || isLivenessListenSocketStale(listen.res)
+
 /**
  * Exclusive long SSE. Encrypt to B route PGP. Never put overlay Securitykey here.
  */
@@ -257,10 +247,17 @@ export const handleL0Listen = async (
 
 	const existing = l0ListenPool.get(wallet)
 	if (existing?.occupied) {
-		logger(Colors.yellow(`l0_listen refuse replace while occupied wallet=${wallet} by=${existing.occupiedBy}`))
-		return rejectOccupiedInflow(socket)
+		if (!occupiedListenSocketsDead(existing)) {
+			logger(Colors.yellow(`l0_listen refuse replace while occupied wallet=${wallet} by=${existing.occupiedBy}`))
+			return rejectOccupiedInflow(socket)
+		}
+		const reason = occupiedInboundDead(existing)
+			? 'occupied_inbound_dead_replace'
+			: 'stale_occupied_replace'
+		logger(Colors.yellow(`l0_listen replace dead occupied wallet=${wallet} reason=${reason}`))
+		dropL0Listen(wallet, reason)
 	}
-	if (existing) {
+	if (existing && l0ListenPool.get(wallet) === existing) {
 		dropL0Listen(wallet, 'replaced')
 	}
 
@@ -340,6 +337,14 @@ export const handleL0Connect = async (
 		return distorySocket(socket)
 	}
 	if (listen.occupied) {
+		if (occupiedListenSocketsDead(listen)) {
+			const reason = occupiedInboundDead(listen)
+				? 'occupied_inbound_dead_before_connect'
+				: 'stale_occupied_before_connect'
+			logger(Colors.yellow(`l0_connect drop dead occupy target=${target} reason=${reason}`))
+			dropL0Listen(target, reason)
+			return distorySocket(socket)
+		}
 		logger(Colors.yellow(`l0_connect occupied target=${target} by=${listen.occupiedBy}`))
 		return rejectOccupiedInflow(socket)
 	}
