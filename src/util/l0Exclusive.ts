@@ -106,11 +106,14 @@ const armListenKeepalive = (listen: L0Listen) => {
 		listen.keepaliveTimer = undefined
 		const live = l0ListenPool.get(listen.wallet)
 		if (live !== listen) return
+		// Occupied SSE carries AES `data:` lines. Comment ticks would inject
+		// `\n\n` into a half-received blob and the client would AES-open garbage.
+		if (live.occupied) return
 		if (isLivenessListenSocketStale(listen.res)) {
 			dropL0Listen(listen.wallet, 'stale_keepalive')
 			return
 		}
-		const wr = tryWriteSse(listen.res, ': keepalive\n\n')
+		const wr = tryWriteSse(listen.res, ': keepalive\r\n\r\n')
 		if (wr === 'closed') {
 			dropL0Listen(listen.wallet, 'keepalive_closed')
 			return
@@ -344,6 +347,7 @@ export const handleL0Connect = async (
 	listen.occupied = true
 	listen.occupiedBy = connector
 	listen.inbound = socket
+	clearKeepalive(listen)
 	logger(Colors.cyan(`l0_connect occupy target=${target} connector=${connector} — SI relinquishes`))
 
 	const occupyWr = writeSseJson(listen.res, {

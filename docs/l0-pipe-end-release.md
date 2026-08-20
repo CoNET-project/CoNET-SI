@@ -47,7 +47,7 @@ Lab `:8400` never reached duplex AES because:
 3. Occupied inflow used to **409 all** packets, including user-PGP Chat `duplex_offer` / `duplex_accept`.
 4. Idle L0 **stole** gossip and returned before the Chat pool, so the initiator Chat SSE never saw accept if L0 later died.
 
-SI now: SSE comment keepalive (~15s) + `setTimeout(0)` on listen / occupy / client→C; occupy writes HTTP 200 keep-alive then AES; 409 only on a second `l0_connect` or replace-while-occupied; Chat pool always gets user-PGP gossip (idle L0 may get a copy). Crate installs `pipe_tx` only after that 200.
+SI now: SSE comment keepalive (~15s, `\r\n\r\n`) **only while idle**; occupy **clears** that timer and never writes comments (AES `data:` keeps the socket); `setTimeout(0)` on listen / occupy / client→C; occupy writes HTTP 200 keep-alive then AES; 409 only on a second `l0_connect` or replace-while-occupied; Chat pool always gets user-PGP gossip (idle L0 may get a copy). Crate installs `pipe_tx` only after that 200. Occupied-pipe AES `duplex_accept` omits bulky `listenUserPgp`.
 
 ## Not in scope
 
