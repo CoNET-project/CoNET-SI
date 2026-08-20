@@ -38,8 +38,19 @@ Reason strings are opaque but stable: `inbound_close`, `inbound_error`, `pipe_wr
 - [ ] GitBook [duplex-forward](https://gitbook.conet.network/l0/duplex-forward.html) documents both JSON shapes
 - [ ] Lab: after hub/spoke listen bounce, overlay `:4200` ESTAB + beacon `connected≥1` without manual SI `pkill` on B only
 
+## Occupy HTTP 200 + idle keepalive (2026-08-19)
+
+Lab `:8400` never reached duplex AES because:
+
+1. Idle `l0_listen` has no mining epoch. Entry `socketData` + `sourceSocket` 60s idle destroyed the listen ~every 64s. Hub reconnect `l0_listen` used to **replace** the pool entry and tear a live occupy → spoke **404** / **409**.
+2. Occupy did not write HTTP 200 keep-alive on the `l0_connect` TCP (`response200Html` would `end()`). Crate `read_http_ok` never returned, so `pipe_tx` never became a live AES pipe.
+3. Occupied inflow used to **409 all** packets, including user-PGP Chat `duplex_offer` / `duplex_accept`.
+4. Idle L0 **stole** gossip and returned before the Chat pool, so the initiator Chat SSE never saw accept if L0 later died.
+
+SI now: SSE comment keepalive (~15s) + `setTimeout(0)` on listen / occupy / client→C; occupy writes HTTP 200 keep-alive then AES; 409 only on a second `l0_connect` or replace-while-occupied; Chat pool always gets user-PGP gossip (idle L0 may get a copy). Crate installs `pipe_tx` only after that 200.
+
 ## Not in scope
 
 - Automatic conntrack flush (ops scripts)
-- Changing 409 semantics for genuinely live occupies
+- Changing 409 semantics for a genuinely live second `l0_connect`
 - Putting teardown fields in HTTP `{ "data" }` POST bodies (wire is occupied TCP + SSE only)

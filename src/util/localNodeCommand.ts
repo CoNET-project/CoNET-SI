@@ -63,7 +63,6 @@ import {
 	l0ListenOccupiedByPgp,
 	findIdleL0ListenByPgp,
 	writeGossipToIdleL0,
-	rejectOccupiedInflow,
 } from './l0Exclusive'
 
 
@@ -1928,6 +1927,13 @@ const socketForward = (
     const infoDown = `socketForward to node <= ${ipAddr}`
     const upload = new BandwidthCount(infoUp, wallet||'')
     const download = new BandwidthCount(infoDown, wallet||'')
+	// socketData applies a 60s receive-idle destroy on every inbound socket.
+	// Long SSE / occupied L0 AES can be quiet for minutes; clear it here so
+	// the client→C half of the pipe is not killed while C→B is already 24h.
+	try {
+		sourceSocket.setTimeout(0)
+	} catch {}
+
 	let opened = false
 	const connectTimer = setTimeout(() => {
 		if (opened || conn.destroyed) {
@@ -2041,17 +2047,19 @@ export const forwardEncryptedSocket = async (
 		return response200Html(socket, JSON.stringify({}))
 	}
 
-    if (_route === nodeIpAddr) {
+        if (_route === nodeIpAddr) {
+        // Occupied L0 409s only a second `l0_connect`. User-PGP Chat / mining
+        // gossip (duplex_offer / duplex_accept) must always reach the Chat pool.
+        // Idle L0 may get a copy (does not occupy). Do not return early — that
+        // starved Chat SSE and dropped offers when idle L0 later died.
         if (l0ListenOccupiedByPgp(gpgPublicKeyID)) {
-            logger(Colors.yellow(`forwardEncryptedSocket occupied l0 listen — 409 ${gpgPublicKeyID}`))
-            return rejectOccupiedInflow(socket)
-        }
-        const idleL0 = findIdleL0ListenByPgp(gpgPublicKeyID)
-        if (idleL0) {
-            response200Html(socket, '')
-            const ok = writeGossipToIdleL0(idleL0, encryptedText)
-            logger(`forwardEncryptedSocket idle l0 gossip wallet=${idleL0.wallet} ok=${ok}`)
-            return
+            logger(Colors.yellow(`forwardEncryptedSocket occupied l0 listen — Chat gossip continues ${gpgPublicKeyID}`))
+        } else {
+            const idleL0 = findIdleL0ListenByPgp(gpgPublicKeyID)
+            if (idleL0) {
+                const ok = writeGossipToIdleL0(idleL0, encryptedText)
+                logger(`forwardEncryptedSocket idle l0 gossip copy wallet=${idleL0.wallet} ok=${ok}`)
+            }
         }
 
         response200Html(socket, '')

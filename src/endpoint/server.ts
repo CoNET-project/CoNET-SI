@@ -232,6 +232,8 @@ const socketData = async (socket: Socket | TLSSocket, serverClass: conet_si_serv
     const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
     s.remoteAddressShow = ip
 
+    // Short HTTP completes via end/close. Long SSE / occupied L0 must call
+    // setTimeout(0) (handleL0Listen / handleL0Connect / socketForward).
     s.setTimeout(60_000, () => { if (!s.destroyed) s.destroy() })
     s.setNoDelay(true)
     s.setKeepAlive(true, 30_000)

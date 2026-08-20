@@ -4,7 +4,8 @@
  * Idle `l0_listen` SSE may still receive user-PGP gossip (application offers).
  * The first `l0_connect` (route-PGP signed command) occupies the SSE: SI pipes
  * remaining inbound TCP bytes onto that SSE, then relinquishes control.
- * Later inflows to the occupied wallet / PGP key ID are 409.
+ * A second `l0_connect` to the occupied wallet is 409. User-PGP Chat /
+ * mining gossip on the same node must continue (do not 409 those).
  *
  * Overlay AES keys must never appear in these B-decryptable commands.
  */
@@ -18,6 +19,8 @@ import { isMyRoute, isLivenessListenSocketStale, getWalletFromKeyID } from './ut
 
 const L0_TIMESTAMP_SKEW_SEC = 600
 const L0_MAX_LISTEN = 256
+/** Idle L0 has no mining epoch heartbeat. Comment ticks keep Entry/mailbox 60s socket timeout from killing the SSE. */
+const L0_IDLE_KEEPALIVE_MS = 15_000
 
 export interface L0Listen {
 	wallet: string
@@ -28,6 +31,7 @@ export interface L0Listen {
 	occupied: boolean
 	occupiedBy?: string
 	inbound?: Socket | TLSSocket
+	keepaliveTimer?: ReturnType<typeof setTimeout>
 }
 
 const l0ListenPool: Map<string, L0Listen> = new Map()
@@ -81,6 +85,51 @@ const writeSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): L0
 const writeSseLine = (res: Socket | TLSSocket, line: string): L0SseWriteResult =>
 	tryWriteSse(res, `data: ${line}\r\n\r\n`)
 
+const disableSocketIdleTimeout = (sock?: Socket | TLSSocket) => {
+	if (!sock) return
+	try {
+		;(sock as Socket).setTimeout(0)
+	} catch {
+		/* ignore */
+	}
+}
+
+const clearKeepalive = (listen: L0Listen) => {
+	if (listen.keepaliveTimer === undefined) return
+	clearTimeout(listen.keepaliveTimer)
+	listen.keepaliveTimer = undefined
+}
+
+const armListenKeepalive = (listen: L0Listen) => {
+	clearKeepalive(listen)
+	const tick = () => {
+		listen.keepaliveTimer = undefined
+		const live = l0ListenPool.get(listen.wallet)
+		if (live !== listen) return
+		if (isLivenessListenSocketStale(listen.res)) {
+			dropL0Listen(listen.wallet, 'stale_keepalive')
+			return
+		}
+		const wr = tryWriteSse(listen.res, ': keepalive\n\n')
+		if (wr === 'closed') {
+			dropL0Listen(listen.wallet, 'keepalive_closed')
+			return
+		}
+		listen.keepaliveTimer = setTimeout(tick, L0_IDLE_KEEPALIVE_MS)
+	}
+	listen.keepaliveTimer = setTimeout(tick, L0_IDLE_KEEPALIVE_MS)
+}
+
+const occupyHttpOkHeaders = (): string =>
+	`HTTP/1.1 200 OK\r\n` +
+	`Date: ${new Date().toUTCString()}\r\n` +
+	`Content-Type: application/octet-stream\r\n` +
+	`Cache-Control: no-cache, no-transform\r\n` +
+	`Connection: keep-alive\r\n` +
+	`X-Accel-Buffering: no\r\n` +
+	`Access-Control-Allow-Origin: *\r\n` +
+	`\r\n`
+
 const destroySock = (res?: Socket | TLSSocket) => {
 	if (!res) return
 	try {
@@ -112,6 +161,7 @@ const emitL0PipeEnd = (listen: L0Listen, reason: string) => {
 const dropL0Listen = (wallet: string, why: string) => {
 	const obj = l0ListenPool.get(wallet)
 	if (!obj) return
+	clearKeepalive(obj)
 	if (obj.occupied) {
 		emitL0PipeEnd(obj, why)
 		writeSseJson(obj.res, {
@@ -203,6 +253,10 @@ export const handleL0Listen = async (
 	}
 
 	const existing = l0ListenPool.get(wallet)
+	if (existing?.occupied) {
+		logger(Colors.yellow(`l0_listen refuse replace while occupied wallet=${wallet} by=${existing.occupiedBy}`))
+		return rejectOccupiedInflow(socket)
+	}
 	if (existing) {
 		dropL0Listen(wallet, 'replaced')
 	}
@@ -219,6 +273,7 @@ export const handleL0Listen = async (
 	}
 
 	const s = socket as Socket
+	disableSocketIdleTimeout(s)
 	s.once('error', (err: Error) => dropL0Listen(wallet, `error:${err.message}`))
 	s.once('close', () => dropL0Listen(wallet, 'close'))
 	s.once('end', () => {
@@ -243,6 +298,7 @@ export const handleL0Listen = async (
 	if (keyID) {
 		l0ListenByPgp.set(keyID, obj)
 	}
+	armListenKeepalive(obj)
 	logger(Colors.cyan(`l0_listen idle wallet=${wallet} pgp=${keyID || 'none'}`))
 }
 
@@ -302,6 +358,8 @@ export const handleL0Connect = async (
 
 	const inbound = socket as Socket
 	const sse = listen.res as Socket
+	disableSocketIdleTimeout(inbound)
+	disableSocketIdleTimeout(sse)
 	let carry = ''
 	let ssePaused = occupyWr === 'backpressured'
 	let drainBound = false
@@ -355,6 +413,15 @@ export const handleL0Connect = async (
 	inbound.once('error', (err: Error) => dropL0Listen(target, `inbound_error:${err.message}`))
 	inbound.once('close', () => dropL0Listen(target, 'inbound_close'))
 	sse.once('close', () => destroySock(inbound))
+	// Connector waits for HTTP 2xx before the first AES blob. Must write headers
+	// without socket.end() — response200Html would close the occupy TCP.
+	try {
+		inbound.write(occupyHttpOkHeaders())
+	} catch {
+		dropL0Listen(target, 'occupy_http_write')
+		return
+	}
+	logger(Colors.cyan(`l0_connect occupy HTTP 200 keep-alive target=${target}`))
 	// getDataPOST unshifts bytes after Content-Length; emit them now that we listen.
 	if (!ssePaused && typeof inbound.resume === 'function') inbound.resume()
 }
