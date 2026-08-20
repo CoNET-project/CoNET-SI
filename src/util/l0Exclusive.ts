@@ -28,6 +28,14 @@ const L0_TIMESTAMP_SKEW_SEC = 600
 const L0_MAX_LISTEN = 256
 /** Idle L0 has no mining epoch heartbeat. Comment ticks keep Entry/mailbox 60s socket timeout from killing the SSE. */
 const L0_IDLE_KEEPALIVE_MS = 15_000
+/**
+ * Occupied pipes carry an application heartbeat from conet-l0d, but a dead
+ * entry/socket-forward path can remain half-open at the TCP layer forever.
+ * Keep this above the client heartbeat interval while still bounding a ghost
+ * occupy. This applies only after l0_connect has occupied the listen; Chat and
+ * mining SSE keep their existing lifecycle.
+ */
+const L0_OCCUPIED_IDLE_TIMEOUT_MS = 180_000
 
 export interface L0Listen {
 	wallet: string
@@ -39,6 +47,8 @@ export interface L0Listen {
 	occupiedBy?: string
 	inbound?: Socket | TLSSocket
 	keepaliveTimer?: ReturnType<typeof setTimeout>
+	released?: boolean
+	occupyHttpCommitted?: boolean
 }
 
 const l0ListenPool: Map<string, L0Listen> = new Map()
@@ -101,6 +111,25 @@ const disableSocketIdleTimeout = (sock?: Socket | TLSSocket) => {
 	}
 }
 
+const armOccupiedSocketTimeout = (
+	socket: Socket | TLSSocket,
+	wallet: string,
+	direction: 'inbound' | 'sse',
+) => {
+	try {
+		;(socket as Socket).setTimeout(L0_OCCUPIED_IDLE_TIMEOUT_MS, () => {
+			logger(
+				Colors.yellow(
+					`l0 occupied ${direction} idle timeout wallet=${wallet} timeoutMs=${L0_OCCUPIED_IDLE_TIMEOUT_MS}`,
+				),
+			)
+			dropL0Listen(wallet, `occupied_${direction}_idle_timeout`)
+		})
+	} catch {
+		/* ignore */
+	}
+}
+
 const clearKeepalive = (listen: L0Listen) => {
 	if (listen.keepaliveTimer === undefined) return
 	clearTimeout(listen.keepaliveTimer)
@@ -140,6 +169,16 @@ const occupyHttpOkHeaders = (): string =>
 	`Access-Control-Allow-Origin: *\r\n` +
 	`\r\n`
 
+const occupyHttpGoneHeaders = (reason: string): string =>
+	`HTTP/1.1 410 Gone\r\n` +
+	`Date: ${new Date().toUTCString()}\r\n` +
+	`Content-Type: application/json; charset=utf-8\r\n` +
+	`Connection: close\r\n` +
+	`Cache-Control: no-store\r\n` +
+	`Content-Length: ${Buffer.byteLength(JSON.stringify({ ok: false, error: 'l0_peer_disconnected', reason }))}\r\n` +
+	`\r\n` +
+	JSON.stringify({ ok: false, error: 'l0_peer_disconnected', reason })
+
 const destroySock = (res?: Socket | TLSSocket) => {
 	if (!res) return
 	try {
@@ -153,6 +192,19 @@ const destroySock = (res?: Socket | TLSSocket) => {
 const dropL0Listen = (wallet: string, why: string) => {
 	const obj = l0ListenPool.get(wallet)
 	if (!obj) return
+	obj.released = true
+	// If the occupy response has not been committed yet, give the POST sender
+	// an explicit HTTP terminal result. Once HTTP 200 keep-alive was sent, a
+	// second HTTP response is invalid; the sender then receives EOF on close.
+	if (obj.occupied && obj.inbound && !obj.occupyHttpCommitted) {
+		try {
+			if (!(obj.inbound as Socket).destroyed) {
+				;(obj.inbound as Socket).write(occupyHttpGoneHeaders(why))
+			}
+		} catch {
+			/* the peer is already gone */
+		}
+	}
 	clearKeepalive(obj)
 	l0ListenPool.delete(wallet)
 	if (obj.pgpKeyId) {
@@ -195,7 +247,13 @@ export const findIdleL0ListenByPgp = (gpgPublicKeyID: string): L0Listen | undefi
 
 /** Idle L0 SSE may receive user-PGP gossip (offers). Does not occupy. */
 export const writeGossipToIdleL0 = (listen: L0Listen, armor: string): boolean => {
-	if (listen.occupied) return false
+	if (
+		listen.occupied ||
+		listen.released ||
+		l0ListenPool.get(listen.wallet) !== listen
+	) {
+		return false
+	}
 	const data = JSON.stringify({ data: armor })
 	const wr = writeSseLine(listen.res, data)
 	// backpressured = line accepted into socket buffer; only closed is hard fail
@@ -385,6 +443,13 @@ export const handleL0Connect = async (
 	}
 
 	const flushCarry = (): boolean => {
+		if (listen.released || l0ListenPool.get(target) !== listen) {
+			// The exclusive peer SSE is gone. This pipe has no offline-delivery
+			// semantics: discard buffered inbound bytes and never reroute them
+			// through Chat/mining saveLocal.
+			carry = ''
+			return false
+		}
 		const parts = carry.split(/\r?\n/)
 		carry = parts.pop() || ''
 		for (const line of parts) {
@@ -420,12 +485,19 @@ export const handleL0Connect = async (
 		}
 	})
 	inbound.once('error', (err: Error) => dropL0Listen(target, `inbound_error:${err.message}`))
+	// An occupied pipe is a bidirectional transport. A peer half-close means
+	// it can no longer deliver overlay bytes; release the mailbox occupy
+	// immediately instead of waiting for a later TCP close event.
+	inbound.once('end', () => dropL0Listen(target, 'inbound_end'))
 	inbound.once('close', () => dropL0Listen(target, 'inbound_close'))
 	sse.once('close', () => destroySock(inbound))
+	armOccupiedSocketTimeout(inbound, target, 'inbound')
+	armOccupiedSocketTimeout(sse, target, 'sse')
 	// Connector waits for HTTP 2xx before the first AES blob. Must write headers
 	// without socket.end() — response200Html would close the occupy TCP.
 	try {
 		inbound.write(occupyHttpOkHeaders())
+		listen.occupyHttpCommitted = true
 	} catch {
 		dropL0Listen(target, 'occupy_http_write')
 		return

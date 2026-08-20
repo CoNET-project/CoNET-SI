@@ -49,6 +49,28 @@ Lab `:8400` never reached duplex AES because:
 
 SI now: SSE comment keepalive (~15s, `\r\n\r\n`) **only while idle**; occupy **clears** that timer and never writes comments (AES `data:` keeps the socket); `setTimeout(0)` on listen / occupy / client→C; occupy writes HTTP 200 keep-alive then AES; 409 only on a second `l0_connect` or replace-while-occupied; Chat pool always gets user-PGP gossip (idle L0 may get a copy). Crate installs `pipe_tx` only after that 200. Occupied-pipe AES `duplex_accept` omits bulky `listenUserPgp`.
 
+## Occupied-pipe ghost cleanup (2026-08-20)
+
+An occupied TCP can remain half-open after an entry or socket-forward process
+dies: the socket may still report `writable=true`, so a close-only cleanup never
+runs and every new `l0_connect` receives `409`. SI now arms a transport-only
+180-second inactivity watchdog on both the occupied inbound TCP and the mailbox
+SSE. The interval is above the conet-l0d application ping cadence, so a live
+pipe remains active; a ghost occupy is dropped and both sockets are destroyed
+when the watchdog fires.
+
+An `end` event on the occupied inbound TCP is also an immediate teardown signal.
+This rule applies only to the exclusive L0 pool. Chat and mining SSE keep their
+normal half-close semantics and are not evicted by this watchdog.
+
+If the peer SSE disappears before the occupy response is committed, SI returns
+HTTP `410 Gone` with `error: "l0_peer_disconnected"` to the `l0_connect` POST
+sender, then closes the pipe. If HTTP `200` keep-alive was already committed,
+SI cannot send a second HTTP response; it closes the occupied TCP instead. The
+client must treat either the `410` response head or EOF as terminal for that
+pipe incarnation. Bytes arriving after release are discarded and are never
+passed to `saveLocal` or a gossip SSE.
+
 ## Not in scope
 
 - Automatic conntrack flush (ops scripts)
