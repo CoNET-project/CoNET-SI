@@ -1904,7 +1904,7 @@ export const postOpenpgpRouteSocket = async (
 		return distorySocket(socket)
 	}
 
-	creditUserGbFromHopSigs(command.walletAddress, hopSigs)
+	creditUserGbFromHopSigs(command.billingWallet || command.walletAddress, hopSigs)
 	
 	return localNodeCommandSocket(socket, headers, command, wallet )
 	
@@ -2209,19 +2209,28 @@ export const checkSign = (message: string, signMess: string) => {
 	try {
 		obj = JSON.parse(message)
 		wallet = obj.walletAddress
+		const billingWallet = obj.billingWallet || wallet
 		digest = ethers.id(message)
 		recoverPublicKey = ethers.recoverAddress(digest, signMess)
 		verifyMessage = ethers.verifyMessage(message, signMess)
+		if (!billingWallet || !ethers.isAddress(billingWallet)) {
+			return null
+		}
+		if (verifyMessage.toLowerCase() !== billingWallet.toLowerCase() &&
+			recoverPublicKey.toLowerCase() !== billingWallet.toLowerCase()) {
+			logger(Colors.red(`checkSignObj recovered signer does not match billingWallet (${billingWallet})`))
+			return null
+		}
 
 	} catch (ex) {
 		logger (Colors.red(`checkSignObj recoverPublicKey ERROR`), ex)
-		logger (`digest = ${digest} signMess = ${signMess}`)
 		return null
 	}
 	
 
-	if (wallet && (verifyMessage.toLowerCase() === wallet.toLowerCase() || recoverPublicKey.toLowerCase() === wallet.toLowerCase())) {
+	if (wallet && ethers.isAddress(wallet) && (obj.billingWallet || verifyMessage.toLowerCase() === wallet.toLowerCase() || recoverPublicKey.toLowerCase() === wallet.toLowerCase())) {
 		obj.walletAddress = wallet.toLowerCase()
+		if (obj.billingWallet) obj.billingWallet = obj.billingWallet.toLowerCase()
 		return obj
 		
 	}

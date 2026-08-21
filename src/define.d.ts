@@ -211,6 +211,8 @@ interface NodList {
 
 interface minerObj extends SICommandObj{
 	walletAddress: string
+	/** Main paid account that signs/owns billing for a temporary channel identity. */
+	billingWallet?: string
 	ipAddress: string
 	weidth: number
 	blockNumber?:string
