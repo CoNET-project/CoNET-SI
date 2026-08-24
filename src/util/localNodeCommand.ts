@@ -23,7 +23,7 @@ import { Writable } from 'stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal, notifyOfflineDeliveryImmediate, hashPgpArmor} from './util'
+import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal} from './util'
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'tls'
@@ -2087,10 +2087,10 @@ export const forwardEncryptedSocket = async (
         const client = findListenClientByPgpKeyId(gpgPublicKeyID)
         const listenUnusable = !client || isLivenessListenSocketStale(client.res)
 
-        // Already offline (no usable SSE): saveLocal + APNs immediately — skip 2-heartbeat ACK wait.
-        // Fresh listen SSE: saveLocal + track pending ACK; APNs only if 2 heartbeats without ack.
-        // skipPush (delivery receipt): durable only — never native icon / APNs queue.
-        const armorHash = await saveLocal(encryptedText, gpgPublicKeyID, {
+        // Always saveLocal first. When !skipPush, APNs/push fires immediately (SSE online or
+        // offline); Beamio API delivers only if pushDevice is registered. skipPush (delivery
+        // receipt): durable only — never native icon / APNs queue.
+        await saveLocal(encryptedText, gpgPublicKeyID, {
             alreadyOffline: listenUnusable,
             skipPush,
         })
@@ -2116,20 +2116,16 @@ export const forwardEncryptedSocket = async (
 
         await waitRunningBlockProcess()
 
-        // Best-effort live delivery; offline copy already saved — never second saveLocal on fail.
+        // Best-effort live delivery; offline copy + push already handled in saveLocal.
         forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (ok) => {
             if (ok && client) {
                 logger(`forWardPGPMessageToClient SUCCESS`, encryptedText)
                 livenessListeningPool.set(client.wallet, client)
                 return
             }
-            logger(`forWardPGPMessageToClient FAIL — already saveLocal; evict → immediate offline APNs`, encryptedText)
+            logger(`forWardPGPMessageToClient FAIL — already saveLocal (+ push if !skipPush); evict`, encryptedText)
             evictListenClient(client, 'has dead forward')
-            // Just judged offline (dead SSE); do not wait for heartbeats.
-            // Protocol no-push frames stay durable only.
-            if (!skipPush) {
-                notifyOfflineDeliveryImmediate(gpgPublicKeyID, armorHash || hashPgpArmor(encryptedText))
-            }
+            // Do not notifyOfflineDeliveryImmediate again — saveLocal already pushed.
         })
 
         return

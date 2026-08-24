@@ -631,11 +631,12 @@ export const rollbackLocalOfflineFlush = (clentKeyID: string, unsent: string[]):
 
 
 /**
- * After offline mailbox write: ask Beamio API to bump push badge.
+ * After mailbox `saveLocal`: ask Beamio API to bump push badge / APNs.
  * Auth = Guardian node wallet EIP-191 (no shared secret on SI).
  * Body: pgpKeyId + eoa + timestamp + signature — never message plaintext/armor.
  *
- * Call only after delivery-ACK grace expires (see pendingDeliveryAcks + stratlivenessV2).
+ * Fired for **every** durable chat save (SSE online or offline). Cluster/Master
+ * only delivers when the EOA has a registered `pushDevice`; otherwise no-op.
  */
 export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
 	const safeCount = Math.max(1, Math.min(50, Math.floor(count) || 1))
@@ -686,11 +687,9 @@ export const hashPgpArmor = (pgpMessage: string): string => {
 }
 
 /**
- * After saveLocal + best-effort SSE (client was in listen pool): wait for `gossip_delivery_ack`.
- * Each `stratlivenessV2` (even-block liveness heartbeat) increments; at 2 → APNs.
- *
- * If the client is **already offline** (no non-stale listen SSE), skip this grace and call
- * {@link notifyOfflineDeliveryImmediate} instead — no heartbeat wait.
+ * Pending ACK map retained only to drain legacy in-flight entries and so
+ * `gossip_delivery_ack` / `removeLocalByArmorHash` can clear them.
+ * New saves always push immediately — they do **not** wait for heartbeats.
  */
 type PendingDeliveryAck = {
 	pgpKeyId: string
@@ -699,7 +698,7 @@ type PendingDeliveryAck = {
 }
 
 const pendingDeliveryAcks = new Map<string, PendingDeliveryAck>()
-/** How many liveness heartbeats (stratlivenessV2) without ACK before APNs (online→zombie path only). */
+/** Legacy grace (stratlivenessV2 ticks) before APNs — only for entries still in the map. */
 export const DELIVERY_ACK_HEARTBEATS_BEFORE_APNS = 2
 
 export const trackPendingDeliveryAck = (pgpKeyId: string, armorHash: string): void => {
@@ -719,19 +718,21 @@ export const clearPendingDeliveryAck = (armorHash: string): void => {
 }
 
 /**
- * Client already judged offline (no fresh listen SSE): drop ACK grace timer and APNs now.
- * Offline armor stays on disk for next listen flush; late ACK still clears via removeLocalByArmorHash.
+ * Enqueue native push for a durable mailbox save (SSE online or offline).
+ * Clears any legacy pending-ACK timer for this armorHash. Offline armor stays
+ * on disk for next listen flush; ACK still removes via removeLocalByArmorHash.
+ * Beamio API skips send when the EOA has no registered pushDevice.
  */
 export const notifyOfflineDeliveryImmediate = (pgpKeyId: string, armorHash: string): void => {
 	const pgp = String(pgpKeyId || '').trim().toUpperCase()
 	const key = String(armorHash || '').trim().toLowerCase()
 	if (!pgp) return
 	if (key) clearPendingDeliveryAck(key)
-	logger(Colors.magenta(`pendingDeliveryAck IMMEDIATE offline (no live SSE) key=${pgp} → APNs`))
+	logger(Colors.magenta(`saveLocal → notifyOfflineChat (SSE online or offline) key=${pgp} → APNs if pushDevice`))
 	notifyOfflineChatPush(pgp, 1)
 }
 
-/** Call once per stratlivenessV2 (mailbox → client liveness heartbeat / even block). */
+/** Call once per stratlivenessV2 — drains legacy pending ACK entries only. */
 export const tickPendingDeliveryAcks = (): void => {
 	if (!pendingDeliveryAcks.size) return
 	const notifyByKey = new Map<string, number>()
@@ -739,7 +740,7 @@ export const tickPendingDeliveryAcks = (): void => {
 		p.heartbeats += 1
 		if (p.heartbeats < DELIVERY_ACK_HEARTBEATS_BEFORE_APNS) {
 			logger(
-				`pendingDeliveryAck wait key=${p.pgpKeyId} hash=${hash.slice(0, 12)}… heartbeats=${p.heartbeats}/${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS}`,
+				`pendingDeliveryAck wait (legacy) key=${p.pgpKeyId} hash=${hash.slice(0, 12)}… heartbeats=${p.heartbeats}/${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS}`,
 			)
 			continue
 		}
@@ -749,7 +750,7 @@ export const tickPendingDeliveryAcks = (): void => {
 	for (const [pgpKeyId, count] of notifyByKey) {
 		logger(
 			Colors.magenta(
-				`pendingDeliveryAck TIMEOUT heartbeats=${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS} key=${pgpKeyId} count=${count} → APNs`,
+				`pendingDeliveryAck TIMEOUT (legacy) heartbeats=${DELIVERY_ACK_HEARTBEATS_BEFORE_APNS} key=${pgpKeyId} count=${count} → APNs`,
 			),
 		)
 		notifyOfflineChatPush(pgpKeyId, count)
@@ -758,13 +759,13 @@ export const tickPendingDeliveryAcks = (): void => {
 
 export type SaveLocalOptions = {
 	/**
-	 * True when mailbox already knows the recipient has no usable listen SSE
-	 * (not in pool / stale / expired session). Skip 2-heartbeat ACK grace → APNs now.
+	 * @deprecated Ignored for push. Chat saves always notify when `skipPush` is false;
+	 * API delivers only if pushDevice is registered. Kept for call-site compatibility.
 	 */
 	alreadyOffline?: boolean
 	/**
 	 * Protocol frames (e.g. chat delivery receipt) that must stay durable but must **not**
-	 * enter the offline APNs / native icon badge push queue.
+	 * enter the APNs / native icon badge push queue.
 	 */
 	skipPush?: boolean
 }
@@ -816,13 +817,9 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string, opts?: SaveLoc
 		logger(Colors.cyan(`${clentKeyID} saveLocal skipPush — no APNs / badge queue`))
 		return armorHash
 	}
-	if (opts?.alreadyOffline) {
-		// Already offline + no new SSE: do not wait for liveness heartbeats.
-		notifyOfflineDeliveryImmediate(clentKeyID, armorHash)
-	} else {
-		// Live (or just-tried) SSE path: APNs only after 2 heartbeats without gossip_delivery_ack.
-		trackPendingDeliveryAck(clentKeyID, armorHash)
-	}
+	// Always push when durable chat ciphertext is stored (SSE online or offline).
+	// Beamio notifyOfflineChat no-ops if the EOA has no registered pushDevice.
+	notifyOfflineDeliveryImmediate(clentKeyID, armorHash)
 	return armorHash
 }
 
@@ -862,7 +859,8 @@ export const removeLocalByArmorHash = (clentKeyID: string, armorHashRaw: string)
 		}
 		logger(`${clentKeyID} removeLocalByArmorHash removed ${list.length - next.length} from ${path.basename(filePath)}`)
 	}
-	// ACK (or late ACK after flush) always cancels the 2-heartbeat APNs timer.
+	// ACK (or late ACK after flush) clears legacy pending map + removes offline armor.
+	// Push already fired on saveLocal; ACK does not cancel a future APNs timer for new saves.
 	clearPendingDeliveryAck(want)
 	return removedAny
 }
