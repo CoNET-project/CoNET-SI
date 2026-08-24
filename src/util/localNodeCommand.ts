@@ -2020,10 +2020,32 @@ const socketForward = (
 		safeClose(sourceSocket)
 	})
 
-    sourceSocket.once ('end', () => {
-        logger(Colors.magenta(`socketForward sourceSocket on Close, STOP connecting`))
-        safeClose(conn)
-    })
+	// Client→C death must tear C→B immediately. Mailbox B's l0_listen is bound
+	// to `conn`; it only dropL0Listen on that socket's 'error'/'close'.
+	// Unexpected initiator exit (kill/RST) emits 'error' (ECONNRESET) then
+	// 'close', often **without** 'end'. The old 'end'-only path left C→B up
+	// for the 24h safety timer, so B kept the SSE after beacon/L0d restart.
+	// destroy() — not end()/safeClose — so B does not treat a write half-close
+	// as "keep writable".
+	let mailboxHopClosed = false
+	const stopMailboxHop = (why: string) => {
+		if (mailboxHopClosed) return
+		mailboxHopClosed = true
+		clearTimeout(connectTimer)
+		logger(Colors.magenta(`socketForward initiator gone ${ipAddr}:${port} why=${why}; destroy C→B so mailbox releases`))
+		if (!conn.destroyed) {
+			conn.destroy()
+		}
+	}
+	sourceSocket.once('error', (err: Error) => {
+		stopMailboxHop(`error:${err.message}`)
+	})
+	sourceSocket.once('end', () => {
+		stopMailboxHop('end')
+	})
+	sourceSocket.once('close', () => {
+		stopMailboxHop('close')
+	})
 
 
 }
