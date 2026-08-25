@@ -22,7 +22,7 @@ import { ethers } from 'ethers'
 import Colors from 'colors/safe'
 import { logger } from './logger'
 import { distorySocket, response200Html } from './htmlResponse'
-import { isMyRoute, isLivenessListenSocketStale, getWalletFromKeyID } from './util'
+import { isLivenessListenSocketStale, getWalletFromKeyID } from './util'
 
 const L0_TIMESTAMP_SKEW_SEC = 600
 const L0_MAX_LISTEN = 256
@@ -294,11 +294,9 @@ export const handleL0Listen = async (
 		logger(Colors.red(`l0_listen timestamp rejected wallet=${wallet}`))
 		return distorySocket(socket)
 	}
-	const mine = await isMyRoute(wallet, nodeWallet.address)
-	if (!mine) {
-		logger(Colors.yellow(`l0_listen not my route wallet=${wallet}`))
-		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route', wallet }))
-	}
+	// l0d listen wallets are intentionally temporary and are not registered in
+	// AddressPGP. The mailbox route PGP, command signature, timestamp, and the
+	// later l0_connect target match are the authorization boundary here.
 	if (l0ListenPool.size >= L0_MAX_LISTEN && !l0ListenPool.has(wallet)) {
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'pool_full' }))
 	}
@@ -382,12 +380,6 @@ export const handleL0Connect = async (
 		logger(Colors.red(`l0_connect timestamp rejected connector=${connector}`))
 		return distorySocket(socket)
 	}
-	const mine = await isMyRoute(target, nodeWallet.address)
-	if (!mine) {
-		logger(Colors.yellow(`l0_connect not my route target=${target}`))
-		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route', targetWallet: target }))
-	}
-
 	const listen = l0ListenPool.get(target)
 	if (!listen || isLivenessListenSocketStale(listen.res)) {
 		if (listen) dropL0Listen(target, 'stale_before_connect')
