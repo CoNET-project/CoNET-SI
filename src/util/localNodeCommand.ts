@@ -63,6 +63,7 @@ import {
 	l0ListenOccupiedByPgp,
 	findIdleL0ListenByPgp,
 	writeGossipToIdleL0,
+	deliverUserPgpToIdleL0,
 } from './l0Exclusive'
 
 
@@ -1616,8 +1617,8 @@ const asPgpMessageArmor = (text: string): string | null => {
 	return trimmed.slice(0, end + '-----END PGP MESSAGE-----'.length)
 }
 
-/** Mailbox work: `{ data: <user-PGP armor>, NoPush?: true }` encrypted to this node's route PGP. */
-const tryParseMailboxWorkEnvelope = (plain: string): { data: string; NoPush: boolean } | null => {
+/** Mailbox work: `{ data: <user-PGP armor> }` encrypted to this node's route PGP. */
+const tryParseMailboxWorkEnvelope = (plain: string): { data: string } | null => {
 	const trimmed = String(plain || '').trim()
 	if (!trimmed) {
 		return null
@@ -1635,7 +1636,7 @@ const tryParseMailboxWorkEnvelope = (plain: string): { data: string; NoPush: boo
 	if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
 		return null
 	}
-	const row = rec as { data?: unknown; message?: unknown; signMessage?: unknown; NoPush?: unknown }
+	const row = rec as { data?: unknown; message?: unknown; signMessage?: unknown }
 	if (typeof row.message === 'string' && row.signMessage) {
 		return null
 	}
@@ -1646,7 +1647,7 @@ const tryParseMailboxWorkEnvelope = (plain: string): { data: string; NoPush: boo
 	if (!inner) {
 		return null
 	}
-	return { data: inner, NoPush: row.NoPush === true }
+	return { data: inner }
 }
 
 const decryptedPayloadToUtf8 = (data: unknown): string => {
@@ -1873,8 +1874,8 @@ export const postOpenpgpRouteSocket = async (
 			if (workKeyID === pgpPublicKeyID) {
 				return terminateByEnd(socket, 'same-node inner PGP after mailbox work unwrap')
 			}
-			logger(Colors.blue(`postOpenpgpRouteSocket mailbox work unwrap; inner key ${workKeyID} NoPush=${mailboxWork.NoPush} ${socket.remoteAddressShow}`))
-			return forwardEncryptedSocket(socket, mailboxWork.data, workKeyID, headers, wallet, mailboxWork.NoPush)
+			logger(Colors.blue(`postOpenpgpRouteSocket mailbox work unwrap; inner key ${workKeyID} ${socket.remoteAddressShow}`))
+			return forwardEncryptedSocket(socket, mailboxWork.data, workKeyID, headers, wallet)
 		} catch (ex: any) {
 			logger(Colors.red(`mailbox work unwrap failed ${socket.remoteAddressShow} ${ex?.message || ''}`))
 			return distorySocket(socket)
@@ -2059,6 +2060,11 @@ export const forwardEncryptedSocket = async (
 	skipPush = false,
 ) => {
 
+	// Temporary L0 user PGP is not in AddressPGP. Match idle l0ListenPool first.
+	if (deliverUserPgpToIdleL0(gpgPublicKeyID, encryptedText)) {
+		logger(Colors.cyan(`forwardEncryptedSocket idle l0_listen pool hit ${gpgPublicKeyID}`))
+		return response200Html(socket, '')
+	}
 
 	//			forward encrypted text
 	let [_route, wallet] = await getRoute (gpgPublicKeyID)

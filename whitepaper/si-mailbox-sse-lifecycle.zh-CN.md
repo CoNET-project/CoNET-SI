@@ -1,6 +1,6 @@
 # CoNET-SI Mailbox SSE 生命周期白皮书
 
-修订：2026-08-24
+修订：2026-08-25
 
 ## 1. 目的
 
@@ -78,3 +78,21 @@ command 签名、时间戳和后续 target wallet 匹配。
 
 本文不把 L0 声明为公开 L1 共识加入路径，也不授权通过重启 geth、beacon 或
 validator 来修复 SSE。L0d 的重连只影响自己的 mailbox/session 和本地 TCP。
+
+## 7. 入站 mailbox work 与空闲 L0 pool
+
+`duplex_accept` / 应用 gossip **不是** SI command。Mailbox 解开 route PGP 后
+若明文是 `{ "data": "<user-PGP armor>" }`：
+
+1. 读取内层 PKESK key ID（user PGP，不是 Guardian route）。
+2. 用 `l0ListenByPgp` 匹配本进程空闲 `l0_listen`（索引来自 command
+   `userPgpKeyId`；临时钱包不在 AddressPGP）。
+3. 命中则把 armor 写入该 SSE，HTTP 200，**停止**。不得 `getRoute`。
+4. 未命中才走 Chat liveness / AddressPGP 路由。
+
+禁止在 L0 duplex 的 mailbox work 里带 `NoPush`。`NoPush` 只表示 Chat 跳过
+APNs；旧实现若先 `getRoute` 再查 pool，临时 user PGP 会变成
+`can not find router`。
+
+`l0_connect` 是另一条 **command**，用 `targetWallet` occupy。不得与仍待
+SSE 投递的 mailbox-work accept 抢同一条空闲 listen。

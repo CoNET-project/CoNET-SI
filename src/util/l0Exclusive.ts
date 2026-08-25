@@ -254,6 +254,15 @@ export const l0ListenOccupiedByPgp = (gpgPublicKeyID: string): boolean => {
 	return !!(obj && obj.occupied)
 }
 
+/** Inner user-PGP armor: match idle l0_listen, do not AddressPGP-route. */
+export const deliverUserPgpToIdleL0 = (gpgPublicKeyID: string, armor: string): boolean => {
+	const idle = findIdleL0ListenByPgp(gpgPublicKeyID)
+	if (!idle) {
+		return false
+	}
+	return writeGossipToIdleL0(idle, armor)
+}
+
 export const findIdleL0ListenByPgp = (gpgPublicKeyID: string): L0Listen | undefined => {
 	const obj = findByPgp(gpgPublicKeyID)
 	if (!obj || obj.occupied) return undefined
@@ -346,7 +355,8 @@ export const handleL0Listen = async (
 		dropL0Listen(wallet, 'replaced')
 	}
 
-	const keyIDRaw = await getWalletFromKeyID(wallet)
+	const announced = normalizePgp(String(command.userPgpKeyId || ''))
+	const keyIDRaw = announced || (await getWalletFromKeyID(wallet))
 	const keyID = keyIDRaw ? normalizePgp(keyIDRaw) : undefined
 	const obj: L0Listen = {
 		wallet,

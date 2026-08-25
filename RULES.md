@@ -14,7 +14,7 @@ HTTP `POST /post` 的 `{ "data": "<OpenPGP armor>" }` 若 PKESK 指向**本节�
 | 顺序 | 明文形态 | mailbox 行为 |
 | --- | --- | --- |
 | 1 | 内层仍是另一把 key 的 PGP（洋葱） | **转发**到该 key 的节点 / 本机用户 SSE；不再当 command |
-| 2 | mailbox work `{ "data": "<user-PGP armor>", "NoPush": bool }` | **转发**内层到用户 PGP；不进 command |
+| 2 | mailbox work `{ "data": "<user-PGP armor>" }` | 先按内层 user PGP 匹配本机 **`l0ListenPool` / `l0ListenByPgp`** 空闲 SSE；没有再 `getRoute` 转发。不进 command。不要带 `NoPush`（那会走 Chat/APNs 语义，不是 L0 pool） |
 | 3 | `base64({ message, signMessage })` 且 EIP-191 通过 | 解析 JSON 的 **`command`**，进 `localNodeCommandSocket` |
 | 其他 | 无法解析 | 关连接 |
 
@@ -29,7 +29,7 @@ Entry 角色：PKESK **不是**本节点 route key 时，`getRoute(keyID)` 后 `
 1. **`command: "l0_listen"`**（L0d 现行）
 2. **`command: "mining"` + `listenKind: "l0"`**（兼容别名）
 
-都是：校验时间戳 / 禁止 overlay `Securitykey` → 入 **`l0ListenPool`** → 写 SSE 握手 `{ ok, kind:'l0', wallet, nodeWallet }` → 空闲 keepalive。临时 L0 wallet 不经过 `isMyRoute`，因为它们不登记在 AddressPGP。
+都是：校验时间戳 / 禁止 overlay `Securitykey` → 入 **`l0ListenPool`**，并用 command 的 **`userPgpKeyId`** 写入 **`l0ListenByPgp`**（临时钱包不在 AddressPGP，禁止只靠 `getWalletFromKeyID`）→ 写 SSE 握手 `{ ok, kind:'l0', wallet, nodeWallet }` → 空闲 keepalive。
 
 对接占用是另一条 command：**`l0_connect`**（不是 SSE）。mailbox 用 `targetWallet` 找 pool 内空闲 listen；未占用则 occupy 并 **pipe** 剩余 TCP 到该 SSE；已占用且插座仍活则 **409**。
 
@@ -43,7 +43,7 @@ Entry 角色：PKESK **不是**本节点 route key 时，`getRoute(keyID)` 后 `
 
 | `command` | 附加字段 | Pool | 作用 |
 | --- | --- | --- | --- |
-| `l0_listen` | `walletAddress`, `timestamp`；勿带 `Securitykey` | `l0ListenPool` | L0 独占空闲 SSE，等 `l0_connect` |
+| `l0_listen` | `walletAddress`, `timestamp`, **`userPgpKeyId`**（加密子钥 16 hex）；勿带 `Securitykey` | `l0ListenPool` + `l0ListenByPgp` | L0 独占空闲 SSE；gossip 用 user PGP 匹配此索引 |
 | `mining` + `listenKind: "l0"` | 同上 | 同上 | 上一条的别名 |
 | `mining`（无 listenKind 或非下表） | `walletAddress` | `livenessListeningPool` kind=`mining` | LayerMinus 挖矿 gossip |
 | `mining` + `listenKind: "chat"` | `walletAddress` | 同上 kind=`chat` | PWA / 应用 Chat 在线 |

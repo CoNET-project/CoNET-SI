@@ -105,6 +105,8 @@ interface SICommandObj {
 	sessionId?: string
 	/** UDP server EOA whose mailbox hosts the client listen. */
 	udpServerWallet?: string
+	/** l0_listen: encryption key ID of this wallet's user PGP (not AddressPGP). */
+	userPgpKeyId?: string
 	/** udp_relay / udp_uplink: AES-GCM blob (base64). Mailbox must not decrypt. */
 	payload?: string
 }
