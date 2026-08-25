@@ -25,6 +25,7 @@ conet-mvp-si
 
 ## Notice
 
+Mailbox 入站与可执行 `command` 清单（含 `l0_listen`）：见 [`RULES.md`](RULES.md)。改 `localNodeCommand` / L0 / UDP mailbox 前先读该文。
 
 ## License
 

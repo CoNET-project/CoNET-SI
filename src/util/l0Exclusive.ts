@@ -28,6 +28,8 @@ const L0_TIMESTAMP_SKEW_SEC = 600
 const L0_MAX_LISTEN = 256
 /** Idle L0 has no mining epoch heartbeat. Comment ticks keep Entry/mailbox 60s socket timeout from killing the SSE. */
 const L0_IDLE_KEEPALIVE_MS = 15_000
+/** Reclaim only sockets Node already proves unusable; idle SSE is valid indefinitely. */
+const L0_POOL_SWEEP_MS = 30_000
 /**
  * Occupied pipes carry an application heartbeat from conet-l0d, but a dead
  * entry/socket-forward path can remain half-open at the TCP layer forever.
@@ -105,7 +107,9 @@ const writeSseLine = (res: Socket | TLSSocket, line: string): L0SseWriteResult =
 const disableSocketIdleTimeout = (sock?: Socket | TLSSocket) => {
 	if (!sock) return
 	try {
-		;(sock as Socket).setTimeout(0)
+		const s = sock as Socket
+		s.setTimeout(0)
+		s.setKeepAlive(true, 30_000)
 	} catch {
 		/* ignore */
 	}
@@ -216,6 +220,21 @@ const dropL0Listen = (wallet: string, why: string) => {
 	destroySock(obj.res)
 }
 
+const sweepClosedL0Listens = () => {
+	for (const listen of l0ListenPool.values()) {
+		if (isLivenessListenSocketStale(listen.res)) {
+			dropL0Listen(listen.wallet, 'pool_sweep_stale')
+			continue
+		}
+		if (listen.occupied && occupiedInboundDead(listen)) {
+			dropL0Listen(listen.wallet, 'pool_sweep_inbound_dead')
+		}
+	}
+}
+
+const l0PoolSweepTimer = setInterval(sweepClosedL0Listens, L0_POOL_SWEEP_MS)
+;(l0PoolSweepTimer as any).unref?.()
+
 const findByPgp = (gpgPublicKeyID: string): L0Listen | undefined => {
 	const want = normalizePgp(gpgPublicKeyID)
 	if (!want) return undefined
@@ -294,10 +313,20 @@ export const handleL0Listen = async (
 		logger(Colors.red(`l0_listen timestamp rejected wallet=${wallet}`))
 		return distorySocket(socket)
 	}
+	sweepClosedL0Listens()
 	// l0d listen wallets are intentionally temporary and are not registered in
 	// AddressPGP. The mailbox route PGP, command signature, timestamp, and the
 	// later l0_connect target match are the authorization boundary here.
 	if (l0ListenPool.size >= L0_MAX_LISTEN && !l0ListenPool.has(wallet)) {
+		let occupied = 0
+		for (const listen of l0ListenPool.values()) {
+			if (listen.occupied) occupied += 1
+		}
+		logger(
+			Colors.yellow(
+				`l0_listen pool_full size=${l0ListenPool.size} max=${L0_MAX_LISTEN} idle=${l0ListenPool.size - occupied} occupied=${occupied} wallet=${wallet}`,
+			),
+		)
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'pool_full' }))
 	}
 

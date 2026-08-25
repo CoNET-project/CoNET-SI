@@ -1,6 +1,9 @@
 # L0 pipe teardown — `l0_pipe_end` / `l0_listen_released`
 
-**Status:** MVP (2026-08) · **Code:** `src/util/l0Exclusive.ts`
+**Status:** 历史草案，**现役已废弃应用层 teardown**。拆线只关插座。  
+现行 mailbox command 与 L0 占用：仓库根目录 [`RULES.md`](../RULES.md)。
+
+**Code:** `src/util/l0Exclusive.ts`
 
 ## Problem
 
