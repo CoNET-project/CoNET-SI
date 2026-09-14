@@ -88,7 +88,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'l0_listen'|'l0_connect'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mailbox_listen'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'l0_listen'|'l0_connect'
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]
@@ -243,10 +243,14 @@ interface livenessListeningPoolObj {
 	res: Socket|TLSSocket
 	ipaddress: string
 	wallet: string
+	/** Stable per-SSE identity. A wallet may own multiple mailbox sessions. */
+	instanceId?: string
 	/** Mailbox listen join time — gossip delivery must not trust forever-writable zombie pipes. */
 	connectedAt?: number
 	/** User PGP key id (hex) for this listen session; used to clear PGP pool on write failure. */
 	pgpKeyId?: string
-	/** 'chat' = PWA presence/mailbox listen; 'mining' = LayerMinus gossip. Default 'mining'. */
-	kind?: 'chat' | 'mining'
+	/** 'chat' = legacy mailbox listen; 'mailbox' = multi-device fan-out; 'mining' = LayerMinus gossip. */
+	kind?: 'chat' | 'mailbox' | 'mining'
+	/** Mailbox reliability keepalive timer; cleared when the SSE closes. */
+	keepaliveTimer?: NodeJS.Timeout
 }

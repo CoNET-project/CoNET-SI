@@ -1024,6 +1024,18 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, listenKind)
 		}
 
+		case 'mailbox_listen': {
+			// Mailbox B is deliberately separate from LayerMinus mining gossip.
+			// A wallet may keep several device SSE sessions; delivery fans out to all.
+			return addIpaddressToMailboxListeningPool(
+				socket.remoteAddressShow || '',
+				command.walletAddress,
+				wallet,
+				socket,
+				(command as any).instanceId,
+			)
+		}
+
 		case 'l0_listen': {
 			return handleL0Listen(socket, command, wallet)
 		}
@@ -1115,8 +1127,13 @@ const handleWalletOnlineQuery = async (
 			JSON.stringify({ ok: false, error: 'not_my_route', wallet: target, online: false }),
 		)
 	}
-	// Pool keys are lowercased by checkSign; also try checksummed form for safety.
-	let client = livenessListeningPool.get(target)
+	// Presence is true when any healthy dedicated Mailbox B session exists.
+	const mailboxClients = [...mailboxListeningPool.values()].filter((c) =>
+		c.wallet.toLowerCase() === target && !isLivenessListenSocketStale(c.res)
+	)
+	let client: livenessListeningPoolObj | undefined = mailboxClients[0]
+	// Legacy chat listeners remain readable during migration.
+	if (!client) client = livenessListeningPool.get(target)
 	if (!client) {
 		try {
 			client = livenessListeningPool.get(ethers.getAddress(target))
@@ -2112,8 +2129,13 @@ export const forwardEncryptedSocket = async (
             } catch {}
         }
 
-        const client = findListenClientByPgpKeyId(gpgPublicKeyID)
-        const listenUnusable = !client || isLivenessListenSocketStale(client.res)
+        const mailboxClients = findMailboxClientsByPgpKeyId(gpgPublicKeyID)
+            .filter((c) => !isLivenessListenSocketStale(c.res))
+        const legacyClient = mailboxClients.length
+            ? undefined
+            : findListenClientByPgpKeyId(gpgPublicKeyID)
+        const listenUnusable = mailboxClients.length === 0 &&
+            (!legacyClient || isLivenessListenSocketStale(legacyClient.res))
 
         // Always saveLocal first. When !skipPush, APNs/push fires immediately (SSE online or
         // offline); Beamio API delivers only if pushDevice is registered. skipPush (delivery
@@ -2123,11 +2145,45 @@ export const forwardEncryptedSocket = async (
             skipPush,
         })
 
-        if (!client) {
+        if (mailboxClients.length === 0 && !legacyClient) {
             logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
             return
         }
 
+        if (mailboxClients.length) {
+            const waitRunningBlockProcess = async () => {
+                while (stratlivenessV2Process) {
+                    await new Promise(resolve => setTimeout(resolve, 1000))
+                }
+            }
+            await waitRunningBlockProcess()
+
+            const deliver = (client: livenessListeningPoolObj) => new Promise<boolean>((resolve) => {
+                forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, (ok) => {
+                    const poolKey = `${client.wallet}:${client.instanceId || ''}`
+                    if (!ok) {
+                        mailboxListeningPool.delete(poolKey)
+                        const clients = client.pgpKeyId
+                            ? mailboxListeningPGPKeyIDPool.get(normalizeListenPgpKeyId(client.pgpKeyId))
+                            : undefined
+                        clients?.delete(poolKey)
+                        if (clients && clients.size === 0) {
+                            mailboxListeningPGPKeyIDPool.delete(normalizeListenPgpKeyId(client.pgpKeyId!))
+                        }
+                        try {
+                            const sock = client.res as Socket
+                            if (!sock.destroyed) sock.destroy()
+                        } catch {}
+                    }
+                    resolve(ok)
+                })
+            })
+            const results = await Promise.all(mailboxClients.map(deliver))
+            logger(`Mailbox fan-out ${gpgPublicKeyID}: ${results.filter(Boolean).length}/${results.length} sessions accepted`)
+            return
+        }
+
+        const client = legacyClient!
         if (isLivenessListenSocketStale(client.res)) {
             evictListenClient(client, 'has STALE client')
             return
@@ -2324,6 +2380,8 @@ export const testCertificateFiles: () => Promise<boolean> = () => new Promise (a
 
 const livenessListeningPool: Map <string, livenessListeningPoolObj> = new Map()
 const livenessListeningPGPKeyIDPool: Map <string, livenessListeningPoolObj> = new Map()
+const mailboxListeningPool: Map <string, livenessListeningPoolObj> = new Map()
+const mailboxListeningPGPKeyIDPool: Map <string, Map<string, livenessListeningPoolObj>> = new Map()
 
 function normalizeListenPgpKeyId(id: string): string {
 	return String(id || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
@@ -2343,6 +2401,19 @@ function findListenClientByPgpKeyId(gpgPublicKeyID: string): livenessListeningPo
 	return undefined
 }
 
+function findMailboxClientsByPgpKeyId(gpgPublicKeyID: string): livenessListeningPoolObj[] {
+	const want = normalizeListenPgpKeyId(gpgPublicKeyID)
+	if (!want) return []
+	const direct = mailboxListeningPGPKeyIDPool.get(want)
+	if (direct) return [...direct.values()]
+	for (const [storedId, clients] of mailboxListeningPGPKeyIDPool) {
+		if (normalizeListenPgpKeyId(storedId) === want) return [...clients.values()]
+	}
+	return [...mailboxListeningPool.values()].filter((obj) =>
+		obj.pgpKeyId && normalizeListenPgpKeyId(obj.pgpKeyId) === want
+	)
+}
+
 const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
 	const s = res as Socket
 	if (isLivenessListenSocketStale(s)) return false
@@ -2354,6 +2425,18 @@ const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unkno
 }
 
 setUdpServerChatNotify((serverWallet, frame) => {
+	const mailboxClients = [...mailboxListeningPool.values()].filter((client) =>
+		client.wallet.toLowerCase() === serverWallet.toLowerCase() &&
+		client.kind === 'mailbox' &&
+		!isLivenessListenSocketStale(client.res)
+	)
+	if (mailboxClients.length) {
+		let accepted = false
+		for (const client of mailboxClients) {
+			accepted = writeLivenessSseJson(client.res, frame) || accepted
+		}
+		return accepted
+	}
 	let client = livenessListeningPool.get(serverWallet)
 	if (!client) {
 		try {
@@ -2511,6 +2594,106 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 }
 
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
+
+/**
+ * Dedicated Mailbox B SSE registration.
+ *
+ * Unlike the legacy mining/chat pool, the key is an SSE instance rather than
+ * the wallet. This makes one wallet's phone, desktop and browser sessions
+ * independent delivery targets.
+ */
+const addIpaddressToMailboxListeningPool = async (
+	ipaddress: string,
+	wallet: string,
+	nodeWallet: ethers.Wallet,
+	res: TLSSocket|Socket,
+	requestedInstanceId?: string,
+) => {
+	const s = res as Socket
+	const instanceId = String(requestedInstanceId || uuidV4(ethers.randomBytes(16)))
+	const poolKey = `${wallet}:${instanceId}`
+	const keyIDRaw = await getWalletFromKeyID(wallet)
+	const keyID = keyIDRaw ? normalizeListenPgpKeyId(keyIDRaw) : null
+	const obj: livenessListeningPoolObj = {
+		ipaddress,
+		wallet,
+		res,
+		instanceId,
+		connectedAt: Date.now(),
+		pgpKeyId: keyID || undefined,
+		kind: 'mailbox',
+	}
+
+	const returnData = {
+		ipaddress,
+		status: 200,
+		kind: 'mailbox',
+		instanceId,
+		nodeWallet: nodeWallet?.address?.toLowerCase(),
+		hash: await nodeWallet?.signMessage(`${CurrentEpoch}`),
+	}
+	const sseHeaders =
+		`HTTP/1.1 200 OK\r\n` +
+		`Date: ${new Date().toUTCString()}\r\n` +
+		`Content-Type: text/event-stream; charset=utf-8\r\n` +
+		`Cache-Control: no-cache, no-transform\r\n` +
+		`Connection: keep-alive\r\n` +
+		`X-Accel-Buffering: no\r\n` +
+		`Access-Control-Allow-Origin: *\r\n\r\n`
+	const responseData = sseHeaders + `data: ${JSON.stringify(returnData)}\r\n\r\n`
+
+	const remove = (reason: string) => {
+		logger(Colors.grey(`Mailbox session ${poolKey} ${reason}`))
+		mailboxListeningPool.delete(poolKey)
+		if (keyID) {
+			const clients = mailboxListeningPGPKeyIDPool.get(keyID)
+			clients?.delete(poolKey)
+			if (clients && clients.size === 0) mailboxListeningPGPKeyIDPool.delete(keyID)
+		}
+		if (obj.keepaliveTimer) clearTimeout(obj.keepaliveTimer)
+	}
+	s.once('error', (err: Error) => remove(`error (${err.message})`))
+	s.once('close', () => remove('close'))
+	s.once('end', () => logger(Colors.grey(`Mailbox session ${poolKey} peer half-close`)))
+
+	await testMinerCOnnecting(s, responseData, wallet, ipaddress)
+	if (s.destroyed || (s as any).writableEnded) return
+
+	if (keyID) {
+		const data = tryGetLocal(keyID)
+		if (data.length) {
+			const unsent = await writeLinesWithBackpressure(res, data)
+			if (unsent.length) rollbackLocalOfflineFlush(keyID, unsent)
+			else if (s.destroyed || (s as any).writableEnded) rollbackLocalOfflineFlush(keyID, data)
+			else commitLocalOfflineFlush(keyID)
+		}
+	}
+	if (s.destroyed || (s as any).writableEnded) return
+	mailboxListeningPool.set(poolKey, obj)
+	if (keyID) {
+		let clients = mailboxListeningPGPKeyIDPool.get(keyID)
+		if (!clients) mailboxListeningPGPKeyIDPool.set(keyID, clients = new Map())
+		clients.set(poolKey, obj)
+	}
+
+	// Reliability keepalive only: bounded jitter prevents synchronized reconnects.
+	// It is not a traffic-masquerading or anti-detection mechanism.
+	const scheduleKeepalive = () => {
+		const delay = 60_000 + Math.floor(Math.random() * 120_000)
+		obj.keepaliveTimer = setTimeout(() => {
+			if (!mailboxListeningPool.has(poolKey) || isLivenessListenSocketStale(res)) {
+				remove('keepalive found stale')
+				return
+			}
+			if (!writeLivenessSseJson(res, { type: 'mailbox_keepalive', ts: Date.now() })) {
+				remove('keepalive write failed')
+				return
+			}
+			scheduleKeepalive()
+		}, delay)
+	}
+	scheduleKeepalive()
+}
 
 // const addToGossipPool = (ipaddress: string, wallet: string, res: Socket|TLSSocket) => {
 // 	const _obj = gossipListeningPool.get (wallet)
