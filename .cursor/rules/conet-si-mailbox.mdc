@@ -1,0 +1,14 @@
+---
+description: SI mailbox 入站与 command 分发。改 POST 解密、localNodeCommand、l0/udp listen 时必读。
+globs: src/util/localNodeCommand.ts,src/util/l0Exclusive.ts,src/util/udpForward.ts,src/define.d.ts,src/endpoint/**/*.ts
+alwaysApply: false
+---
+
+# SI mailbox
+
+权威条文：[RULES.md](../../RULES.md)。
+
+- 本机 route PGP 解开 ≠ SSE。先分流洋葱 / mailbox work，再读 `command`。
+- `l0_listen` 与 `mining`+`listenKind:"l0"` 才开 L0 SSE；`l0_connect` 是 occupy+pipe。
+- 新语义用新 `command`，并同时改 `SICommandObj` 与 `localNodeCommandSocket`。
+- L0/UDP mailbox 命令禁止带 overlay `Securitykey`。

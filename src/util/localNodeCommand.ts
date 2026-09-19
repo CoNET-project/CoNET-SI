@@ -65,6 +65,11 @@ import {
 	writeGossipToIdleL0,
 	deliverUserPgpToIdleL0,
 } from './l0Exclusive'
+import {
+	handleVoiceFrame,
+	handleVoiceListen,
+	handleVoiceUnlisten,
+} from './voiceForward'
 
 
 
@@ -1066,6 +1071,19 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 		case 'udp_unlisten': {
 			return handleUdpUnlisten(socket, command)
+		}
+
+		case 'voice_listen': {
+			return handleVoiceListen(socket, command as unknown as Record<string, unknown>, wallet)
+		}
+
+		case 'voice_uplink':
+		case 'voice_downlink': {
+			return handleVoiceFrame(socket, command as unknown as Record<string, unknown>, wallet)
+		}
+
+		case 'voice_unlisten': {
+			return handleVoiceUnlisten(socket, command as unknown as Record<string, unknown>)
 		}
 
 		case 'mining_validator': {

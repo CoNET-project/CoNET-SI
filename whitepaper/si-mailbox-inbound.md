@@ -1,6 +1,16 @@
 # CoNET-SI inbound: commands vs mailbox work vs idle L0
 
-Revision: 2026-08-25. Pair: [si-mailbox-sse-lifecycle.zh-CN.md](./si-mailbox-sse-lifecycle.zh-CN.md) §7.
+Revision: 2026-09-19. Pair: [si-mailbox-sse-lifecycle.zh-CN.md](./si-mailbox-sse-lifecycle.zh-CN.md) §7.
+
+## Temporary voice SSE
+
+Chat real-time voice is an application-level temporary stream. It does not
+reuse or occupy `mailbox_listen`. A signed `voice_listen` command creates a
+random per-call SSE session on the wallet's own route. A signed
+`voice_uplink` or `voice_downlink` command addressed to the peer mailbox
+locates that peer session and writes an opaque AES-GCM frame. The node checks
+route ownership, session ownership, timestamp, sequence and size only. It
+never decrypts, persists, pushes, or indexes the audio payload.
 
 Decrypting this node’s **route PGP** does not open an SSE. `postOpenpgpRouteSocket` then takes **one** branch:
 

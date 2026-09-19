@@ -27,6 +27,16 @@ conet-mvp-si
 
 Mailbox 入站与可执行 `command` 清单（含 `l0_listen` / mailbox work → idle L0 pool）：见 [`RULES.md`](RULES.md) 与 [`whitepaper/si-mailbox-inbound.md`](whitepaper/si-mailbox-inbound.md)。
 
+### Temporary voice relay
+
+CoNET-SI supports an experimental Chat voice relay separate from the normal
+`mailbox_listen` SSE. Each participant opens a random `voice_listen` session
+on its own mailbox. The peer sends opaque AES-GCM frames using
+`voice_uplink`/`voice_downlink`; the node writes them only to the matching
+temporary voice SSE. Voice frames are never decrypted, saved to offline
+mailbox storage, pushed through APNs, or included in Chat history. This is an
+application-level duplex relay, not raw UDP and not WebRTC.
+
 ## License
 
 Copyright (c) Kloak Information Technologies Inc. All rights reserved.

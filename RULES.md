@@ -5,6 +5,12 @@
 实现入口：`src/util/localNodeCommand.ts`（`postOpenpgpRouteSocket` → `localNodeCommandSocket`）。  
 类型：`src/define.d.ts` `SICommandObj.command` / `minerObj.listenKind`。
 
+实时语音 MVP 使用独立的 `voice_listen` 临时 SSE 池，不得占用普通
+`mailbox_listen` Chat SSE。`voice_uplink` / `voice_downlink` 只转发
+AES-GCM 密文帧；SI 不保存会话密钥、不解密音频、不写 offline mailbox、
+不触发 APNs。会话由随机 `sessionId` 标识，并受 route ownership、时间窗、
+帧大小、序号和 idle timeout 限制。
+
 ## 一、能解开 mailbox PGP ≠ 一定是 SSE
 
 HTTP `POST /post` 的 `{ "data": "<OpenPGP armor>" }` 若 PKESK 指向**本节点 route PGP**，本机解密。解密成功只说明「这包是给本 mailbox 的」，**不**自动开 SSE。
