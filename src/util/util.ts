@@ -681,6 +681,38 @@ export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
 	})()
 }
 
+/** Route-encrypted voice-call metadata → API VoIP/FCM push. No media or key material. */
+export const notifyVoiceCallPush = (payload: {
+	callId: string
+	sessionId: string
+	callerEoa: string
+	calleeEoa: string
+	expiresAt: number
+	timestamp: number
+	signature: string
+}): void => {
+	void (async () => {
+		try {
+			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
+			const res = await P({
+				url: `${apiBase}/api/voiceCallPush`,
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				data: JSON.stringify(payload),
+				parse: 'json',
+				timeout: 8_000,
+			})
+			if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
+				logger(Colors.yellow(`voiceCallPush HTTP ${res.statusCode} callId=${payload.callId}`))
+			} else {
+				logger(Colors.green(`voiceCallPush ok callId=${payload.callId} sessionId=${payload.sessionId}`))
+			}
+		} catch (err: any) {
+			logger(Colors.yellow(`voiceCallPush failed: ${err?.message ?? err}`))
+		}
+	})()
+}
+
 /** Canonical hash of a stored offline PGP armor string (client ACK must match). */
 export const hashPgpArmor = (pgpMessage: string): string => {
 	return ethers.keccak256(ethers.toUtf8Bytes(pgpMessage))
