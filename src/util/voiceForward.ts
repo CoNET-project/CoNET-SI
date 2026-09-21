@@ -13,7 +13,7 @@ import { ethers } from 'ethers'
 import Colors from 'colors/safe'
 import { logger } from './logger'
 import { distorySocket, response200Html } from './htmlResponse'
-import { isLivenessListenSocketStale, isMyRoute } from './util'
+import { isLivenessListenSocketStale, isMyRoute, notifyVoiceCallPush } from './util'
 
 const VOICE_IDLE_MS = 2 * 60 * 1000
 const VOICE_SWEEP_MS = 30_000
@@ -162,6 +162,34 @@ export const handleVoiceListen = async (
 	sessions.set(sessionId, session)
 	scheduleSweep()
 	logger(Colors.cyan(`voice listen attached session=${sessionId} wallet=${wallet}`))
+
+	// The caller's mailbox is the only component that wakes native devices.
+	// The PWA never calls /api/voiceCallPush directly, so the API sees the
+	// mailbox node as the network source rather than the caller's IP.
+	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
+	const calleeEoa = lowerAddress(command.targetWallet)
+	const expiresAt = Number(command.expiresAt)
+	const pushTimestamp = Number(command.pushTimestamp)
+	const pushSignature = typeof command.pushSignature === 'string' ? command.pushSignature.trim() : ''
+	if (
+		callId &&
+		calleeEoa &&
+		Number.isFinite(expiresAt) &&
+		expiresAt > Date.now() &&
+		expiresAt <= Date.now() + 10 * 60_000 &&
+		validTimestamp(pushTimestamp) &&
+		pushSignature
+	) {
+		notifyVoiceCallPush({
+			callId,
+			sessionId,
+			callerEoa: wallet,
+			calleeEoa,
+			expiresAt,
+			timestamp: pushTimestamp,
+			signature: pushSignature,
+		})
+	}
 }
 
 export const handleVoiceUnlisten = (

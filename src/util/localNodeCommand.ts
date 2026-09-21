@@ -29,7 +29,7 @@ import IP from 'ip'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks, notifyVoiceCallPush } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -907,30 +907,6 @@ const setToUssrPool = (_wallet: string) => {
     validatorUserPool.set (wallet, _timeout)
 }
 
-const handleVoiceCallPush = async (socket: Socket, command: Record<string, unknown>, nodeWallet: ethers.Wallet) => {
-	const target = String(command.targetWallet || '').trim()
-	const caller = String(command.walletAddress || '').trim()
-	const callId = String(command.callId || '').trim()
-	const sessionId = String(command.sessionId || '').trim()
-	if (!ethers.isAddress(target) || !ethers.isAddress(caller) || !callId || !sessionId) {
-		return distorySocket(socket)
-	}
-	if (!(await isMyRoute(target, nodeWallet.address))) {
-		logger(Colors.yellow(`voice_call_push not_my_route target=${target}`))
-		return distorySocket(socket)
-	}
-	notifyVoiceCallPush({
-		callId,
-		sessionId,
-		callerEoa: caller,
-		calleeEoa: target,
-		expiresAt: Number(command.expiresAt),
-		timestamp: Number(command.timestamp),
-		signature: String(command.signature || ''),
-	})
-	return distorySocket(socket)
-}
-
 export const localNodeCommandSocket = async (socket: Socket, headers: string[], command: minerObj, wallet: ethers.Wallet) => {
 	//logger(`wallet ${command.walletAddress} command = ${command.command}`)
 	switch (command.command) {
@@ -1110,9 +1086,6 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return handleVoiceUnlisten(socket, command as unknown as Record<string, unknown>)
 		}
 
-		case 'voice_call_push': {
-			return handleVoiceCallPush(socket, command as unknown as Record<string, unknown>, wallet)
-		}
 
 		case 'mining_validator': {
 			return validatorMining(command, socket)
