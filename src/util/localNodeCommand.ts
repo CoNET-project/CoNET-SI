@@ -23,7 +23,18 @@ import { Writable } from 'stream'
 import { createInterface } from 'readline'
 import { TransformCallback } from 'stream'
 export const setupPath = '.CoNET-SI'
-import {CoNET_mainnet_RPC, getRoute, startUp, reScanAllWallets, getWalletFromKeyID, saveLocal} from './util'
+import {
+	CoNET_mainnet_RPC,
+	getRoute,
+	startUp,
+	reScanAllWallets,
+	getWalletFromKeyID,
+	saveLocal,
+	notifyPushDeviceRegistration,
+} from './util'
+
+const validRouteCommandTimestamp = (value: number): boolean =>
+	Number.isFinite(value) && Math.abs(Math.floor(Date.now() / 1000) - value) <= 600
 import { ethers } from 'ethers'
 import IP from 'ip'
 import {TLSSocket} from 'tls'
@@ -1097,6 +1108,50 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 		case 'wallet_online_query': {
 			return handleWalletOnlineQuery(socket, command, wallet)
+		}
+
+		case 'push_device_register': {
+			const eoa = typeof command.walletAddress === 'string' ? command.walletAddress.trim() : ''
+			const deviceToken = typeof command.deviceToken === 'string' ? command.deviceToken.trim() : ''
+			const platform = typeof command.platform === 'string' ? command.platform.trim().toLowerCase() : ''
+			const bundleId = typeof command.bundleId === 'string' ? command.bundleId.trim() : ''
+			const pgpKeyId = typeof command.pgpKeyId === 'string' ? command.pgpKeyId.trim() : ''
+			const timestamp = Number(command.timestamp)
+			const signature = typeof command.registrationSignature === 'string'
+				? command.registrationSignature.trim()
+				: ''
+			const capabilities = command.capabilities && typeof command.capabilities === 'object'
+				? command.capabilities as {
+					nativeCallUi?: boolean
+					fullScreenIntent?: boolean
+					callKit?: boolean
+				}
+				: undefined
+			if (
+				!ethers.isAddress(eoa) ||
+				!deviceToken ||
+				deviceToken.length > 4096 ||
+				!['ios', 'ios_voip', 'android'].includes(platform) ||
+				!bundleId ||
+				!signature ||
+				!validRouteCommandTimestamp(timestamp)
+			) {
+				return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_push_device_register' }))
+			}
+			if (!(await isMyRoute(eoa, wallet.address))) {
+				return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route' }))
+			}
+			notifyPushDeviceRegistration({
+				eoa: ethers.getAddress(eoa),
+				deviceToken,
+				platform,
+				bundleId,
+				pgpKeyId: pgpKeyId || undefined,
+				timestamp,
+				signature,
+				capabilities,
+			})
+			return response200Html(socket, JSON.stringify({ ok: true }))
 		}
 
 		// case 'mining_gossip': {

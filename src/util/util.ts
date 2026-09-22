@@ -713,6 +713,52 @@ export const notifyVoiceCallPush = (payload: {
 	})()
 }
 
+/** Forward a shell capability/device registration from the wallet's own encrypted mailbox. */
+export const notifyPushDeviceRegistration = (payload: {
+	eoa: string
+	deviceToken: string
+	platform: string
+	bundleId: string
+	pgpKeyId?: string
+	timestamp: number
+	signature: string
+	capabilities?: {
+		nativeCallUi?: boolean
+		fullScreenIntent?: boolean
+		callKit?: boolean
+	}
+}): void => {
+	void (async () => {
+		try {
+			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
+			const res = await P({
+				url: `${apiBase}/api/registerPushDevice`,
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				data: JSON.stringify({
+					eoa: payload.eoa,
+					deviceToken: payload.deviceToken,
+					platform: payload.platform,
+					bundleId: payload.bundleId,
+					pgpKeyId: payload.pgpKeyId,
+					timestamp: payload.timestamp,
+					signature: payload.signature,
+					capabilities: payload.capabilities,
+				}),
+				parse: 'json',
+				timeout: 8_000,
+			})
+			if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
+				logger(Colors.yellow(`push device registration HTTP ${res.statusCode} eoa=${payload.eoa}`))
+			} else {
+				logger(Colors.green(`push device registration ok eoa=${payload.eoa} platform=${payload.platform}`))
+			}
+		} catch (err: any) {
+			logger(Colors.yellow(`push device registration failed: ${err?.message ?? err}`))
+		}
+	})()
+}
+
 /** Canonical hash of a stored offline PGP armor string (client ACK must match). */
 export const hashPgpArmor = (pgpMessage: string): string => {
 	return ethers.keccak256(ethers.toUtf8Bytes(pgpMessage))
