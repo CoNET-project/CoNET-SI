@@ -13,19 +13,17 @@ import { ethers } from 'ethers'
 import Colors from 'colors/safe'
 import { logger } from './logger'
 import { distorySocket, response200Html } from './htmlResponse'
-import { isLivenessListenSocketStale, isMyRoute, notifyVoiceCallPush } from './util'
+import { isLivenessListenSocketStale, notifyVoiceCallPush } from './util'
 
 const VOICE_IDLE_MS = 2 * 60 * 1000
 const VOICE_SWEEP_MS = 30_000
 const VOICE_MAX_GLOBAL = 256
-const VOICE_MAX_PER_WALLET = 4
 const VOICE_MAX_PAYLOAD_B64 = 12_000
 const VOICE_TIMESTAMP_SKEW_SEC = 60
 const VOICE_SESSION_RE = /^[0-9a-fA-F-]{16,64}$/
 
 type VoiceSession = {
 	sessionId: string
-	wallet: string
 	res: Socket | TLSSocket
 	lastActivityAt: number
 	paused: boolean
@@ -58,7 +56,7 @@ const removeSession = (sessionId: string, reason: string): void => {
 	if (!session) return
 	sessions.delete(sessionId)
 	if (session.drainTimer) clearTimeout(session.drainTimer)
-	logger(Colors.grey(`voice session=${sessionId} wallet=${session.wallet} ${reason}`))
+	logger(Colors.grey(`voice session=${sessionId} ${reason}`))
 	try {
 		const stream = session.res as Socket
 		if (!stream.destroyed) stream.destroy()
@@ -117,22 +115,13 @@ export const handleVoiceListen = async (
 	command: Record<string, unknown>,
 	nodeWallet: ethers.Wallet,
 ): Promise<void> => {
-	const wallet = lowerAddress(command.walletAddress)
 	const sessionId = validSessionId(command.sessionId) ? command.sessionId.trim() : ''
-	if (!wallet || !sessionId || !validTimestamp(command.timestamp)) return distorySocket(socket)
-	if (!(await isMyRoute(wallet, nodeWallet.address))) {
-		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route' }))
-	}
+	if (!sessionId || !validTimestamp(command.timestamp)) return distorySocket(socket)
 	if (sessions.size >= VOICE_MAX_GLOBAL) return response200Html(socket, JSON.stringify({ ok: false, error: 'pool_full' }))
-	const walletSessions = [...sessions.values()].filter((session) => session.wallet === wallet)
-	if (walletSessions.length >= VOICE_MAX_PER_WALLET) {
-		return response200Html(socket, JSON.stringify({ ok: false, error: 'wallet_session_limit' }))
-	}
 	if (sessions.has(sessionId)) return response200Html(socket, JSON.stringify({ ok: false, error: 'session_conflict' }))
 
 	const session: VoiceSession = {
 		sessionId,
-		wallet,
 		res: socket,
 		lastActivityAt: Date.now(),
 		paused: false,
@@ -153,7 +142,6 @@ export const handleVoiceListen = async (
 		type: 'voice_ready',
 		ok: true,
 		sessionId,
-		wallet,
 		nodeWallet: nodeWallet.address.toLowerCase(),
 	}
 	if (!writeFrame({ ...session, paused: false, queue: [] }, headers + frameLine(handshake))) {
@@ -161,7 +149,7 @@ export const handleVoiceListen = async (
 	}
 	sessions.set(sessionId, session)
 	scheduleSweep()
-	logger(Colors.cyan(`voice listen attached session=${sessionId} wallet=${wallet}`))
+	logger(Colors.cyan(`voice listen attached session=${sessionId}`))
 
 	// The caller's mailbox is the only component that wakes native devices.
 	// The PWA never calls /api/voiceCallPush directly, so the API sees the
@@ -170,24 +158,20 @@ export const handleVoiceListen = async (
 	const calleeEoa = lowerAddress(command.targetWallet)
 	const expiresAt = Number(command.expiresAt)
 	const pushTimestamp = Number(command.pushTimestamp)
-	const pushSignature = typeof command.pushSignature === 'string' ? command.pushSignature.trim() : ''
 	if (
 		callId &&
 		calleeEoa &&
 		Number.isFinite(expiresAt) &&
 		expiresAt > Date.now() &&
 		expiresAt <= Date.now() + 10 * 60_000 &&
-		validTimestamp(pushTimestamp) &&
-		pushSignature
+		validTimestamp(pushTimestamp)
 	) {
 		notifyVoiceCallPush({
 			callId,
 			sessionId,
-			callerEoa: wallet,
 			calleeEoa,
 			expiresAt,
 			timestamp: pushTimestamp,
-			signature: pushSignature,
 		})
 	}
 }
@@ -197,9 +181,8 @@ export const handleVoiceUnlisten = (
 	command: Record<string, unknown>,
 ): void => {
 	const sessionId = validSessionId(command.sessionId) ? command.sessionId.trim() : ''
-	const wallet = lowerAddress(command.walletAddress)
 	const session = sessions.get(sessionId)
-	if (session && session.wallet === wallet) removeSession(sessionId, 'unlisten')
+	if (session) removeSession(sessionId, 'unlisten')
 	return response200Html(socket, JSON.stringify({ ok: true, sessionId }))
 }
 
@@ -208,22 +191,17 @@ export const handleVoiceFrame = async (
 	command: Record<string, unknown>,
 	nodeWallet: ethers.Wallet,
 ): Promise<void> => {
-	const from = lowerAddress(command.walletAddress)
-	const targetWallet = lowerAddress(command.targetWallet)
 	const targetSessionId = validSessionId(command.targetSessionId) ? command.targetSessionId.trim() : ''
 	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
 	const sessionId = validSessionId(command.sessionId) ? command.sessionId.trim() : ''
 	const payload = command.payload
 	const seq = Number(command.seq)
-	if (!from || !targetWallet || !targetSessionId || !sessionId || !callId || !validPayload(payload) ||
+	if (!targetSessionId || !sessionId || !callId || !validPayload(payload) ||
 		!Number.isSafeInteger(seq) || seq < 0 || !validTimestamp(command.timestamp)) {
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_voice_frame' }))
 	}
-	if (!(await isMyRoute(targetWallet, nodeWallet.address))) {
-		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route' }))
-	}
 	const target = sessions.get(targetSessionId)
-	if (!target || target.wallet !== targetWallet || isLivenessListenSocketStale(target.res)) {
+	if (!target || isLivenessListenSocketStale(target.res)) {
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'target_voice_session_not_found' }))
 	}
 	target.lastActivityAt = Date.now()
@@ -231,8 +209,6 @@ export const handleVoiceFrame = async (
 		type: 'voice_frame_v1',
 		callId,
 		sessionId,
-		from,
-		to: targetWallet,
 		seq,
 		timestamp: Math.floor(Date.now() / 1000),
 		payload,

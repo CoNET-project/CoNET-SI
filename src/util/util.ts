@@ -681,24 +681,34 @@ export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
 	})()
 }
 
-/** Route-encrypted voice-call metadata → API VoIP/FCM push. No media or key material. */
+/** Route-encrypted opaque voice wake-up → API VoIP/FCM push. No wallet, media, or key material. */
 export const notifyVoiceCallPush = (payload: {
 	callId: string
 	sessionId: string
-	callerEoa: string
 	calleeEoa: string
 	expiresAt: number
 	timestamp: number
-	signature: string
 }): void => {
 	void (async () => {
 		try {
+			if (!nodePrivatekey) return
+			const nodeWallet = new ethers.Wallet(nodePrivatekey)
+			const message = [
+				'CoNET voiceCallPush relay',
+				`callId:${payload.callId}`,
+				`sessionId:${payload.sessionId}`,
+				`calleeEoa:${payload.calleeEoa.toLowerCase()}`,
+				`expiresAt:${payload.expiresAt}`,
+				`timestamp:${payload.timestamp}`,
+				`nodeWallet:${nodeWallet.address.toLowerCase()}`,
+			].join('\n')
+			const signature = await nodeWallet.signMessage(message)
 			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
 			const res = await P({
 				url: `${apiBase}/api/voiceCallPush`,
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				data: JSON.stringify(payload),
+				data: JSON.stringify({ ...payload, nodeWallet: nodeWallet.address, signature }),
 				parse: 'json',
 				timeout: 8_000,
 			})

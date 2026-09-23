@@ -1982,6 +1982,14 @@ export const postOpenpgpRouteSocket = async (
 		return distorySocket(socket)
 	}
 
+	if (
+		(content.command === 'voice_listen' || content.command === 'voice_uplink' ||
+			content.command === 'voice_downlink' || content.command === 'voice_unlisten') &&
+		typeof content.sessionId === 'string'
+	) {
+		return localNodeCommandSocket(socket, headers, content as minerObj, wallet)
+	}
+
 	if (!content.message ||!content.signMessage) {
 		logger (Colors.red(`Command format Error ${socket.remoteAddressShow}`))
 		logger(inspect(content, false,3, true))
@@ -2363,6 +2371,19 @@ export const checkSign = (message: string, signMess: string) => {
 	try {
 		obj = JSON.parse(message)
 		wallet = obj.walletAddress
+		// Voice commands are already encrypted to the destination mailbox
+		// route. Their sessionId is the capability; requiring an EOA signature
+		// here would recover and expose the initiator's business wallet to the
+		// mailbox node.
+		if (
+			(obj.command === 'voice_listen' || obj.command === 'voice_uplink' ||
+				obj.command === 'voice_downlink' || obj.command === 'voice_unlisten') &&
+			typeof obj.sessionId === 'string' && obj.sessionId.length >= 16
+		) {
+			obj.walletAddress = ''
+			obj.billingWallet = ''
+			return obj
+		}
 		const billingWallet = obj.billingWallet || wallet
 		digest = ethers.id(message)
 		recoverPublicKey = ethers.recoverAddress(digest, signMess)
