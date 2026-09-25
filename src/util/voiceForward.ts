@@ -154,6 +154,8 @@ export const handleVoiceListen = async (
 	// The caller's mailbox is the only component that wakes native devices.
 	// The PWA never calls /api/voiceCallPush directly, so the API sees the
 	// mailbox node as the network source rather than the caller's IP.
+	// relayVoiceOfferArmor already stored the attached user-PGP offer on the
+	// callee mailbox before this push.
 	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
 	const calleeEoa = lowerAddress(command.targetWallet)
 	const expiresAt = Number(command.expiresAt)

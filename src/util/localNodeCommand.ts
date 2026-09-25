@@ -1085,7 +1085,9 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 
 		case 'voice_listen': {
-			return handleVoiceListen(socket, command as unknown as Record<string, unknown>, wallet)
+			const voiceCommand = command as unknown as Record<string, unknown>
+			await relayVoiceOfferArmor(voiceCommand, wallet)
+			return handleVoiceListen(socket, voiceCommand, wallet)
 		}
 
 		case 'voice_uplink':
@@ -2010,6 +2012,82 @@ export const postOpenpgpRouteSocket = async (
 	
 }
 
+
+const VOICE_OFFER_ARMOR_MAX = 48_000
+
+/**
+ * Outgoing voice_listen may carry the callee's user-PGP offer armor.
+ * This mailbox forwards that ciphertext and does not decrypt it.
+ * The offer is stored before voiceCallPush so the callee flush has it.
+ */
+const relayVoiceOfferArmor = async (
+	command: Record<string, unknown>,
+	nodeWallet: ethers.Wallet,
+): Promise<void> => {
+	const raw = typeof command.offerArmor === 'string' ? command.offerArmor : ''
+	if (!raw) return
+	if (raw.length > VOICE_OFFER_ARMOR_MAX || !raw.includes('-----BEGIN PGP MESSAGE-----')) {
+		logger(Colors.yellow('voice offer armor rejected'))
+		return
+	}
+	let keyId = ''
+	try {
+		const message = await readMessage({ armoredMessage: raw })
+		keyId = message.getEncryptionKeyIDs()?.[0]?.toHex().toUpperCase() || ''
+	} catch {
+		logger(Colors.yellow('voice offer armor is not OpenPGP'))
+		return
+	}
+	if (!keyId) return
+	const [route] = await getRoute(keyId)
+	if (!route) {
+		logger(Colors.yellow(`voice offer no mailbox for ${keyId}`))
+		return
+	}
+	if (route === nodeIpAddr) {
+		saveLocal(raw, keyId, { skipPush: true })
+		for (const client of findMailboxClientsByPgpKeyId(keyId)) {
+			if (isLivenessListenSocketStale(client.res)) continue
+			forWardPGPMessageToClient(raw, keyId, client, () => {})
+		}
+		logger(Colors.cyan(`voice offer stored on this mailbox ${keyId}`))
+		return
+	}
+	const hops = await signAndAppendHop([], nodeWallet, keyId, raw)
+	if (!hops) {
+		logger(Colors.yellow(`voice offer hop-sig refused ${keyId}`))
+		return
+	}
+	const ok = await postUserPgpToRemoteMailbox(route, raw, hopSigsHeaderLine(hops))
+	logger(Colors.cyan(`voice offer forwarded ${keyId} ok=${ok}`))
+}
+
+const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string): Promise<boolean> => {
+	return new Promise((resolve) => {
+		const body = JSON.stringify({ data: armor })
+		const raw = otherRequestForNet(body, ip, 80, [hopLine])
+		let settled = false
+		const done = (ok: boolean) => {
+			if (settled) return
+			settled = true
+			clearTimeout(timer)
+			try { conn.destroy() } catch { /* ignore */ }
+			resolve(ok)
+		}
+		const timer = setTimeout(() => done(false), 8_000)
+		const conn = createConnection(80, ip, () => {
+			conn.write(raw, (err) => {
+				if (err) done(false)
+				// The destination mailbox stores user-PGP mail without writing
+				// an HTTP body. Give it time to saveLocal, then continue.
+				else setTimeout(() => done(true), 1_500)
+			})
+		})
+		conn.once('data', () => done(true))
+		conn.once('end', () => done(true))
+		conn.once('error', () => done(false))
+	})
+}
 
 const socketForward = (
 	ipAddr: string,
