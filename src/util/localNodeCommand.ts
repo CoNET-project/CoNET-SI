@@ -31,6 +31,7 @@ import {
 	getWalletFromKeyID,
 	saveLocal,
 	notifyPushDeviceRegistration,
+	queryNativeWakeable,
 } from './util'
 
 const validRouteCommandTimestamp = (value: number): boolean =>
@@ -1112,6 +1113,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return handleWalletOnlineQuery(socket, command, wallet)
 		}
 
+		case 'wallet_native_wake_query': {
+			return handleWalletNativeWakeQuery(socket, command, wallet)
+		}
+
 		case 'push_device_register': {
 			const eoa = typeof command.walletAddress === 'string' ? command.walletAddress.trim() : ''
 			const deviceToken = typeof command.deviceToken === 'string' ? command.deviceToken.trim() : ''
@@ -1239,6 +1244,51 @@ const handleWalletOnlineQuery = async (
 			online,
 			listenAgeMs,
 			nodeWallet: nodeWallet.address?.toLowerCase() || '',
+		}),
+	)
+}
+
+/**
+ * Whether the mailbox-registered wallet has a native shell that push can wake.
+ * Callers obtain presence first via wallet_online_query. This answer is independent:
+ * true means iOS, Android, Windows, Linux, or macOS can be rung while the listen
+ * session is offline. Device tokens are not included.
+ */
+const handleWalletNativeWakeQuery = async (
+	socket: Socket,
+	command: minerObj,
+	nodeWallet: ethers.Wallet,
+) => {
+	const requester = String(command.walletAddress || '').trim()
+	const targetRaw = String((command as any).targetWallet || '').trim()
+	const timestamp = Number((command as any).timestamp)
+	if (!requester || !ethers.isAddress(requester) || requester === ethers.ZeroAddress) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_wallet', nativeWakeable: false }))
+	}
+	if (!targetRaw || !ethers.isAddress(targetRaw) || targetRaw === ethers.ZeroAddress) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'invalid_target', nativeWakeable: false }))
+	}
+	if (!validRouteCommandTimestamp(timestamp)) {
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'timestamp', nativeWakeable: false }))
+	}
+	const target = ethers.getAddress(targetRaw).toLowerCase()
+	const mine = await isMyRoute(target, nodeWallet.address)
+	if (!mine) {
+		logger(Colors.yellow(`wallet_native_wake_query not_my_route target=${target} node=${nodeWallet.address}`))
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'not_my_route', wallet: target, nativeWakeable: false }))
+	}
+	const nativeWakeable = await queryNativeWakeable(target)
+	if (nativeWakeable === null) {
+		logger(Colors.yellow(`wallet_native_wake_query lookup_failed target=${target}`))
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'lookup_failed', wallet: target, nativeWakeable: false }))
+	}
+	logger(Colors.cyan(`wallet_native_wake_query target=${target} nativeWakeable=${nativeWakeable} from=${requester}`))
+	return response200Html(
+		socket,
+		JSON.stringify({
+			ok: true,
+			wallet: target,
+			nativeWakeable,
 		}),
 	)
 }

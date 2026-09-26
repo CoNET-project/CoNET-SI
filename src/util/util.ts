@@ -723,6 +723,48 @@ export const notifyVoiceCallPush = (payload: {
 	})()
 }
 
+/**
+ * Ask Cluster whether this mailbox user has a registered native shell
+ * (iOS, Android, Windows, Linux, or macOS) that push can wake.
+ * Returns null when the lookup is untrusted (timeout, non-2xx, bad body).
+ * The response is a boolean only — device tokens never come back.
+ */
+export const queryNativeWakeable = async (eoa: string): Promise<boolean | null> => {
+	try {
+		if (!nodePrivatekey || !ethers.isAddress(eoa)) return null
+		const nodeWallet = new ethers.Wallet(nodePrivatekey)
+		const timestamp = Math.floor(Date.now() / 1000)
+		const eoaNorm = ethers.getAddress(eoa).toLowerCase()
+		const message = [
+			'Beamio nativeWakeable',
+			`eoa:${eoaNorm}`,
+			`timestamp:${timestamp}`,
+		].join('\n')
+		const signature = await nodeWallet.signMessage(message)
+		const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
+		const res = await P({
+			url: `${apiBase}/api/nativeWakeable`,
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			data: JSON.stringify({ eoa: eoaNorm, timestamp, signature }),
+			parse: 'json',
+			timeout: 8_000,
+		})
+		if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
+			logger(Colors.yellow(`nativeWakeable HTTP ${res.statusCode} eoa=${eoaNorm}`))
+			return null
+		}
+		const body = res.body as { success?: boolean; nativeWakeable?: boolean } | undefined
+		if (body?.success === true && typeof body.nativeWakeable === 'boolean') {
+			return body.nativeWakeable
+		}
+		return null
+	} catch (err: any) {
+		logger(Colors.yellow(`nativeWakeable failed: ${err?.message ?? err}`))
+		return null
+	}
+}
+
 /** Forward a shell capability/device registration from the wallet's own encrypted mailbox. */
 export const notifyPushDeviceRegistration = (payload: {
 	eoa: string
