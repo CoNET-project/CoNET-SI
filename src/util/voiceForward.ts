@@ -19,7 +19,7 @@ const VOICE_IDLE_MS = 2 * 60 * 1000
 const VOICE_SWEEP_MS = 30_000
 const VOICE_MAX_GLOBAL = 256
 const VOICE_MAX_PAYLOAD_B64 = 12_000
-const VOICE_TIMESTAMP_SKEW_SEC = 60
+const VOICE_TIMESTAMP_SKEW_SEC = 10 * 60
 const VOICE_SESSION_RE = /^[0-9a-fA-F-]{16,64}$/
 
 type VoiceSession = {
@@ -117,6 +117,7 @@ export const handleVoiceListen = async (
 ): Promise<void> => {
 	const sessionId = validSessionId(command.sessionId) ? command.sessionId.trim() : ''
 	if (!sessionId || !validTimestamp(command.timestamp)) return distorySocket(socket)
+	try { socket.setTimeout(0) } catch { /* ignore */ }
 	if (sessions.size >= VOICE_MAX_GLOBAL) return response200Html(socket, JSON.stringify({ ok: false, error: 'pool_full' }))
 	if (sessions.has(sessionId)) return response200Html(socket, JSON.stringify({ ok: false, error: 'session_conflict' }))
 
@@ -175,6 +176,10 @@ export const handleVoiceListen = async (
 			expiresAt,
 			timestamp: pushTimestamp,
 		})
+	} else if (callId || calleeEoa) {
+		logger(Colors.yellow(
+			`voiceCallPush skipped callId=${callId ? 'yes' : 'no'} callee=${calleeEoa ? 'yes' : 'no'} expiresOk=${Number.isFinite(expiresAt) && expiresAt > Date.now() && expiresAt <= Date.now() + 10 * 60_000} tsOk=${validTimestamp(pushTimestamp)}`
+		))
 	}
 }
 

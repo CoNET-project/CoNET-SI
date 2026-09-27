@@ -1087,7 +1087,10 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 		case 'voice_listen': {
 			const voiceCommand = command as unknown as Record<string, unknown>
-			await relayVoiceOfferArmor(voiceCommand, wallet)
+			const offerDelivered = await relayVoiceOfferArmor(voiceCommand, wallet)
+			if (!offerDelivered) {
+				return response200Html(socket, JSON.stringify({ ok: false, error: 'offer_not_delivered' }))
+			}
 			return handleVoiceListen(socket, voiceCommand, wallet)
 		}
 
@@ -2073,12 +2076,12 @@ const VOICE_OFFER_ARMOR_MAX = 48_000
 const relayVoiceOfferArmor = async (
 	command: Record<string, unknown>,
 	nodeWallet: ethers.Wallet,
-): Promise<void> => {
+): Promise<boolean> => {
 	const raw = typeof command.offerArmor === 'string' ? command.offerArmor : ''
-	if (!raw) return
+	if (!raw) return true
 	if (raw.length > VOICE_OFFER_ARMOR_MAX || !raw.includes('-----BEGIN PGP MESSAGE-----')) {
 		logger(Colors.yellow('voice offer armor rejected'))
-		return
+		return false
 	}
 	let keyId = ''
 	try {
@@ -2086,30 +2089,41 @@ const relayVoiceOfferArmor = async (
 		keyId = message.getEncryptionKeyIDs()?.[0]?.toHex().toUpperCase() || ''
 	} catch {
 		logger(Colors.yellow('voice offer armor is not OpenPGP'))
-		return
+		return false
 	}
-	if (!keyId) return
+	if (!keyId) return false
 	const [route] = await getRoute(keyId)
 	if (!route) {
 		logger(Colors.yellow(`voice offer no mailbox for ${keyId}`))
-		return
+		return false
 	}
 	if (route === nodeIpAddr) {
 		saveLocal(raw, keyId, { skipPush: true })
-		for (const client of findMailboxClientsByPgpKeyId(keyId)) {
-			if (isLivenessListenSocketStale(client.res)) continue
+		const mailboxClients = findMailboxClientsByPgpKeyId(keyId)
+			.filter((client) => !isLivenessListenSocketStale(client.res))
+		const legacy = findListenClientByPgpKeyId(keyId)
+		const targets = mailboxClients.length
+			? mailboxClients
+			: (legacy && !isLivenessListenSocketStale(legacy.res) ? [legacy] : [])
+		for (const client of targets) {
 			forWardPGPMessageToClient(raw, keyId, client, () => {})
 		}
-		logger(Colors.cyan(`voice offer stored on this mailbox ${keyId}`))
-		return
+		logger(Colors.cyan(`voice offer stored on this mailbox ${keyId} live=${targets.length}`))
+		return true
 	}
 	const hops = await signAndAppendHop([], nodeWallet, keyId, raw)
 	if (!hops) {
 		logger(Colors.yellow(`voice offer hop-sig refused ${keyId}`))
-		return
+		return false
 	}
-	const ok = await postUserPgpToRemoteMailbox(route, raw, hopSigsHeaderLine(hops))
+	const hopLine = hopSigsHeaderLine(hops)
+	let ok = false
+	for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
+		ok = await postUserPgpToRemoteMailbox(route, raw, hopLine)
+		if (!ok) logger(Colors.yellow(`voice offer forward attempt ${attempt} failed ${keyId}`))
+	}
 	logger(Colors.cyan(`voice offer forwarded ${keyId} ok=${ok}`))
+	return ok
 }
 
 const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string): Promise<boolean> => {
@@ -2117,25 +2131,36 @@ const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string):
 		const body = JSON.stringify({ data: armor })
 		const raw = otherRequestForNet(body, ip, 80, [hopLine])
 		let settled = false
-		const done = (ok: boolean) => {
+		let writeFinished = false
+		const finish = (ok: boolean) => {
 			if (settled) return
 			settled = true
 			clearTimeout(timer)
-			try { conn.destroy() } catch { /* ignore */ }
 			resolve(ok)
 		}
-		const timer = setTimeout(() => done(false), 8_000)
 		const conn = createConnection(80, ip, () => {
 			conn.write(raw, (err) => {
-				if (err) done(false)
-				// The destination mailbox stores user-PGP mail without writing
-				// an HTTP body. Give it time to saveLocal, then continue.
-				else setTimeout(() => done(true), 1_500)
+				if (settled || err) {
+					if (!settled) {
+						try { conn.destroy() } catch { /* ignore */ }
+						finish(false)
+					}
+					return
+				}
+				writeFinished = true
+				// Half-close after the body. destroy() is RST and drops bytes
+				// the callee has not read; the old 1.5s timer still returned true.
+				conn.end()
 			})
 		})
-		conn.once('data', () => done(true))
-		conn.once('end', () => done(true))
-		conn.once('error', () => done(false))
+		const timer = setTimeout(() => {
+			finish(false)
+			try { conn.destroy() } catch { /* ignore */ }
+		}, 6_000)
+		conn.on('data', () => { /* drain the HTTP response; do not RST */ })
+		conn.once('end', () => { if (writeFinished) finish(true) })
+		conn.once('close', () => { if (!settled) finish(false) })
+		conn.once('error', () => { if (!writeFinished) finish(false) })
 	})
 }
 
@@ -2705,6 +2730,10 @@ async function writeLinesWithBackpressure(
 
 const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: string, nodeWallet: ethers.Wallet, res: TLSSocket|Socket, kind: 'chat' | 'mining' = 'mining') => {
 	const s = res as Socket
+	// socketData arms a 60s receive-idle destroy. Chat/mining SSE sends nothing
+	// after the POST, so that timer was closing a healthy listen every minute
+	// and the reconnect gap dropped live voice offers.
+	try { s.setTimeout(0) } catch { /* ignore */ }
 	const _obj = livenessListeningPool.get (wallet)
 	if (_obj) {
 		const o = _obj.res as Socket
@@ -2833,6 +2862,7 @@ const addIpaddressToMailboxListeningPool = async (
 	requestedInstanceId?: string,
 ) => {
 	const s = res as Socket
+	try { s.setTimeout(0) } catch { /* ignore */ }
 	const instanceId = String(requestedInstanceId || uuidV4(ethers.randomBytes(16)))
 	const poolKey = `${wallet}:${instanceId}`
 	const keyIDRaw = await getWalletFromKeyID(wallet)
