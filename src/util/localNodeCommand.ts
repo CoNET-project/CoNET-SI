@@ -1087,9 +1087,13 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 
 		case 'voice_listen': {
 			const voiceCommand = command as unknown as Record<string, unknown>
+			// Offer relay is best-effort. Blocking listen/push on offer forward
+			// prevented CallKit VoIP wake when the callee mailbox was briefly
+			// unreachable — the caller UI still showed Ringing after a client
+			// timeout, but APNs never fired because voice_listen never attached.
 			const offerDelivered = await relayVoiceOfferArmor(voiceCommand, wallet)
 			if (!offerDelivered) {
-				return response200Html(socket, JSON.stringify({ ok: false, error: 'offer_not_delivered' }))
+				logger(Colors.yellow(`voice offer relay best-effort failed; still attaching listen for ${wallet}`))
 			}
 			return handleVoiceListen(socket, voiceCommand, wallet)
 		}
