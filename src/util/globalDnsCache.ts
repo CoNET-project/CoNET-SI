@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
 import { randomBytes } from 'node:crypto'
-import IP from 'ip'
 import dns from 'node:dns'
+import {isPublicIpv4} from './publicIpv4'
 
 type CacheEntry = {
 	address: string
@@ -51,7 +51,7 @@ export async function getHostIPv4Cached(host: string): Promise<string> {
 	const now = Date.now()
 	let cache = await readCache()
 	const hit = cache[host]
-	if (hit && hit.expiresAt > now && IP.isPublic(hit.address)) {
+	if (hit && hit.expiresAt > now && isPublicIpv4(hit.address)) {
 		hit.usedAt = now
 		// 异步写回 usedAt（不阻塞主流程）
 		atomicWrite(cache).catch(() => {})
@@ -78,7 +78,7 @@ export async function getHostIPv4Cached(host: string): Promise<string> {
 	if (!records.length) return ''
 
 	// 选择第一个公网 IPv4；并找到最小 TTL（更安全）
-	const publicAddrs = records.filter(r => IP.isPublic(r.address))
+	const publicAddrs = records.filter(r => isPublicIpv4(r.address))
 	if (!publicAddrs.length) return ''
 	const chosen = publicAddrs[0]
 	const minTTL = Math.max(5, Math.min(...publicAddrs.map(r => (r.ttl || 60)))) // 最少 5s

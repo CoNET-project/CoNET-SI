@@ -37,6 +37,14 @@ temporary voice SSE. Voice frames are never decrypted, saved to offline
 mailbox storage, pushed through APNs, or included in Chat history. This is an
 application-level duplex relay, not raw UDP and not WebRTC.
 
+When `voice_listen` carries `offerArmor` (callee **user PGP** ciphertext), the
+caller's mailbox forwards that armor without decrypting it and also indexes a
+copy under opaque `callId` + `sessionId` on the callee mailbox
+(`voice_offer_store` / `voice_offer_fetch`, see [`RULES.md`](RULES.md)). Native
+shells wake from opaque VoIP/FCM metadata, fetch the indexed armor through an
+entry, and decrypt locally with the recipient user PGP private key injected by
+the PWA. Mailbox nodes never decrypt the offer.
+
 ## License
 
 Copyright (c) Kloak Information Technologies Inc. All rights reserved.

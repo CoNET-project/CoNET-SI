@@ -1,7 +1,6 @@
 import {logger} from './logger'
 import Colors from 'colors/safe'
 import { ethers } from 'ethers'
-import IP from 'ip'
 import {readPrivateKey, readMessage, decrypt, decryptKey} from 'openpgp'
 import { inspect}from 'node:util'
 

@@ -88,7 +88,13 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mailbox_listen'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'wallet_native_wake_query'|'push_device_register'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'voice_listen'|'voice_uplink'|'voice_downlink'|'voice_unlisten'|'voice_call_push'|'l0_listen'|'l0_connect'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mailbox_listen'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'wallet_native_wake_query'|'push_device_register'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'voice_listen'|'voice_uplink'|'voice_downlink'|'voice_unlisten'|'voice_call_push'|'voice_offer_store'|'voice_offer_fetch'|'l0_listen'|'l0_connect'
+	/** voice_offer_store / voice_call push: opaque call id */
+	callId?: string
+	/** voice_offer_store: callee user-PGP ciphertext (mailbox must not decrypt) */
+	offerArmor?: string
+	/** voice_offer_store / voice_listen push: offer expiry (unix ms or sec) */
+	expiresAt?: number
 	publicKeyArmored: string
 	responseError: string|null
 	responseData: any[]

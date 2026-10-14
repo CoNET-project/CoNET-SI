@@ -1,5 +1,4 @@
-import { createConnection, Socket } from 'net'
-import IP from 'ip'
+import { createConnection, Socket, isIP } from 'net'
 import nodeJs_DNS from 'dns'
 import { logger } from './logger'
 import { inspect } from 'util'
@@ -7,6 +6,7 @@ import { distorySocket } from './htmlResponse'
 import { Transform, TransformCallback } from 'stream'
 import { getHostIPv4Cached } from './globalDnsCache'
 import {transferCount} from './localNodeCommand'
+import {isPublicIpv4} from './publicIpv4'
 
 
 export class BandwidthCount extends Transform {
@@ -196,10 +196,10 @@ export class socks5Connect_v2 {
        try {
             port = prosyData.port
             host = prosyData.host || ''
-            ipStyle = IP.isV4Format(host)
+            ipStyle = isIP(host) === 4
             this.info = `[${uuid}:${wallet}]:req=[${reqSocket.remoteAddressShow}] res=[${this.resIpaddress}] ===> ${host}:${port}`
             
-            host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+            host = ipStyle ? (isPublicIpv4(host) ? host : '') : await getHostIpv4(host)
             
 
             if ( port < 1 || port > 65535 || ! host) {

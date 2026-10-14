@@ -18,11 +18,12 @@
  */
 import type { Socket } from 'net'
 import type { TLSSocket } from 'tls'
+import { randomBytes } from 'crypto'
 import { ethers } from 'ethers'
 import Colors from 'colors/safe'
 import { logger } from './logger'
 import { distorySocket, response200Html } from './htmlResponse'
-import { isLivenessListenSocketStale, getWalletFromKeyID } from './util'
+import { isLivenessListenSocketStale } from './util'
 
 const L0_TIMESTAMP_SKEW_SEC = 600
 const L0_MAX_LISTEN = 256
@@ -41,6 +42,7 @@ const L0_OCCUPIED_IDLE_TIMEOUT_MS = 180_000
 
 export interface L0Listen {
 	wallet: string
+	listenId: string
 	res: Socket | TLSSocket
 	ipaddress: string
 	connectedAt: number
@@ -54,6 +56,7 @@ export interface L0Listen {
 }
 
 const l0ListenPool: Map<string, L0Listen> = new Map()
+const l0ListenById: Map<string, L0Listen> = new Map()
 const l0ListenByPgp: Map<string, L0Listen> = new Map()
 
 const nowMs = () => Date.now()
@@ -74,6 +77,9 @@ const timestampOk = (raw: unknown): boolean => {
 
 const normalizePgp = (id: string): string =>
 	String(id || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+
+/** Opaque, single-use capability handle. It must not encode an EOA or PGP id. */
+const createListenId = (): string => randomBytes(24).toString('base64url')
 
 const sseHeaders = (): string =>
 	`HTTP/1.1 200 OK\r\n` +
@@ -124,7 +130,7 @@ const armOccupiedSocketTimeout = (
 		;(socket as Socket).setTimeout(L0_OCCUPIED_IDLE_TIMEOUT_MS, () => {
 			logger(
 				Colors.yellow(
-					`l0 occupied ${direction} idle timeout wallet=${wallet} timeoutMs=${L0_OCCUPIED_IDLE_TIMEOUT_MS}`,
+					`l0 occupied ${direction} idle timeout timeoutMs=${L0_OCCUPIED_IDLE_TIMEOUT_MS}`,
 				),
 			)
 			dropL0Listen(wallet, `occupied_${direction}_idle_timeout`)
@@ -211,11 +217,12 @@ const dropL0Listen = (wallet: string, why: string) => {
 	}
 	clearKeepalive(obj)
 	l0ListenPool.delete(wallet)
+	l0ListenById.delete(obj.listenId)
 	if (obj.pgpKeyId) {
 		l0ListenByPgp.delete(obj.pgpKeyId)
 		l0ListenByPgp.delete(normalizePgp(obj.pgpKeyId))
 	}
-	logger(Colors.grey(`l0_listen drop wallet=${wallet} occupied=${obj.occupied} ${why}`))
+	logger(Colors.grey(`l0_listen drop occupied=${obj.occupied} ${why}`))
 	destroySock(obj.inbound)
 	destroySock(obj.res)
 }
@@ -232,8 +239,15 @@ const sweepClosedL0Listens = () => {
 	}
 }
 
-const l0PoolSweepTimer = setInterval(sweepClosedL0Listens, L0_POOL_SWEEP_MS)
-;(l0PoolSweepTimer as any).unref?.()
+let l0PoolSweepTimer: ReturnType<typeof setTimeout> | undefined
+const scheduleL0PoolSweep = () => {
+	l0PoolSweepTimer = setTimeout(() => {
+		sweepClosedL0Listens()
+		scheduleL0PoolSweep()
+	}, L0_POOL_SWEEP_MS)
+	;(l0PoolSweepTimer as any).unref?.()
+}
+scheduleL0PoolSweep()
 
 const findByPgp = (gpgPublicKeyID: string): L0Listen | undefined => {
 	const want = normalizePgp(gpgPublicKeyID)
@@ -271,6 +285,12 @@ export const findIdleL0ListenByPgp = (gpgPublicKeyID: string): L0Listen | undefi
 		return undefined
 	}
 	return obj
+}
+
+const findL0ListenById = (listenId: string): L0Listen | undefined => {
+	const normalized = typeof listenId === 'string' ? listenId.trim() : ''
+	if (!normalized || normalized.length > 128) return undefined
+	return l0ListenById.get(normalized)
 }
 
 /** Idle L0 SSE may receive user-PGP gossip (offers). Does not occupy. */
@@ -311,7 +331,7 @@ export const handleL0Listen = async (
 ) => {
 	const wallet = lowerAddr(command.walletAddress)
 	if (!wallet) {
-		logger(Colors.red(`l0_listen missing walletAddress`))
+		logger(Colors.red(`l0_listen missing authenticated signer`))
 		return distorySocket(socket)
 	}
 	if ((command as any).Securitykey) {
@@ -319,7 +339,7 @@ export const handleL0Listen = async (
 		return distorySocket(socket)
 	}
 	if (!timestampOk((command as any).timestamp)) {
-		logger(Colors.red(`l0_listen timestamp rejected wallet=${wallet}`))
+		logger(Colors.red('l0_listen timestamp rejected'))
 		return distorySocket(socket)
 	}
 	sweepClosedL0Listens()
@@ -333,7 +353,7 @@ export const handleL0Listen = async (
 		}
 		logger(
 			Colors.yellow(
-				`l0_listen pool_full size=${l0ListenPool.size} max=${L0_MAX_LISTEN} idle=${l0ListenPool.size - occupied} occupied=${occupied} wallet=${wallet}`,
+				`l0_listen pool_full size=${l0ListenPool.size} max=${L0_MAX_LISTEN} idle=${l0ListenPool.size - occupied} occupied=${occupied}`,
 			),
 		)
 		return response200Html(socket, JSON.stringify({ ok: false, error: 'pool_full' }))
@@ -342,24 +362,27 @@ export const handleL0Listen = async (
 	const existing = l0ListenPool.get(wallet)
 	if (existing?.occupied) {
 		if (!occupiedListenSocketsDead(existing)) {
-			logger(Colors.yellow(`l0_listen refuse replace while occupied wallet=${wallet} by=${existing.occupiedBy}`))
+			logger(Colors.yellow('l0_listen refuse replace while occupied'))
 			return rejectOccupiedInflow(socket)
 		}
 		const reason = occupiedInboundDead(existing)
 			? 'occupied_inbound_dead_replace'
 			: 'stale_occupied_replace'
-		logger(Colors.yellow(`l0_listen replace dead occupied wallet=${wallet} reason=${reason}`))
+		logger(Colors.yellow(`l0_listen replace dead occupied reason=${reason}`))
 		dropL0Listen(wallet, reason)
 	}
 	if (existing && l0ListenPool.get(wallet) === existing) {
 		dropL0Listen(wallet, 'replaced')
 	}
 
-	const announced = normalizePgp(String(command.userPgpKeyId || ''))
-	const keyIDRaw = announced || (await getWalletFromKeyID(wallet))
-	const keyID = keyIDRaw ? normalizePgp(keyIDRaw) : undefined
+	const keyID = normalizePgp(String(command.userPgpKeyId || '')) || undefined
+	if (!keyID) {
+		logger(Colors.red('l0_listen requires userPgpKeyId'))
+		return distorySocket(socket)
+	}
 	const obj: L0Listen = {
 		wallet,
+		listenId: createListenId(),
 		res: socket,
 		ipaddress: socket.remoteAddressShow || socket.remoteAddress || '',
 		connectedAt: nowMs(),
@@ -369,10 +392,13 @@ export const handleL0Listen = async (
 
 	const s = socket as Socket
 	disableSocketIdleTimeout(s)
-	s.once('error', (err: Error) => dropL0Listen(wallet, `error:${err.message}`))
+	// Never reflect raw socket errors in the HTTP response or logs: platform
+	// errors can contain peer/network details that are not part of the L0
+	// capability protocol.
+	s.once('error', () => dropL0Listen(wallet, 'socket_error'))
 	s.once('close', () => dropL0Listen(wallet, 'close'))
 	s.once('end', () => {
-		logger(Colors.grey(`l0_listen peer half-close wallet=${wallet} — keep writable`))
+		logger(Colors.grey('l0_listen peer half-close — keep writable'))
 	})
 
 	const handshake =
@@ -380,21 +406,22 @@ export const handleL0Listen = async (
 		`data: ${JSON.stringify({
 			ok: true,
 			kind: 'l0',
-			wallet,
-			nodeWallet: nodeWallet.address?.toLowerCase(),
+			// The temporary EOA and mailbox wallet are deliberately not sent
+			// over the entry-facing SSE. The opaque handle is only for the
+			// peer's later l0_connect capability.
+			listenId: obj.listenId,
 		})}\r\n\r\n`
 
+	l0ListenPool.set(wallet, obj)
+	l0ListenById.set(obj.listenId, obj)
+	l0ListenByPgp.set(keyID, obj)
 	if (!s.write(handshake)) {
-		logger(Colors.red(`l0_listen handshake write fail wallet=${wallet}`))
+		logger(Colors.red('l0_listen handshake write fail'))
 		return dropL0Listen(wallet, 'handshake_write')
 	}
 
-	l0ListenPool.set(wallet, obj)
-	if (keyID) {
-		l0ListenByPgp.set(keyID, obj)
-	}
 	armListenKeepalive(obj)
-	logger(Colors.cyan(`l0_listen idle wallet=${wallet} pgp=${keyID || 'none'}`))
+	logger(Colors.cyan(`l0_listen idle listenId=${obj.listenId.slice(0, 8)}`))
 }
 
 /**
@@ -406,9 +433,12 @@ export const handleL0Connect = async (
 	nodeWallet: ethers.Wallet,
 ) => {
 	const connector = lowerAddr(command.walletAddress)
-	const target = lowerAddr((command as any).targetWallet)
-	if (!connector || !target) {
-		logger(Colors.red(`l0_connect missing walletAddress/targetWallet`))
+	const targetListenId = typeof (command as any).targetListenId === 'string'
+		? (command as any).targetListenId.trim()
+		: ''
+	const listen = findL0ListenById(targetListenId)
+	if (!connector || !listen) {
+		logger(Colors.red('l0_connect missing targetListenId or authenticated signer'))
 		return distorySocket(socket)
 	}
 	if ((command as any).Securitykey) {
@@ -416,13 +446,13 @@ export const handleL0Connect = async (
 		return distorySocket(socket)
 	}
 	if (!timestampOk((command as any).timestamp)) {
-		logger(Colors.red(`l0_connect timestamp rejected connector=${connector}`))
+		logger(Colors.red('l0_connect timestamp rejected'))
 		return distorySocket(socket)
 	}
-	const listen = l0ListenPool.get(target)
-	if (!listen || isLivenessListenSocketStale(listen.res)) {
+	const target = listen.wallet
+	if (isLivenessListenSocketStale(listen.res)) {
 		if (listen) dropL0Listen(target, 'stale_before_connect')
-		logger(Colors.yellow(`l0_connect no idle listen target=${target}`))
+		logger(Colors.yellow('l0_connect no idle listen'))
 		return distorySocket(socket)
 	}
 	if (listen.occupied) {
@@ -430,11 +460,11 @@ export const handleL0Connect = async (
 			const reason = occupiedInboundDead(listen)
 				? 'occupied_inbound_dead_before_connect'
 				: 'stale_occupied_before_connect'
-			logger(Colors.yellow(`l0_connect drop dead occupy target=${target} reason=${reason}`))
+			logger(Colors.yellow(`l0_connect drop dead occupy reason=${reason}`))
 			dropL0Listen(target, reason)
 			return distorySocket(socket)
 		}
-		logger(Colors.yellow(`l0_connect occupied target=${target} by=${listen.occupiedBy}`))
+		logger(Colors.yellow('l0_connect occupied'))
 		return rejectOccupiedInflow(socket)
 	}
 
@@ -442,12 +472,10 @@ export const handleL0Connect = async (
 	listen.occupiedBy = connector
 	listen.inbound = socket
 	clearKeepalive(listen)
-	logger(Colors.cyan(`l0_connect occupy target=${target} connector=${connector} — SI relinquishes`))
+	logger(Colors.cyan(`l0_connect occupy listenId=${listen.listenId.slice(0, 8)} — SI relinquishes`))
 
 	const occupyWr = writeSseJson(listen.res, {
 		type: 'l0_occupied',
-		wallet: target,
-		connector,
 	})
 	if (occupyWr === 'closed') {
 		dropL0Listen(target, 'occupy_write_closed')
@@ -515,7 +543,7 @@ export const handleL0Connect = async (
 			destroySock(inbound)
 		}
 	})
-	inbound.once('error', (err: Error) => dropL0Listen(target, `inbound_error:${err.message}`))
+	inbound.once('error', () => dropL0Listen(target, 'inbound_socket_error'))
 	// An occupied pipe is a bidirectional transport. A peer half-close means
 	// it can no longer deliver overlay bytes; release the mailbox occupy
 	// immediately instead of waiting for a later TCP close event.
@@ -533,7 +561,7 @@ export const handleL0Connect = async (
 		dropL0Listen(target, 'occupy_http_write')
 		return
 	}
-	logger(Colors.cyan(`l0_connect occupy HTTP 200 keep-alive target=${target}`))
+	logger(Colors.cyan(`l0_connect occupy HTTP 200 keep-alive listenId=${listen.listenId.slice(0, 8)}`))
 	// getDataPOST unshifts bytes after Content-Length; emit them now that we listen.
 	if (!ssePaused && typeof inbound.resume === 'function') inbound.resume()
 }

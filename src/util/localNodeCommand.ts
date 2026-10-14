@@ -1,5 +1,5 @@
 import type { Socket } from 'net'
-import {createConnection} from 'net'
+import {createConnection, isIP} from 'net'
 import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
 import {logger, hexDebug} from './logger'
 import crypto from 'crypto'
@@ -37,10 +37,11 @@ import {
 const validRouteCommandTimestamp = (value: number): boolean =>
 	Number.isFinite(value) && Math.abs(Math.floor(Date.now() / 1000) - value) <= 600
 import { ethers } from 'ethers'
-import IP from 'ip'
+import {isPublicIpv4} from './publicIpv4'
 import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
+
 import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
@@ -82,6 +83,10 @@ import {
 	handleVoiceListen,
 	handleVoiceUnlisten,
 } from './voiceForward'
+import {
+	fetchVoiceOffer,
+	storeVoiceOffer,
+} from './voiceOfferIndex'
 
 
 
@@ -850,7 +855,7 @@ const socks5ConnectV3 = async (prosyData: VE_IPptpStream, requestSocket: Socket,
         host = prosyData.host || '';
         
         // 示例：您自己的域名解析逻辑
-        if (!IP.isV4Format(host)) { 
+        if (isIP(host) !== 4) {
             host = await getHostIpv4(host); 
         }
         
@@ -1107,6 +1112,13 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 			return handleVoiceUnlisten(socket, command as unknown as Record<string, unknown>)
 		}
 
+		case 'voice_offer_store': {
+			return handleVoiceOfferStore(socket, command as unknown as Record<string, unknown>)
+		}
+
+		case 'voice_offer_fetch': {
+			return handleVoiceOfferFetch(socket, command as unknown as Record<string, unknown>)
+		}
 
 		case 'mining_validator': {
 			return validatorMining(command, socket)
@@ -1477,8 +1489,8 @@ const socks5Connect = async (prosyData: VE_IPptpStream, resoestSocket: Socket, w
 	try {
 		port = prosyData.port
 		host = prosyData.host || ''
-		ipStyle = IP.isV4Format(host)
-		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+		ipStyle = isIP(host) === 4
+		host = ipStyle ? (isPublicIpv4(host) ? host : '') : await getHostIpv4(host)
 		if ( port < 1 || port > 65535 || ! host) {
 			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
 		}
@@ -1533,8 +1545,8 @@ const socks5Connectv2 = async (prosyData: VE_IPptpStream, resoestSocket: Socket,
 	try {
 		port = prosyData.port
 		host = prosyData.host || ''
-		ipStyle = IP.isV4Format(host)
-		host = ipStyle ? (IP.isPublic(host) ? host : '') : await getHostIpv4(host)
+		ipStyle = isIP(host) === 4
+		host = ipStyle ? (isPublicIpv4(host) ? host : '') : await getHostIpv4(host)
 		if ( port < 1 || port > 65535 || ! host) {
 			throw new Error(` ${prosyData.host}:${prosyData.port} Error!`)
 		}
@@ -1810,6 +1822,21 @@ const decryptedPayloadToUtf8 = (data: unknown): string => {
 	return String(data ?? '')
 }
 
+/**
+ * Routing accepts exactly one recipient packet. A multi-recipient OpenPGP
+ * armor would reveal a recipient set to this untrusted routing hop and must
+ * never be fanned out by SI.
+ */
+const getSingleEncryptionKeyId = (keyIds: typeOpenPGPKeyID[] | undefined): string | null => {
+	if (!keyIds?.length) return null
+	if (keyIds.length !== 1) {
+		// Deliberately avoid logging key IDs, armor, or cardinality details.
+		logger(Colors.yellow('rejected_multi_recipient_armor'))
+		return null
+	}
+	return keyIds[0].toHex().toUpperCase()
+}
+
 type InnerPgpForward = {
 	message: Message<string | Uint8Array>
 	armor: string
@@ -1959,14 +1986,11 @@ export const postOpenpgpRouteSocket = async (
 		return distorySocket(socket)
 	}
 
-	const encrypKeyID: typeOpenPGPKeyID[] = messObj.getEncryptionKeyIDs()
-
-	if (!encrypKeyID?.length) {
+	const customerKeyID = getSingleEncryptionKeyId(messObj.getEncryptionKeyIDs())
+	if (!customerKeyID) {
 		logger (Colors.red(`postOpenpgpRoute readMessage has no keys ERROR end connecting! ${socket.remoteAddressShow} \n`))
 		return distorySocket(socket)
 	}
-	
-	const customerKeyID = encrypKeyID[0].toHex().toUpperCase()
 	
 	if (customerKeyID !== pgpPublicKeyID) {
 		// logger(Colors.blue(`postOpenpgpRouteSocket encrypKeyID  [${customerKeyID}] is not this node's key ${pgpPublicKeyID} forward to destination node! ${socket.remoteAddressShow}`))
@@ -1995,7 +2019,8 @@ export const postOpenpgpRouteSocket = async (
 		if (innerMsg) {
 			const innerKeyIDs: typeOpenPGPKeyID[] = innerMsg.message.getEncryptionKeyIDs()
 			if (innerKeyIDs?.length) {
-				const innerKeyID = innerKeyIDs[0].toHex().toUpperCase()
+				const innerKeyID = getSingleEncryptionKeyId(innerKeyIDs)
+				if (!innerKeyID) return distorySocket(socket)
 				const innerArmor = innerMsg.armor
 				if (innerKeyID === pgpPublicKeyID) {
 					return terminateByEnd(socket, 'same-node inner PGP after local decrypt')
@@ -2016,11 +2041,11 @@ export const postOpenpgpRouteSocket = async (
 		try {
 			const workMsg = await readMessage({ armoredMessage: mailboxWork.data })
 			const workKeyIDs: typeOpenPGPKeyID[] = workMsg.getEncryptionKeyIDs()
-			if (!workKeyIDs?.length) {
+			const workKeyID = getSingleEncryptionKeyId(workKeyIDs)
+			if (!workKeyID) {
 				logger(Colors.red(`mailbox work envelope has no inner key ${socket.remoteAddressShow}`))
 				return distorySocket(socket)
 			}
-			const workKeyID = workKeyIDs[0].toHex().toUpperCase()
 			if (workKeyID === pgpPublicKeyID) {
 				return terminateByEnd(socket, 'same-node inner PGP after mailbox work unwrap')
 			}
@@ -2043,7 +2068,8 @@ export const postOpenpgpRouteSocket = async (
 
 	if (
 		(content.command === 'voice_listen' || content.command === 'voice_uplink' ||
-			content.command === 'voice_downlink' || content.command === 'voice_unlisten') &&
+			content.command === 'voice_downlink' || content.command === 'voice_unlisten' ||
+			content.command === 'voice_offer_store' || content.command === 'voice_offer_fetch') &&
 		typeof content.sessionId === 'string'
 	) {
 		return localNodeCommandSocket(socket, headers, content as minerObj, wallet)
@@ -2072,10 +2098,118 @@ export const postOpenpgpRouteSocket = async (
 
 const VOICE_OFFER_ARMOR_MAX = 48_000
 
+const findGuardianNodeByIp = (ip: string): nodeInfo | null => {
+	const want = String(ip || '').trim()
+	if (!want) return null
+	for (const n of routerInfo.values()) {
+		if (n.ipaddress === want) return n
+	}
+	return null
+}
+
+const handleVoiceOfferStore = async (
+	socket: any,
+	command: Record<string, unknown>,
+): Promise<void> => {
+	const callId = typeof command.callId === 'string' ? command.callId : ''
+	const sessionId = typeof command.sessionId === 'string' ? command.sessionId : ''
+	const offerArmor = typeof command.offerArmor === 'string' ? command.offerArmor : ''
+	const expiresAt = typeof command.expiresAt === 'number' ? command.expiresAt : undefined
+	const ok = storeVoiceOffer(callId, sessionId, offerArmor, expiresAt)
+	return response200Html(socket, JSON.stringify({
+		ok,
+		error: ok ? undefined : 'invalid_voice_offer_store',
+		callId: callId.trim(),
+		sessionId: sessionId.trim(),
+	}))
+}
+
+const handleVoiceOfferFetch = async (
+	socket: any,
+	command: Record<string, unknown>,
+): Promise<void> => {
+	const callId = typeof command.callId === 'string' ? command.callId : ''
+	const sessionId = typeof command.sessionId === 'string' ? command.sessionId : ''
+	const entry = fetchVoiceOffer(callId, sessionId)
+	if (!entry) {
+		return response200Html(socket, JSON.stringify({
+			ok: false,
+			error: 'not_found',
+			callId: callId.trim(),
+			sessionId: sessionId.trim(),
+		}))
+	}
+	return response200Html(socket, JSON.stringify({
+		ok: true,
+		callId: entry.callId,
+		sessionId: entry.sessionId,
+		expiresAt: entry.expiresAt,
+		offerArmor: entry.offerArmor,
+	}))
+}
+
+/**
+ * Index opaque offerArmor on the callee mailbox by callId+sessionId.
+ * Encrypted to that mailbox's route PGP (capability: sessionId ≥ 16).
+ */
+const postVoiceOfferStoreToRemoteMailbox = async (
+	ip: string,
+	callId: string,
+	sessionId: string,
+	expiresAt: number | undefined,
+	offerArmor: string,
+	nodeWallet: ethers.Wallet,
+): Promise<boolean> => {
+	const node = findGuardianNodeByIp(ip)
+	if (!node?.pgpArmored) {
+		logger(Colors.yellow(`voice_offer_store remote: no route PGP for ip=${ip}`))
+		return false
+	}
+	const payload: Record<string, unknown> = {
+		command: 'voice_offer_store',
+		callId,
+		sessionId,
+		offerArmor,
+		timestamp: Math.floor(Date.now() / 1000),
+	}
+	if (typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0) {
+		payload.expiresAt = expiresAt
+	}
+	try {
+		const armored = await encrypt({
+			message: await createMessage({ text: JSON.stringify(payload) }),
+			encryptionKeys: await readKey({ armoredKey: node.pgpArmored }),
+			config: { preferredCompressionAlgorithm: enums.compression.zlib },
+		})
+		const armorStr = typeof armored === 'string' ? armored : String(armored)
+		let storeKeyId = ''
+		try {
+			const msg = await readMessage({ armoredMessage: armorStr })
+			storeKeyId = getSingleEncryptionKeyId(msg.getEncryptionKeyIDs()) || ''
+		} catch {
+			storeKeyId = ''
+		}
+		if (!storeKeyId) {
+			logger(Colors.yellow('voice_offer_store remote: could not read store armor key id'))
+			return false
+		}
+		const hops = await signAndAppendHop([], nodeWallet, storeKeyId, armorStr)
+		if (!hops) {
+			logger(Colors.yellow(`voice_offer_store remote hop-sig refused ${storeKeyId}`))
+			return false
+		}
+		return postUserPgpToRemoteMailbox(ip, armorStr, hopSigsHeaderLine(hops))
+	} catch (ex) {
+		logger(Colors.yellow(`voice_offer_store remote failed: ${(ex as Error)?.message ?? String(ex)}`))
+		return false
+	}
+}
+
 /**
  * Outgoing voice_listen may carry the callee's user-PGP offer armor.
  * This mailbox forwards that ciphertext and does not decrypt it.
- * The offer is stored before voiceCallPush so the callee flush has it.
+ * Also indexes by callId+sessionId so a killed native shell can fetch
+ * offerArmor without a live PWA (voice_offer_fetch).
  */
 const relayVoiceOfferArmor = async (
 	command: Record<string, unknown>,
@@ -2087,10 +2221,13 @@ const relayVoiceOfferArmor = async (
 		logger(Colors.yellow('voice offer armor rejected'))
 		return false
 	}
+	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
+	const sessionId = typeof command.sessionId === 'string' ? command.sessionId.trim() : ''
+	const expiresAt = typeof command.expiresAt === 'number' ? command.expiresAt : undefined
 	let keyId = ''
 	try {
 		const message = await readMessage({ armoredMessage: raw })
-		keyId = message.getEncryptionKeyIDs()?.[0]?.toHex().toUpperCase() || ''
+		keyId = getSingleEncryptionKeyId(message.getEncryptionKeyIDs()) || ''
 	} catch {
 		logger(Colors.yellow('voice offer armor is not OpenPGP'))
 		return false
@@ -2103,6 +2240,12 @@ const relayVoiceOfferArmor = async (
 	}
 	if (route === nodeIpAddr) {
 		saveLocal(raw, keyId, { skipPush: true })
+		if (callId && sessionId) {
+			const indexed = storeVoiceOffer(callId, sessionId, raw, expiresAt)
+			if (!indexed) {
+				logger(Colors.yellow(`voice offer local index skipped callId=${callId}`))
+			}
+		}
 		const mailboxClients = findMailboxClientsByPgpKeyId(keyId)
 			.filter((client) => !isLivenessListenSocketStale(client.res))
 		const legacy = findListenClientByPgpKeyId(keyId)
@@ -2125,6 +2268,19 @@ const relayVoiceOfferArmor = async (
 	for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
 		ok = await postUserPgpToRemoteMailbox(route, raw, hopLine)
 		if (!ok) logger(Colors.yellow(`voice offer forward attempt ${attempt} failed ${keyId}`))
+	}
+	if (ok && callId && sessionId) {
+		const indexedRemote = await postVoiceOfferStoreToRemoteMailbox(
+			route,
+			callId,
+			sessionId,
+			expiresAt,
+			raw,
+			nodeWallet,
+		)
+		if (!indexedRemote) {
+			logger(Colors.yellow(`voice_offer_store remote best-effort failed callId=${callId}`))
+		}
 	}
 	logger(Colors.cyan(`voice offer forwarded ${keyId} ok=${ok}`))
 	return ok
@@ -2318,7 +2474,7 @@ export const forwardEncryptedSocket = async (
 
 	// Temporary L0 user PGP is not in AddressPGP. Match idle l0ListenPool first.
 	if (deliverUserPgpToIdleL0(gpgPublicKeyID, encryptedText)) {
-		logger(Colors.cyan(`forwardEncryptedSocket idle l0_listen pool hit ${gpgPublicKeyID}`))
+		logger(Colors.cyan('forwardEncryptedSocket idle l0_listen pool hit'))
 		return response200Html(socket, '')
 	}
 
@@ -2327,7 +2483,7 @@ export const forwardEncryptedSocket = async (
 
 
 	if ( !_route ) {
-		logger (Colors.magenta(`forwardEncryptedText can not find router for [${ gpgPublicKeyID }]`))
+		logger (Colors.magenta('forwardEncryptedText can not find router for routed key'))
 		return response200Html(socket, JSON.stringify({}))
 	}
 
@@ -2337,12 +2493,12 @@ export const forwardEncryptedSocket = async (
         // Idle L0 may get a copy (does not occupy). Do not return early — that
         // starved Chat SSE and dropped offers when idle L0 later died.
         if (l0ListenOccupiedByPgp(gpgPublicKeyID)) {
-            logger(Colors.yellow(`forwardEncryptedSocket occupied l0 listen — Chat gossip continues ${gpgPublicKeyID}`))
+            logger(Colors.yellow('forwardEncryptedSocket occupied l0 listen — Chat gossip continues'))
         } else {
             const idleL0 = findIdleL0ListenByPgp(gpgPublicKeyID)
             if (idleL0) {
                 const ok = writeGossipToIdleL0(idleL0, encryptedText)
-                logger(`forwardEncryptedSocket idle l0 gossip copy wallet=${idleL0.wallet} ok=${ok}`)
+                logger(`forwardEncryptedSocket idle l0 gossip copy ok=${ok}`)
             }
         }
 
@@ -2355,7 +2511,7 @@ export const forwardEncryptedSocket = async (
         // Do NOT expire by connectedAt wall-clock — that stored armor and skipped live
         // forWard while the listing heartbeat pipe was still writable.
         const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
-            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) ${reason} ${c.wallet}`)
+            logger(`liveness listener evicted: ${reason}`)
             const pgpIds = [gpgPublicKeyID, c.pgpKeyId].filter(Boolean) as string[]
             for (const id of pgpIds) {
                 livenessListeningPGPKeyIDPool.delete(id)
@@ -2385,7 +2541,7 @@ export const forwardEncryptedSocket = async (
         })
 
         if (mailboxClients.length === 0 && !legacyClient) {
-            logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has off line!`)
+            logger('liveness listener offline')
             return
         }
 
@@ -2418,7 +2574,7 @@ export const forwardEncryptedSocket = async (
                 })
             })
             const results = await Promise.all(mailboxClients.map(deliver))
-            logger(`Mailbox fan-out ${gpgPublicKeyID}: ${results.filter(Boolean).length}/${results.length} sessions accepted`)
+            logger(`Mailbox fan-out: ${results.filter(Boolean).length}/${results.length} sessions accepted`)
             return
         }
 
@@ -2428,7 +2584,7 @@ export const forwardEncryptedSocket = async (
             return
         }
 
-        logger(`livenessListeningPGPKeyIDPool.get(${gpgPublicKeyID}) has client ${client.wallet}`)
+        logger('liveness listener has active client')
         livenessListeningPool.delete(client.wallet)
 
         const waitRunningBlockProcess = async () => {
@@ -2442,11 +2598,11 @@ export const forwardEncryptedSocket = async (
         // Best-effort live delivery; offline copy + push already handled in saveLocal.
         forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (ok) => {
             if (ok && client) {
-                logger(`forWardPGPMessageToClient SUCCESS`, encryptedText)
+                logger('forWardPGPMessageToClient SUCCESS')
                 livenessListeningPool.set(client.wallet, client)
                 return
             }
-            logger(`forWardPGPMessageToClient FAIL — already saveLocal (+ push if !skipPush); evict`, encryptedText)
+            logger('forWardPGPMessageToClient FAIL — already saveLocal (+ push if !skipPush); evict')
             evictListenClient(client, 'has dead forward')
             // Do not notifyOfflineDeliveryImmediate again — saveLocal already pushed.
         })
@@ -2482,13 +2638,13 @@ export const forwardEncryptedSocket = async (
 		}
 		if (!wallet) {
 			logger(
-				`**************** forwardEncryptedSocket Error! ${gpgPublicKeyID} no wallet for _route after reScanAllWallets — closing client ******************************`,
+				'forwardEncryptedSocket: no wallet for route after reScanAllWallets — closing client',
 			)
 			return distorySocket(socket)
 		}
 		logger(
 			Colors.green(
-				`forwardEncryptedSocket recovered wallet for ${gpgPublicKeyID} after reScanAllWallets`,
+				'forwardEncryptedSocket recovered route wallet after reScanAllWallets',
 			),
 		)
     }
@@ -2505,14 +2661,14 @@ export const forwardEncryptedSocket = async (
 	try {
 		armorText = await pgpArmorToUtf8String(encryptedText)
 	} catch (ex: any) {
-		logger(Colors.red(`forwardEncryptedSocket armor is not utf8 text ${gpgPublicKeyID} ${ex?.message || ex}`))
+		logger(Colors.red('forwardEncryptedSocket armor is not utf8 text'))
 		return distorySocket(socket)
 	}
 	let nextHops: SiHopSig[] | null
 	try {
 		nextHops = await signAndAppendHop(incomingHops, nodeWallet, gpgPublicKeyID, armorText)
 	} catch (ex: any) {
-		logger(Colors.red(`forwardEncryptedSocket hop-sig failed ${gpgPublicKeyID} ${ex?.message || ex}`))
+		logger(Colors.red('forwardEncryptedSocket hop-sig failed'))
 		return distorySocket(socket)
 	}
 	if (!nextHops) {
@@ -2534,7 +2690,8 @@ export const checkSign = (message: string, signMess: string) => {
 		// mailbox node.
 		if (
 			(obj.command === 'voice_listen' || obj.command === 'voice_uplink' ||
-				obj.command === 'voice_downlink' || obj.command === 'voice_unlisten') &&
+				obj.command === 'voice_downlink' || obj.command === 'voice_unlisten' ||
+				obj.command === 'voice_offer_store' || obj.command === 'voice_offer_fetch') &&
 			typeof obj.sessionId === 'string' && obj.sessionId.length >= 16
 		) {
 			obj.walletAddress = ''
@@ -2545,6 +2702,14 @@ export const checkSign = (message: string, signMess: string) => {
 		digest = ethers.id(message)
 		recoverPublicKey = ethers.recoverAddress(digest, signMess)
 		verifyMessage = ethers.verifyMessage(message, signMess)
+		// Temporary L0 commands do not carry the temporary EOA in the
+		// signed JSON. Recover it from the signature only for SI's internal
+		// capability bookkeeping; never require or echo it as a wire field.
+		if (obj.command === 'l0_listen' || obj.command === 'l0_connect') {
+			if (!verifyMessage || !ethers.isAddress(verifyMessage)) return null
+			obj.walletAddress = verifyMessage.toLowerCase()
+			return obj
+		}
 		if (!billingWallet || !ethers.isAddress(billingWallet)) {
 			return null
 		}

@@ -3,5 +3,4 @@
 # Root-level build / deps (src/.gitignore only applies under src/)
 /node_modules/
 /dist/
-/package-lock.json
 /yarn.lock

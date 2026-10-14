@@ -11,6 +11,29 @@ AES-GCM 密文帧；SI 不保存会话密钥、不解密音频、不写 offline 
 不触发 APNs。会话由随机 `sessionId` 标识，并受 route ownership、时间窗、
 帧大小、序号和 idle timeout 限制。
 
+### 杀进程原生壳来电身份（`voice_offer_store` / `voice_offer_fetch`）
+
+VoIP / FCM 唤醒包**只有**不透明 `callId` + `sessionId`（无主叫钱包 / tag）。
+被叫用户 PGP 密文 `offerArmor` 过大，不能塞进 APNs。因此：
+
+1. 主叫 mailbox 在 `relayVoiceOfferArmor` 转发 user-PGP armor 时，若本机是被叫
+   mailbox：除 `saveLocal` 外，按 `callId|sessionId` **索引**密文
+   （`src/util/voiceOfferIndex.ts`，内存 + `~/.data/voice-offers/`）。
+2. 若被叫 mailbox 在远程：armor 一跳转发成功后，**best-effort** 再向该 IP
+   发 route-PGP 命令 `voice_offer_store`（加密目标 = 对端 **route PGP**；
+   capability = `sessionId` ≥ 16，与 `voice_listen` 相同，**无** EIP-191 业务钱包）。
+3. 原生壳（PWA 已退出）用推送里的 `callId`/`sessionId` 经 entry 发
+   `voice_offer_fetch`（同样加密给本机 mailbox route PGP）取回 `offerArmor`，
+   **本地**用已注入的**收件人 user PGP 私钥**解密；SI **永不**解密 offer。
+
+| `command` | 加密目标 | 作用 |
+| --- | --- | --- |
+| `voice_offer_store` | 被叫 mailbox **route PGP** | 按 callId+sessionId 索引 user-PGP `offerArmor` |
+| `voice_offer_fetch` | 被叫 mailbox **route PGP** | 按 callId+sessionId 取回密文（JSON 含 `offerArmor`） |
+
+禁止：mailbox 解密 `offerArmor`；把主叫 EOA / tag 写进推送；把 EOA 助记词注入壳
+（壳只需 **收件人 user PGP 私钥** + 可选 route 材料以便经 entry 取 armor）。
+
 ## 一、能解开 mailbox PGP ≠ 一定是 SSE
 
 HTTP `POST /post` 的 `{ "data": "<OpenPGP armor>" }` 若 PKESK 指向**本节点 route PGP**，本机解密。解密成功只说明「这包是给本 mailbox 的」，**不**自动开 SSE。
@@ -75,8 +98,11 @@ Chat / mining 与 L0 **分池**。Idle L0 可抄一份用户 PGP gossip（offer�
 | `command` | 作用 |
 | --- | --- |
 | `wallet_online_query` | 查本 mailbox **chat/mining** pool 里 `targetWallet` 是否在听 |
+| `wallet_native_wake_query` | 查本 mailbox 登记钱包是否有可唤醒原生壳 |
 | `gossip_delivery_ack` | 客户端确认 gossip，按 `armorHash` 删离线缓存 |
 | `mining_validator` | 验证人矿工上报（验签 epoch/hash） |
+| `voice_offer_store` | 按 `callId`+`sessionId` 索引 user-PGP `offerArmor`（不解密） |
+| `voice_offer_fetch` | 按 `callId`+`sessionId` 取回索引密文供原生壳本地解密 |
 
 ### 3.4 支付隧道（本机代连，不是 mailbox SSE）
 
