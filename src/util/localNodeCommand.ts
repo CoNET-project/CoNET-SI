@@ -3498,11 +3498,11 @@ export const startEPOCH_EventListeningForMining = async (
 
 		blockListeningProcess = true
 		clearMiningStartRetry()
-		// Do NOT removeAllListeners('block') before the first on('block'): ethers v6
+		// Never call removeAllListeners('block') before the first on('block'): ethers v6
 		// tears down internal polling and never restarts it on that provider instance.
-		if (!CONETProvider_Mainnet.listenerCount('block')) {
-			CONETProvider_Mainnet.on('block', blockProcess)
-		}
+		// Also avoid listenerCount() guards — in ethers v6 it can return a Promise (always
+		// truthy), which would skip attaching the handler entirely.
+		CONETProvider_Mainnet.on('block', blockProcess)
 		miningListenAttached = true
 		logger(Colors.blue(
 			`startEPOCH_EventListeningForMining START (retryAttempt=${retryAttempt})`,
