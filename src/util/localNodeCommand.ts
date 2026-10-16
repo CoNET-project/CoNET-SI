@@ -3355,55 +3355,126 @@ const blockProcess = async (block: number ) => {
 let nodeDomain: string 
 let nodeIpAddr: string
 
-export const startEPOCH_EventListeningForMining = async (nodePrivate: Wallet, domain: string, _nodeIpAddr: string ) => {
-	localNodeKey = nodePrivate
-    nodeDomain = domain
-    nodeIpAddr = _nodeIpAddr
+/** Mining block listener attached — never register twice. */
+let miningListenAttached = false
+/** In-flight startEPOCH attempt (prevents overlapping retries). */
+let miningStartInFlight = false
+let miningStartRetryTimer: ReturnType<typeof setTimeout> | null = null
 
-	const result = await getAllNodes()
-	if (!result) {
-		
+const MINING_START_RETRY_BASE_MS = 15_000
+const MINING_START_RETRY_MAX_MS = 5 * 60_000
+
+const clearMiningStartRetry = () => {
+	if (miningStartRetryTimer) {
+		clearTimeout(miningStartRetryTimer)
+		miningStartRetryTimer = null
+	}
+}
+
+/**
+ * When publicrpc is down at boot, getAllNodes / getBlockNumber fail and the old code
+ * returned permanently — :80 stayed up but gossip never started. Schedule retries with
+ * backoff until RPC recovers and the block listener can attach.
+ */
+const scheduleMiningStartRetry = (
+	nodePrivate: Wallet,
+	domain: string,
+	ip: string,
+	retryAttempt: number,
+) => {
+	clearMiningStartRetry()
+	const delay = Math.min(
+		MINING_START_RETRY_MAX_MS,
+		MINING_START_RETRY_BASE_MS * Math.pow(2, Math.min(retryAttempt, 5)),
+	)
+	logger(Colors.yellow(
+		`startEPOCH: mining init incomplete; retry in ${Math.round(delay / 1000)}s (attempt ${retryAttempt + 1})`,
+	))
+	miningStartRetryTimer = setTimeout(() => {
+		miningStartRetryTimer = null
+		void startEPOCH_EventListeningForMining(nodePrivate, domain, ip, retryAttempt + 1)
+	}, delay)
+}
+
+export const startEPOCH_EventListeningForMining = async (
+	nodePrivate: Wallet,
+	domain: string,
+	_nodeIpAddr: string,
+	retryAttempt = 0,
+) => {
+	localNodeKey = nodePrivate
+	nodeDomain = domain
+	nodeIpAddr = _nodeIpAddr
+
+	if (miningListenAttached) {
+		logger(Colors.blue(`startEPOCH: mining block listener already attached; skip`))
 		return
 	}
+	if (miningStartInFlight) {
+		return
+	}
+	miningStartInFlight = true
 
-	serttData = await getSetup()
-
-	let blockNum = 0
-	for (let attempt = 1; attempt <= 5; attempt++) {
-		try {
-			blockNum = await CONETProvider_Mainnet.getBlockNumber()
-			break
-		} catch (ex: any) {
-			logger(Colors.yellow(`startEPOCH getBlockNumber attempt ${attempt}/5: ${ex?.message ?? ex}`))
-			if (attempt === 5) {
-				logger(Colors.red(`startEPOCH getBlockNumber failed after 5 attempts; mining loop not started`))
-				return
-			}
-			await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+	try {
+		const result = await getAllNodes()
+		if (!result) {
+			logger(Colors.yellow(`startEPOCH: getAllNodes failed or empty; will retry when RPC recovers`))
+			scheduleMiningStartRetry(nodePrivate, domain, _nodeIpAddr, retryAttempt)
+			return
 		}
-	}
-	listenValidatorEpoch = CurrentEpoch = blockNum
-	nodeWallet = nodePrivate.address.toLowerCase()
-	try {
-		await getFaucet(nodePrivate)
-	} catch (ex: any) {
-		logger(Colors.yellow(`startEPOCH getFaucet failed (non-fatal): ${ex?.message ?? ex}`))
-	}
-	try {
-		await startUp(nodePrivate, domain)
-	} catch (ex: any) {
-		logger(Colors.yellow(`startEPOCH startUp failed (non-fatal): ${ex?.message ?? ex}`))
-	}
-	
-	currentRate = {
-		totalMiners: 0,  minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch
-	}
-	
-    
-    blockListeningProcess = true
-    logger(Colors.blue(`startEPOCH_EventListeningForMining START`))
 
-	CONETProvider_Mainnet.on('block', blockProcess)
+		serttData = await getSetup()
+
+		let blockNum = 0
+		let blockOk = false
+		for (let attempt = 1; attempt <= 5; attempt++) {
+			try {
+				blockNum = await CONETProvider_Mainnet.getBlockNumber()
+				blockOk = true
+				break
+			} catch (ex: any) {
+				logger(Colors.yellow(`startEPOCH getBlockNumber attempt ${attempt}/5: ${ex?.message ?? ex}`))
+				if (attempt < 5) {
+					await new Promise(resolve => setTimeout(resolve, 2000 * attempt))
+				}
+			}
+		}
+		if (!blockOk) {
+			logger(Colors.red(
+				`startEPOCH getBlockNumber failed after 5 attempts; will retry when RPC recovers`,
+			))
+			scheduleMiningStartRetry(nodePrivate, domain, _nodeIpAddr, retryAttempt)
+			return
+		}
+
+		listenValidatorEpoch = CurrentEpoch = blockNum
+		nodeWallet = nodePrivate.address.toLowerCase()
+		try {
+			await getFaucet(nodePrivate)
+		} catch (ex: any) {
+			logger(Colors.yellow(`startEPOCH getFaucet failed (non-fatal): ${ex?.message ?? ex}`))
+		}
+		try {
+			await startUp(nodePrivate, domain)
+		} catch (ex: any) {
+			logger(Colors.yellow(`startEPOCH startUp failed (non-fatal): ${ex?.message ?? ex}`))
+		}
+
+		currentRate = {
+			totalMiners: 0, minerRate: 0, totalUsrs: 0, epoch: listenValidatorEpoch,
+		}
+
+		blockListeningProcess = true
+		clearMiningStartRetry()
+		CONETProvider_Mainnet.removeAllListeners('block')
+		CONETProvider_Mainnet.on('block', blockProcess)
+		miningListenAttached = true
+		logger(Colors.blue(
+			`startEPOCH_EventListeningForMining START (retryAttempt=${retryAttempt})`,
+		))
+	} finally {
+		miningStartInFlight = false
+	}
 }
 
 interface IGossipStatus {

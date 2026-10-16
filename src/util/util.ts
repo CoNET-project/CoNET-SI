@@ -320,6 +320,12 @@ export const getAllNodes = async (): Promise<boolean> => {
     Guardian_Nodes.push(...merged.values())
 
     logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
+    // Empty list after fetch usually means RPC abort / degraded read — treat as failure so
+    // startEPOCH can retry when publicrpc recovers (do not permanently skip mining).
+    if (Guardian_Nodes.length === 0) {
+      logger(Colors.yellow(`getAllNodes: empty Guardian_Nodes; treat as failure for mining init`))
+      return false
+    }
     return true
   } catch (e) {
     logger(Colors.red(`getAllNodes Error: ${(e as any)?.message ?? e}`))
