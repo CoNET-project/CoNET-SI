@@ -3363,6 +3363,8 @@ let miningStartRetryTimer: ReturnType<typeof setTimeout> | null = null
 
 const MINING_START_RETRY_BASE_MS = 15_000
 const MINING_START_RETRY_MAX_MS = 5 * 60_000
+/** Cap hung ethers RPC (DROP/blackhole) so init fails into retry instead of hanging forever. */
+const MINING_RPC_TIMEOUT_MS = 45_000
 
 const clearMiningStartRetry = () => {
 	if (miningStartRetryTimer) {
@@ -3370,6 +3372,24 @@ const clearMiningStartRetry = () => {
 		miningStartRetryTimer = null
 	}
 }
+
+const withMiningRpcTimeout = <T>(p: Promise<T>, label: string): Promise<T> =>
+	new Promise<T>((resolve, reject) => {
+		const t = setTimeout(
+			() => reject(new Error(`${label} timeout after ${MINING_RPC_TIMEOUT_MS}ms`)),
+			MINING_RPC_TIMEOUT_MS,
+		)
+		p.then(
+			(v) => {
+				clearTimeout(t)
+				resolve(v)
+			},
+			(e) => {
+				clearTimeout(t)
+				reject(e)
+			},
+		)
+	})
 
 /**
  * When publicrpc is down at boot, getAllNodes / getBlockNumber fail and the old code
@@ -3416,7 +3436,16 @@ export const startEPOCH_EventListeningForMining = async (
 	miningStartInFlight = true
 
 	try {
-		const result = await getAllNodes()
+		let result: boolean
+		try {
+			result = await withMiningRpcTimeout(getAllNodes(), 'getAllNodes')
+		} catch (ex: any) {
+			logger(Colors.yellow(
+				`startEPOCH: getAllNodes error (${ex?.message ?? ex}); will retry when RPC recovers`,
+			))
+			scheduleMiningStartRetry(nodePrivate, domain, _nodeIpAddr, retryAttempt)
+			return
+		}
 		if (!result) {
 			logger(Colors.yellow(`startEPOCH: getAllNodes failed or empty; will retry when RPC recovers`))
 			scheduleMiningStartRetry(nodePrivate, domain, _nodeIpAddr, retryAttempt)
@@ -3429,7 +3458,10 @@ export const startEPOCH_EventListeningForMining = async (
 		let blockOk = false
 		for (let attempt = 1; attempt <= 5; attempt++) {
 			try {
-				blockNum = await CONETProvider_Mainnet.getBlockNumber()
+				blockNum = await withMiningRpcTimeout(
+					CONETProvider_Mainnet.getBlockNumber(),
+					`getBlockNumber attempt ${attempt}`,
+				)
 				blockOk = true
 				break
 			} catch (ex: any) {
@@ -3466,8 +3498,11 @@ export const startEPOCH_EventListeningForMining = async (
 
 		blockListeningProcess = true
 		clearMiningStartRetry()
-		CONETProvider_Mainnet.removeAllListeners('block')
-		CONETProvider_Mainnet.on('block', blockProcess)
+		// Do NOT removeAllListeners('block') before the first on('block'): ethers v6
+		// tears down internal polling and never restarts it on that provider instance.
+		if (!CONETProvider_Mainnet.listenerCount('block')) {
+			CONETProvider_Mainnet.on('block', blockProcess)
+		}
 		miningListenAttached = true
 		logger(Colors.blue(
 			`startEPOCH_EventListeningForMining START (retryAttempt=${retryAttempt})`,
