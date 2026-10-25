@@ -2116,6 +2116,11 @@ const handleVoiceOfferStore = async (
 	const offerArmor = typeof command.offerArmor === 'string' ? command.offerArmor : ''
 	const expiresAt = typeof command.expiresAt === 'number' ? command.expiresAt : undefined
 	const ok = storeVoiceOffer(callId, sessionId, offerArmor, expiresAt)
+	if (ok) {
+		logger(Colors.cyan(`voice_offer_store indexed callId=${callId.trim()} sessionId=${sessionId.trim()}`))
+	} else {
+		logger(Colors.yellow(`voice_offer_store rejected callId=${String(callId).slice(0, 32)}`))
+	}
 	return response200Html(socket, JSON.stringify({
 		ok,
 		error: ok ? undefined : 'invalid_voice_offer_store',
@@ -2176,8 +2181,10 @@ const postVoiceOfferStoreToRemoteMailbox = async (
 		payload.expiresAt = expiresAt
 	}
 	try {
+		// Peel path: JSON.parse(Buffer.from(decryptedRaw, 'base64')) — must match EncryptePGPMessage.
+		const plaintext = Buffer.from(JSON.stringify(payload)).toString('base64')
 		const armored = await encrypt({
-			message: await createMessage({ text: JSON.stringify(payload) }),
+			message: await createMessage({ text: plaintext }),
 			encryptionKeys: await readKey({ armoredKey: node.pgpArmored }),
 			config: { preferredCompressionAlgorithm: enums.compression.zlib },
 		})
@@ -2198,7 +2205,13 @@ const postVoiceOfferStoreToRemoteMailbox = async (
 			logger(Colors.yellow(`voice_offer_store remote hop-sig refused ${storeKeyId}`))
 			return false
 		}
-		return postUserPgpToRemoteMailbox(ip, armorStr, hopSigsHeaderLine(hops))
+		const ok = await postUserPgpToRemoteMailbox(ip, armorStr, hopSigsHeaderLine(hops))
+		if (ok) {
+			logger(Colors.cyan(`voice_offer_store remote ok callId=${callId} sessionId=${sessionId} ip=${ip}`))
+		} else {
+			logger(Colors.yellow(`voice_offer_store remote http/body fail callId=${callId} ip=${ip}`))
+		}
+		return ok
 	} catch (ex) {
 		logger(Colors.yellow(`voice_offer_store remote failed: ${(ex as Error)?.message ?? String(ex)}`))
 		return false
@@ -2292,11 +2305,32 @@ const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string):
 		const raw = otherRequestForNet(body, ip, 80, [hopLine])
 		let settled = false
 		let writeFinished = false
+		let responseBuf = ''
 		const finish = (ok: boolean) => {
 			if (settled) return
 			settled = true
 			clearTimeout(timer)
 			resolve(ok)
+		}
+		/** HTTP 200 + empty body (Myself offer forward) or JSON without ok:false. */
+		const evaluateResponse = (): boolean => {
+			const statusMatch = /^HTTP\/1\.[01]\s+(\d{3})/i.exec(responseBuf)
+			if (!statusMatch) return false
+			const status = Number(statusMatch[1])
+			if (status !== 200) return false
+			const sep = responseBuf.indexOf('\r\n\r\n')
+			const bodyText = sep >= 0 ? responseBuf.slice(sep + 4).trim() : ''
+			if (!bodyText) return true
+			try {
+				const parsed = JSON.parse(bodyText) as { ok?: unknown }
+				if (parsed && typeof parsed === 'object' && 'ok' in parsed) {
+					return parsed.ok === true
+				}
+			} catch {
+				// Non-JSON 200 (nginx-mimic HTML) must not count as success.
+				return false
+			}
+			return true
 		}
 		const conn = createConnection(80, ip, () => {
 			conn.write(raw, (err) => {
@@ -2317,8 +2351,16 @@ const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string):
 			finish(false)
 			try { conn.destroy() } catch { /* ignore */ }
 		}, 6_000)
-		conn.on('data', () => { /* drain the HTTP response; do not RST */ })
-		conn.once('end', () => { if (writeFinished) finish(true) })
+		conn.on('data', (chunk: Buffer) => {
+			responseBuf += chunk.toString('utf8')
+		})
+		conn.once('end', () => {
+			if (!writeFinished) {
+				finish(false)
+				return
+			}
+			finish(evaluateResponse())
+		})
 		conn.once('close', () => { if (!settled) finish(false) })
 		conn.once('error', () => { if (!writeFinished) finish(false) })
 	})
