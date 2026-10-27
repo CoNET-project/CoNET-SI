@@ -1026,7 +1026,9 @@ export const forWardPGPMessageToClient = (
 	clent: livenessListeningPoolObj,
 	callback: (ok: boolean) => void,
 ) => {
-	const data = JSON.stringify({ data: pgpMessage }) + '\r\n\r\n'
+	// Must be SSE `data:` frames (same as handshake/keepalive). Raw JSON without
+	// the prefix is dropped by nginx/event-stream proxies → client never decrypts.
+	const data = `data: ${JSON.stringify({ data: pgpMessage })}\r\n\r\n`
 	const res = clent.res as Socket
 
 	if (isLivenessListenSocketStale(res)) {

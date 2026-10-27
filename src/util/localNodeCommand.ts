@@ -2920,9 +2920,11 @@ async function writeLinesWithBackpressure(
             return lines.slice(i)
         }
         const line = lines[i]
-        const data = JSON.stringify({data: line}) + '\r\n\r\n'
+        // SSE `data:` prefix — matches handshake/keepalive; raw JSON is dropped by
+        // text/event-stream proxies so offline flush never reaches the client.
+        const data = `data: ${JSON.stringify({ data: line })}\r\n\r\n`
         const ok = s.write(data)
-        logger(`writeLinesWithBackpressure try send ${line}`)
+        logger(`writeLinesWithBackpressure try send ${line.slice(0, 48)}`)
         if (!ok) {
             logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
             try {
