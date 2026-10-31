@@ -71,14 +71,6 @@ import {
 	setUdpServerChatNotify,
 } from './udpForward'
 import {
-	handleL0Listen,
-	handleL0Connect,
-	l0ListenOccupiedByPgp,
-	findIdleL0ListenByPgp,
-	writeGossipToIdleL0,
-	deliverUserPgpToIdleL0,
-} from './l0Exclusive'
-import {
 	handleVoiceFrame,
 	handleVoiceListen,
 	handleVoiceUnlisten,
@@ -1040,7 +1032,9 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				return handleUdpServerListen(socket, command, wallet)
 			}
 			if (listenKindRaw === 'l0') {
-				return handleL0Listen(socket, command, wallet)
+				// L0 exclusive occupancy was removed from SI.
+				logger(Colors.yellow('mining listenKind l0 refused: L0 occupancy removed'))
+				return distorySocket(socket)
 			}
 			const listenKind = listenKindRaw === 'chat' ? 'chat' : 'mining'
 			return addIpaddressToLivenessListeningPool(socket.remoteAddressShow||'', command.walletAddress, wallet, socket, listenKind)
@@ -1056,14 +1050,6 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				socket,
 				(command as any).instanceId,
 			)
-		}
-
-		case 'l0_listen': {
-			return handleL0Listen(socket, command, wallet)
-		}
-
-		case 'l0_connect': {
-			return handleL0Connect(socket, command, wallet)
 		}
 
 		case 'udp_listen': {
@@ -2383,7 +2369,7 @@ const socketForward = (
     const upload = new BandwidthCount(infoUp, wallet||'')
     const download = new BandwidthCount(infoDown, wallet||'')
 	// socketData applies a 60s receive-idle destroy on every inbound socket.
-	// Long SSE / occupied L0 AES can be quiet for minutes; clear it here so
+	// Long SSE can be quiet for minutes; clear it here so
 	// the client→C half of the pipe is not killed while C→B is already 24h.
 	try {
 		sourceSocket.setTimeout(0)
@@ -2412,10 +2398,9 @@ const socketForward = (
         // 关键：关闭 Nagle，降低小包等待；并打开 keepalive
         conn.setNoDelay(true)
         conn.setKeepAlive(true, 30_000)
-		// Long-lived C→B pipes carry Chat / mining / l0_listen SSE and occupied L0
-		// AES streams. Idle receive gaps of minutes are normal (heartbeat may be
-		// sparse). Do **not** destroy on 60s receive-idle — that killed L0 occupy
-		// after ~60s (listen SSE end → dropL0Listen → l0_connect 404). Short HTTP
+		// Long-lived C→B pipes carry Chat / mining / mailbox / voice SSE. Idle
+		// receive gaps of minutes are normal (heartbeat may be sparse). Do **not**
+		// destroy on 60s receive-idle — that dropped healthy listen SSE. Short HTTP
 		// still completes via 'end'/'close'. Keepalive + error/close reclaim dead
 		// peers. 24h is only a runaway-socket safety net.
 		conn.setTimeout(24 * 60 * 60 * 1000, () => {
@@ -2475,11 +2460,11 @@ const socketForward = (
 		safeClose(sourceSocket)
 	})
 
-	// Client→C death must tear C→B immediately. Mailbox B's l0_listen is bound
-	// to `conn`; it only dropL0Listen on that socket's 'error'/'close'.
+	// Client→C death must tear C→B immediately. Mailbox B's listen SSE is bound
+	// to `conn`; it only drops the listen on that socket's 'error'/'close'.
 	// Unexpected initiator exit (kill/RST) emits 'error' (ECONNRESET) then
 	// 'close', often **without** 'end'. The old 'end'-only path left C→B up
-	// for the 24h safety timer, so B kept the SSE after beacon/L0d restart.
+	// for the 24h safety timer, so B kept the SSE after a client restart.
 	// destroy() — not end()/safeClose — so B does not treat a write half-close
 	// as "keep writable".
 	let mailboxHopClosed = false
@@ -2514,12 +2499,6 @@ export const forwardEncryptedSocket = async (
 	skipPush = false,
 ) => {
 
-	// Temporary L0 user PGP is not in AddressPGP. Match idle l0ListenPool first.
-	if (deliverUserPgpToIdleL0(gpgPublicKeyID, encryptedText)) {
-		logger(Colors.cyan('forwardEncryptedSocket idle l0_listen pool hit'))
-		return response200Html(socket, '')
-	}
-
 	//			forward encrypted text
 	let [_route, wallet] = await getRoute (gpgPublicKeyID)
 
@@ -2530,20 +2509,6 @@ export const forwardEncryptedSocket = async (
 	}
 
         if (_route === nodeIpAddr) {
-        // Occupied L0 409s only a second `l0_connect`. User-PGP Chat / mining
-        // gossip (duplex_offer / duplex_accept) must always reach the Chat pool.
-        // Idle L0 may get a copy (does not occupy). Do not return early — that
-        // starved Chat SSE and dropped offers when idle L0 later died.
-        if (l0ListenOccupiedByPgp(gpgPublicKeyID)) {
-            logger(Colors.yellow('forwardEncryptedSocket occupied l0 listen — Chat gossip continues'))
-        } else {
-            const idleL0 = findIdleL0ListenByPgp(gpgPublicKeyID)
-            if (idleL0) {
-                const ok = writeGossipToIdleL0(idleL0, encryptedText)
-                logger(`forwardEncryptedSocket idle l0 gossip copy ok=${ok}`)
-            }
-        }
-
         response200Html(socket, '')
 
         logger(`forwardEncryptedSocket to MySelf!!${skipPush ? ' (skipPush)' : ''}`)
@@ -2744,14 +2709,6 @@ export const checkSign = (message: string, signMess: string) => {
 		digest = ethers.id(message)
 		recoverPublicKey = ethers.recoverAddress(digest, signMess)
 		verifyMessage = ethers.verifyMessage(message, signMess)
-		// Temporary L0 commands do not carry the temporary EOA in the
-		// signed JSON. Recover it from the signature only for SI's internal
-		// capability bookkeeping; never require or echo it as a wire field.
-		if (obj.command === 'l0_listen' || obj.command === 'l0_connect') {
-			if (!verifyMessage || !ethers.isAddress(verifyMessage)) return null
-			obj.walletAddress = verifyMessage.toLowerCase()
-			return obj
-		}
 		if (!billingWallet || !ethers.isAddress(billingWallet)) {
 			return null
 		}

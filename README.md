@@ -25,7 +25,7 @@ conet-mvp-si
 
 ## Notice
 
-Mailbox 入站与可执行 `command` 清单（含 `l0_listen` / mailbox work → idle L0 pool）：见 [`RULES.md`](RULES.md) 与 [`whitepaper/si-mailbox-inbound.md`](whitepaper/si-mailbox-inbound.md)。
+Mailbox 入站与可执行 `command` 清单：见 [`RULES.md`](RULES.md) 与 [`whitepaper/si-mailbox-inbound.md`](whitepaper/si-mailbox-inbound.md)。L0 独占管道（`l0_listen` / `l0_connect`）已于 2026-10-31 移除。
 
 ### Temporary voice relay
 

@@ -88,7 +88,7 @@ interface pgpObj {
 }
 
 interface SICommandObj {
-	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mailbox_listen'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'wallet_native_wake_query'|'push_device_register'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'voice_listen'|'voice_uplink'|'voice_downlink'|'voice_unlisten'|'voice_call_push'|'voice_offer_store'|'voice_offer_fetch'|'l0_listen'|'l0_connect'
+	command: 'SilentPass'|'SaaS_Sock5'|'mining'|'mailbox_listen'|'mining_validator'|'mining_gossip'|'SaaS_Sock5_v2'|'gossip_delivery_ack'|'wallet_online_query'|'wallet_native_wake_query'|'push_device_register'|'udp_listen'|'udp_server_listen'|'udp_subscribe'|'udp_relay'|'udp_uplink'|'udp_unlisten'|'voice_listen'|'voice_uplink'|'voice_downlink'|'voice_unlisten'|'voice_call_push'|'voice_offer_store'|'voice_offer_fetch'
 	/** voice_offer_store / voice_call push: opaque call id */
 	callId?: string
 	/** voice_offer_store: callee user-PGP ciphertext (mailbox must not decrypt) */
@@ -111,8 +111,6 @@ interface SICommandObj {
 	sessionId?: string
 	/** UDP server EOA whose mailbox hosts the client listen. */
 	udpServerWallet?: string
-	/** l0_listen: encryption key ID of this wallet's user PGP (not AddressPGP). */
-	userPgpKeyId?: string
 	/** udp_relay / udp_uplink: AES-GCM blob (base64). Mailbox must not decrypt. */
 	payload?: string
 }
@@ -240,7 +238,7 @@ interface minerObj extends SICommandObj{
 	}
 	allWallets?: string[]
 	/** Distinguish PWA chat ('chat'), LayerMinus mining (default 'mining'), and UDP mailbox listen. */
-	listenKind?: 'chat' | 'mining' | 'udp' | 'udp_server' | 'l0'
+	listenKind?: 'chat' | 'mining' | 'udp' | 'udp_server'
 }
 
 

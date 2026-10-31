@@ -232,8 +232,8 @@ const socketData = async (socket: Socket | TLSSocket, serverClass: conet_si_serv
     const ip = remoteAddress ? remoteAddress[remoteAddress.length-1] : ''
     s.remoteAddressShow = ip
 
-    // Short HTTP completes via end/close. Long SSE / occupied L0 must call
-    // setTimeout(0) (handleL0Listen / handleL0Connect / socketForward).
+    // Short HTTP completes via end/close. Long SSE must call setTimeout(0)
+    // (listen handlers / socketForward).
     s.setTimeout(60_000, () => { if (!s.destroyed) s.destroy() })
     s.setNoDelay(true)
     s.setKeepAlive(true, 30_000)
@@ -380,8 +380,7 @@ class conet_si_server {
     }
     
 	private startServer = () => {
-		
-		const server = createServer( async socket => {
+		const server: ReturnType<typeof createServer> = createServer( async socket => {
             const start = Date.now()
             
             socket.setNoDelay(true)
@@ -408,7 +407,7 @@ class conet_si_server {
 
 		})
 
-		server.on('error', err => {
+		server.on('error', (err: Error) => {
 			logger(Colors.red(`conet_si_server server on Error! ${err.message}`))
 		})
 
@@ -432,7 +431,7 @@ class conet_si_server {
 
 
 		
-		const server = createServerSSL (options, async socket => {
+		const server: ReturnType<typeof createServerSSL> = createServerSSL (options, async socket => {
             const s = socket as unknown as Socket
             const start = Date.now()
             s.setNoDelay(true)
