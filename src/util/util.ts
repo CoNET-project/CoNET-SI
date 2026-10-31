@@ -18,7 +18,7 @@ import CoNETDePIN_PassportABI from './CoNETDePIN_Passport.json'
 import { throws } from 'assert'
 import passport_distributor_ABI from './passport_distributor-ABI.json'
 import duplicateFactoryABI from './duplicateFactoryABI.json'
-import newNodeInfoABI from './newNodeInfoABI.json'
+import { createGuardianNodeSync } from './guardianNodes'
 import {distorySocket, response200Html, distorySocketPayment} from './htmlResponse'
 import CoNET_PGP_ABI from './ABI/conetPgp.json'
 import path from 'path'
@@ -34,7 +34,6 @@ const ipfsEndpoint = `https://ipfs.conet.network/api/`
 const CONETP_mainnet_rovider = new ethers.JsonRpcProvider(CoNET_mainnet_RPC)
 const GuardianPlan_CancunAddr = '0x312c96DbcCF9aa277999b3a11b7ea6956DdF5c61'
 const GuardianNodeInfo_CancunAddr = '0x88cBCc093344F2e1A6c2790A537574949D711E9d'
-const GuardianNodeInfo_mainnet = '0xBC6b53065b5647261396d002bDBA0d3396E0722f'.toLowerCase()
 
 /** 与 `deployments/conet-addresses.json` / `conet-AddressPGP.json` 中 AddressPGP 一致（由 updateConetReferences.ts 同步） */
 const conet_PGP_address = '0x684b0ac760cEE9c9b85de36d69746420648Cf9e2'
@@ -58,7 +57,6 @@ const CoNETDePIN_PassportSC_mainnet_readonly = new ethers.Contract(CoNETDePIN_Pa
 const CoNETDePIN_passport_distributor_mainnet_readonly = new ethers.Contract(CoNETDePIN_passport_distributor_mainnet_addr, passport_distributor_ABI, CONETP_mainnet_rovider)
 
 const paymendUser: Map<string, boolean> = new Map()
-const GuardianNodesMainnet = new ethers.Contract(GuardianNodeInfo_mainnet, newNodeInfoABI, CONETP_mainnet_rovider)
 
 	//		_nftIDs, _expires, _expiresDays, _premium
 
@@ -126,83 +124,14 @@ export const putUserMiningToPaymendUser = (fromAddr: string) => {
 }
 
 
-let getAllNodesProcess = false
+/** Guardian node table. Replaced as a whole by applyGuardianTable; never edited in place. */
 let Guardian_Nodes: nodeInfo[] = []
-
 
 const ZERO = '0x0000000000000000000000000000000000000000'
 
 /** 与 apiv4 `miningRate` 返回的 `nodeWallets[].ipAddr` 对齐比较用（trim、去 IPv4-mapped 前缀、小写） */
 const normalizeNodeWalletIp = (ip: string) =>
 	(ip || '').trim().replace(/^::ffff:/i, '').toLowerCase()
-
-const _getAllNodes = async (): Promise<any[]> => {
-  let i = 0
-  const length = 100
-
-  const all: any[] = []
-  const seen = new Set<string>()
-  const MAX_LOOP = 1000
-  const MAX_CONSECUTIVE_FAIL = 5  // 连续失败后退出，避免无限重试
-  let loop = 0
-  let consecutiveFail = 0
-
-  while (loop++ < MAX_LOOP) {
-    logger(`_getAllNodes LOOP from ${i} to ${i + length}`)
-
-    let page: any[]
-    try {
-      page = await GuardianNodesMainnet.getAllNodes(i, length)
-      consecutiveFail = 0
-    } catch (e: any) {
-      // 合约返回 0x（空数据）时，ethers 无法解码，视为无节点
-      if (e?.code === 'BAD_DATA' && /value="0x"/.test(e?.message ?? '')) {
-        logger(`_getAllNodes: contract returned empty (0x), treat as no nodes`)
-        page = []
-        consecutiveFail = 0
-      } else {
-        consecutiveFail++
-        logger(Colors.red(`_getAllNodes Error (${consecutiveFail}/${MAX_CONSECUTIVE_FAIL}): ${e?.message ?? e}`))
-        if (consecutiveFail >= MAX_CONSECUTIVE_FAIL) {
-          logger(Colors.red(`_getAllNodes abort after ${MAX_CONSECUTIVE_FAIL} consecutive failures`))
-          break
-        }
-        await new Promise(r => setTimeout(r, 2000))
-        continue
-      }
-    }
-
-    logger(`_getAllNodes page received: length=${page?.length ?? 0}, i=${i}`)
-    if (!page || page.length === 0) break
-
-    let validCount = 0
-    let added = 0
-
-    for (const n of page) {
-      const keyID = (n?.keyID ?? n?.[2] ?? "").toString().trim().toLowerCase()
-      const ip = (n?.ip ?? n?.[3] ?? "").toString().trim().toLowerCase()
-
-      if (!keyID && !ip) continue
-      validCount++
-
-      const key = keyID || ip
-      if (seen.has(key)) continue
-
-      seen.add(key)
-      all.push(n)
-      added++
-    }
-
-    logger(`_getAllNodes page processed: validCount=${validCount}, added=${added}, all.length=${all.length}`)
-    if (validCount === 0) break
-    if (added === 0) break  // 无新节点，避免重复数据死循环
-
-    // 按实际返回数量推进（合约可能每批最多返回 < length 条，不可依赖 page.length < length 判断末尾）
-    i += page.length
-  }
-
-  return all
-}
 
 let reScanAllWalletsProcess = false
 
@@ -259,81 +188,65 @@ export const reScanAllWallets = async () => {
     }
 }
 
-export const getAllNodes = async (): Promise<boolean> => {
-  if (getAllNodesProcess) return true
+/**
+ * Swap in a new node table. Runs synchronously (no await), so other requests see either the
+ * whole old table or the whole new one. Open sockets keep their own addresses and are not
+ * touched; only lookups made after this call use the new data.
+ */
+const applyGuardianTable = (nodes: nodeInfo[]) => {
+	const next = new Map<string, nodeInfo>()
+	for (const n of nodes) {
+		// routerInfo key = Guardian domain (PGP key ID); store trimmed and UPPER, as before.
+		const d = (n.domain || '').trim()
+		if (!d) continue
+		next.set(d, n)
+		next.set(d.toUpperCase(), n)
+	}
+	for (const key of [...routerInfo.keys()]) {
+		if (!next.has(key)) routerInfo.delete(key)
+	}
+	for (const [key, n] of next) routerInfo.set(key, n)
+	Guardian_Nodes = nodes
 
-  getAllNodesProcess = true
-  try {
-    const wallets = await getAllNodeWallets()
-    if (!wallets) logger(`getAllNodes Error: getAllNodeWallets NULL!!`)
-
-    const nodes = await _getAllNodes()
-
-    // 先用 Map 去重（按 ipaddress）
-    const merged = new Map<string, nodeInfo>()
-
-    // 先把现有的放进去（保留已有）
-    for (const n of Guardian_Nodes) merged.set(n.ipaddress, n)
-
-    for (let i = 0; i < nodes.length; i++) {
-      const node = nodes[i]
-      const id = Number(node[0].toString())
-
-      const pgpString = Buffer.from(node[1], "base64").toString()
-      const domain: string = node[2] ?? ""
-      const ipAddr: string = node[3] ?? ""
-      const region: string = node[4] ?? ""
-
-      if (!ipAddr) continue
-
-      let wallet = ""
-      if (wallets?.length) {
-        const hit = wallets.find(
-			n => normalizeNodeWalletIp(n.ipAddr) === normalizeNodeWalletIp(ipAddr)
-		)
-        if (hit) wallet = hit.wallet
-      }
-
-      const itemNode: nodeInfo = {
-        ipaddress: ipAddr,
-        pgpArmored: pgpString,
-        domain,
-        nftNumber: id,
-        regionName: region,
-        pgpKeyID: domain,
-        wallet
-      }
-
-      // 更新 routerInfo（按 Guardian domain；同时写入 trim 后原串与 UPPER，避免与链上 routeKeyID 大小写不一致）
-      if (domain) {
-        const d = domain.trim()
-        routerInfo.set(d, itemNode)
-        routerInfo.set(d.toUpperCase(), itemNode)
-      }
-
-      // 更新 merged（按 ip 去重）
-      merged.set(ipAddr, itemNode)
-    }
-
-    // 一次性替换，避免 splice/push 的各种坑
-    Guardian_Nodes.length = 0
-    Guardian_Nodes.push(...merged.values())
-
-    logger(Colors.red(`getAllNodes success! Guardian_Nodes = ${Guardian_Nodes.length} `))
-    // Empty list after fetch usually means RPC abort / degraded read — treat as failure so
-    // startEPOCH can retry when publicrpc recovers (do not permanently skip mining).
-    if (Guardian_Nodes.length === 0) {
-      logger(Colors.yellow(`getAllNodes: empty Guardian_Nodes; treat as failure for mining init`))
-      return false
-    }
-    return true
-  } catch (e) {
-    logger(Colors.red(`getAllNodes Error: ${(e as any)?.message ?? e}`))
-    return false
-  } finally {
-    getAllNodesProcess = false
-  }
+	// clientRoute caches user keyID -> node object. Point entries at the new objects; drop
+	// entries whose node left the table so the next lookup asks AddressPGP again.
+	let clientRoutesDropped = 0
+	let clientRoutesRepointed = 0
+	for (const [userKey, node] of clientRoute) {
+		const d = (node.domain || '').trim()
+		const fresh = next.get(d) ?? next.get(d.toUpperCase())
+		if (!fresh) {
+			clientRoute.delete(userKey)
+			clientRoutesDropped++
+		} else if (fresh !== node) {
+			if (fresh.ipaddress !== node.ipaddress) clientRoutesRepointed++
+			clientRoute.set(userKey, fresh)
+		}
+	}
+	return { clientRoutesDropped, clientRoutesRepointed }
 }
+
+const guardianNodeSync = createGuardianNodeSync({
+	rpcUrl: CoNET_mainnet_RPC,
+	getTable: () => Guardian_Nodes,
+	applyTable: applyGuardianTable,
+	fetchWallets: () => getAllNodeWallets(),
+})
+
+/**
+ * Read the full node table from chain now and apply it. Returns false when the read failed or
+ * was refused (the current table stays). Used at boot by startEPOCH.
+ */
+export const getAllNodes = async (): Promise<boolean> => {
+	const outcome = await guardianNodeSync.refreshNow('startEPOCH')
+	return outcome.ok && Guardian_Nodes.length > 0
+}
+
+/** Ask for a refresh with debounce + jitter (use this instead of getAllNodes outside boot). */
+export const requestGuardianNodeRefresh = (reason: string) => guardianNodeSync.requestRefresh(reason)
+
+/** Start watching GuardianNodesInfoV6 for changes. Idempotent. */
+export const startGuardianNodeWatcher = () => guardianNodeSync.startWatching()
 
 
 export const aesGcmEncrypt = async (plaintext: string, password: string) => {

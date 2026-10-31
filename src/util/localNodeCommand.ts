@@ -42,7 +42,7 @@ import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
 
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, requestGuardianNodeRefresh, startGuardianNodeWatcher, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -1379,9 +1379,8 @@ const validatorMining = async (command: minerObj, socket: Socket ) => {
 	if (!nodeInfo ) {
 		logger(Colors.red(`wallet ${command.walletAddress} node ${nodeWallet} has no domain ${validatorData.nodeDomain} Error! routerInfo size = ${routerInfo.size} `))
 		if (routerInfo.size <400) {
-			logger(Colors.red(`routerInfo size <100 restart routerInfo`))
-			
-			getAllNodes ()
+			logger(Colors.red(`routerInfo size <400; requesting node table refresh`))
+			requestGuardianNodeRefresh(`validator: unknown node domain ${validatorData.nodeDomain}`)
 			const now = new Date().getTime()
 			if (routerInfo_Less100 > 0) {
 				if (routerInfo_Less100 - now > 1000 * 60 * 5) {
@@ -3328,7 +3327,7 @@ const blockProcess = async (block: number ) => {
     try {
         //logger(Colors.blue(`startEPOCH_EventListeningForMining on Block ${block} START! ${new Date().toISOString()}`))
         await nodeRestartEvent(block)
-        await checkNodeUpdate(block)
+        // Guardian node table changes are handled by startGuardianNodeWatcher (util.ts / guardianNodes.ts).
 
         if (block % 2) {
             return
@@ -3446,6 +3445,7 @@ export const startEPOCH_EventListeningForMining = async (
 			scheduleMiningStartRetry(nodePrivate, domain, _nodeIpAddr, retryAttempt)
 			return
 		}
+		startGuardianNodeWatcher()
 
 		serttData = await getSetup()
 
@@ -3752,40 +3752,6 @@ const stratlivenessV2 =  (block: number, nodeWprivateKey: Wallet, nodeDomain: st
     executor(true)
 })
 
-const GuardianNodeInfo_mainnet = '0xBC6b53065b5647261396d002bDBA0d3396E0722f'.toLowerCase()
-
-const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
-	try {
-	const blockTs = await CONETProvider_Mainnet.getBlock(block)
-	
-	if (!blockTs?.transactions) {
-		return resolve(true)
-	}
-
-    let hasGuardianNodeEvent = false
-
-	for (let tx of blockTs.transactions) {
-
-		const event = await CONETProvider_Mainnet.getTransactionReceipt(tx)
-
-		if ( event?.to?.toLowerCase() === GuardianNodeInfo_mainnet) {
-            
-            hasGuardianNodeEvent = true
-			
-            break
-		}
-		
-	}
-    if (hasGuardianNodeEvent) {
-        await getAllNodes()
-    }
-	} catch (ex: any) {
-		logger(Colors.yellow(`checkNodeUpdate block ${block} failed (non-fatal): ${ex?.message ?? ex}`))
-	}
-    
-    resolve(true)
-})
-
 // export const startEPOCH_EventListeningForMining1 = async () => {
 
 
@@ -3819,10 +3785,5 @@ const checkNodeUpdate = async(block: number) => new Promise (async resolve => {
 
 // startEPOCH_EventListeningForMining1()
 
-const test = async () => {
-	//2615447
-	checkNodeUpdate(2615447)
-}
-// test()
 ///		885 socks5ConnectV3
 ///		1463 return socketForwardV2
