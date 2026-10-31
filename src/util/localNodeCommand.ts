@@ -42,7 +42,7 @@ import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
 
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, requestGuardianNodeRefresh, startGuardianNodeWatcher, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
+import { getClientWalletAddress, notifyVoiceCallPush, routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, requestGuardianNodeRefresh, startGuardianNodeWatcher, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -71,9 +71,11 @@ import {
 	setUdpServerChatNotify,
 } from './udpForward'
 import {
+	handleVoiceChunk,
 	handleVoiceFrame,
 	handleVoiceListen,
 	handleVoiceUnlisten,
+	isVoiceChunk,
 } from './voiceForward'
 import {
 	fetchVoiceOffer,
@@ -1987,8 +1989,15 @@ export const postOpenpgpRouteSocket = async (
 	let content
 
 	try {
-		const decryptedObj = await decryptMessage ( messObj, pgpPrivateObj)
-		decryptedData = decryptedObj.data
+		// Binary first so a v2 voice chunk (binary literal) survives intact.
+		// Everything else gets the same text openpgp's default utf8 format
+		// returns (getText: UTF-8 decode of CRLF→LF bytes).
+		const decryptedObj = await decrypt({ message: messObj, decryptionKeys: pgpPrivateObj, format: 'binary' })
+		const bytes = decryptedObj.data as Uint8Array
+		if (isVoiceChunk(bytes)) {
+			return handleVoiceChunk(socket, bytes)
+		}
+		decryptedData = Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString('utf8').replace(/\r\n/g, '\n')
 		decryptedRaw = decryptedPayloadToUtf8(decryptedData)
 	} catch (ex: any) {
 		logger (Colors.red(` decryptMessage EX ERROR, distorySocket! ${socket.remoteAddressShow}, ${ex.message}`))
@@ -2106,12 +2115,47 @@ const handleVoiceOfferStore = async (
 	} else {
 		logger(Colors.yellow(`voice_offer_store rejected callId=${String(callId).slice(0, 32)}`))
 	}
+	// v2 wake: this is the callee's own mailbox, so it finds the callee from
+	// the offer's recipient key ID and rings the device itself. The caller
+	// then sends voice_listen without the callee wallet. `pushed` tells the
+	// caller it may drop the legacy wake fields (old nodes never return it).
+	const pushed = ok && Number(command.push) === 1
+		? await pushVoiceCallFromOffer(callId.trim(), sessionId.trim(), offerArmor, expiresAt, Number(command.pushTimestamp))
+		: false
 	return response200Html(socket, JSON.stringify({
 		ok,
 		error: ok ? undefined : 'invalid_voice_offer_store',
 		callId: callId.trim(),
 		sessionId: sessionId.trim(),
+		...(pushed ? { pushed: true } : {}),
 	}))
+}
+
+const pushVoiceCallFromOffer = async (
+	callId: string,
+	sessionId: string,
+	offerArmor: string,
+	expiresAt: number | undefined,
+	pushTimestamp: number,
+): Promise<boolean> => {
+	const now = Date.now()
+	if (!expiresAt || expiresAt <= now || expiresAt > now + 10 * 60_000) return false
+	if (!Number.isFinite(pushTimestamp) || Math.abs(Math.floor(now / 1000) - pushTimestamp) > 10 * 60) return false
+	try {
+		const message = await readMessage({ armoredMessage: offerArmor })
+		const keyId = getSingleEncryptionKeyId(message.getEncryptionKeyIDs()) || ''
+		if (!keyId) return false
+		const calleeEoa = await getClientWalletAddress(keyId)
+		if (!calleeEoa) {
+			logger(Colors.yellow(`voice_offer_store push: no wallet for ${keyId}`))
+			return false
+		}
+		notifyVoiceCallPush({ callId, sessionId, calleeEoa, expiresAt, timestamp: pushTimestamp })
+		return true
+	} catch (ex: any) {
+		logger(Colors.yellow(`voice_offer_store push failed: ${ex?.message ?? ex}`))
+		return false
+	}
 }
 
 const handleVoiceOfferFetch = async (

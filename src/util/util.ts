@@ -1121,7 +1121,7 @@ export const getNodeWallet = (nodeIpaddress: string) => {
 }
 
 
-const getClientWalletAddress = async (
+export const getClientWalletAddress = async (
     pgpKeyID: string
 ): Promise<string | null> => {
     try {
