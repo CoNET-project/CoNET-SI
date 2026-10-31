@@ -42,7 +42,7 @@ import {TLSSocket} from 'tls'
 import {resolve4} from 'dns'
 import {access, constants} from 'fs/promises'
 
-import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, commitLocalOfflineFlush, rollbackLocalOfflineFlush, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
+import { routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
 import { once } from 'events'
 import P from 'phin'
@@ -3035,15 +3035,11 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     
         if (data.length) {
             const unsent = await writeLinesWithBackpressure(res, data)
+            // Keep the claimed copy: a socket write is not delivery. Each message
+            // leaves storage only on its gossip_delivery_ack; anything not ACKed
+            // is flushed again on the next listen (clients dedupe by sendId).
             if (unsent.length) {
-                logger(`======================================= User ${keyID} offline flush incomplete unsent=${unsent.length} — rollback`)
-                rollbackLocalOfflineFlush(keyID, unsent)
-            } else if ((res as Socket).destroyed || (res as any).writableEnded) {
-                // Wrote into a dying socket — reclaim so next listen can retry (may duplicate if client got some).
-                logger(`======================================= User ${keyID} offline flush socket dead after write — rollback all`)
-                rollbackLocalOfflineFlush(keyID, data)
-            } else {
-                commitLocalOfflineFlush(keyID)
+                logger(`======================================= User ${keyID} offline flush incomplete unsent=${unsent.length} — kept for next listen`)
             }
         }
         logger(`======================================= User ${keyID} success all offline data!`)
@@ -3128,10 +3124,8 @@ const addIpaddressToMailboxListeningPool = async (
 	if (keyID) {
 		const data = tryGetLocal(keyID)
 		if (data.length) {
-			const unsent = await writeLinesWithBackpressure(res, data)
-			if (unsent.length) rollbackLocalOfflineFlush(keyID, unsent)
-			else if (s.destroyed || (s as any).writableEnded) rollbackLocalOfflineFlush(keyID, data)
-			else commitLocalOfflineFlush(keyID)
+			// Keep the claimed copy until each message is ACKed (see tryGetLocal).
+			await writeLinesWithBackpressure(res, data)
 		}
 	}
 	if (s.destroyed || (s as any).writableEnded) return

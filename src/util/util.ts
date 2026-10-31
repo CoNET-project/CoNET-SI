@@ -557,42 +557,39 @@ export const tryGetLocal = (clentKeyID: string): string[] => {
     const filePath = path.join(baseDir, `${safeKey}.json`)
     const inflightPath = path.join(baseDir, `${safeKey}.inflight.json`)
 
-    // Prefer reclaiming a prior interrupted flush (client aborted mid-SSE).
-    const candidatePaths = [inflightPath, filePath]
-    let sourcePath: string | null = null
-    for (const p of candidatePaths) {
-        if (fs.existsSync(p)) {
-            sourcePath = p
-            break
+    const readList = (p: string): string[] => {
+        if (!fs.existsSync(p)) return []
+        try {
+            const parsed = JSON.parse(fs.readFileSync(p, 'utf8'))
+            return Array.isArray(parsed) ? parsed.filter(v => typeof v === 'string') : []
+        } catch {
+            // Corrupt file: drop it rather than block every later flush.
+            return []
         }
     }
-    if (!sourcePath) return []
 
-    let result: string[] = []
-    try {
-        const raw = fs.readFileSync(sourcePath, 'utf8')
-        const parsed = JSON.parse(raw)
-        if (Array.isArray(parsed)) {
-            result = parsed.filter(v => typeof v === 'string')
-        }
-    } catch {
-        // ignore parse errors — still try to quarantine the bad file
+    // `.inflight` holds messages already flushed but not yet ACKed by the
+    // client (`gossip_delivery_ack` → removeLocalByArmorHash). Merge it with
+    // messages saved since, so an unACKed copy never blocks newer ones.
+    const seen = new Set<string>()
+    const result: string[] = []
+    for (const item of [...readList(inflightPath), ...readList(filePath)]) {
+        if (seen.has(item)) continue
+        seen.add(item)
+        result.push(item)
     }
 
     if (!result.length) {
-        try { fs.unlinkSync(sourcePath) } catch {}
+        try { fs.unlinkSync(inflightPath) } catch {}
+        try { fs.unlinkSync(filePath) } catch {}
         return []
     }
 
-    // Claim: move to .inflight so a second concurrent listen cannot double-take,
-    // and a crashed flush can be reclaimed on the next listen.
     try {
-        if (sourcePath !== inflightPath) {
-            try { fs.unlinkSync(inflightPath) } catch {}
-            fs.renameSync(sourcePath, inflightPath)
-        }
+        fs.writeFileSync(inflightPath, JSON.stringify(result, null, 2), 'utf8')
+        try { fs.unlinkSync(filePath) } catch {}
     } catch {
-        // If rename fails, keep reading from source but do not delete yet.
+        // If the claim write fails, keep the source files as they are.
     }
 
     return result
