@@ -73,7 +73,6 @@ import {
 } from './udpForward'
 import {
 	handleVoiceChunk,
-	handleVoiceFrame,
 	handleVoiceListen,
 	handleVoiceUnlisten,
 	isVoiceChunk,
@@ -1081,12 +1080,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 
 		case 'voice_listen': {
-			return handleVoiceListen(socket, command as unknown as Record<string, unknown>, wallet)
-		}
-
-		case 'voice_uplink':
-		case 'voice_downlink': {
-			return handleVoiceFrame(socket, command as unknown as Record<string, unknown>, wallet)
+			return handleVoiceListen(socket, command as unknown as Record<string, unknown>, wallet, nodeDomain)
 		}
 
 		case 'voice_unlisten': {
@@ -2054,8 +2048,7 @@ export const postOpenpgpRouteSocket = async (
 	}
 
 	if (
-		(content.command === 'voice_listen' || content.command === 'voice_uplink' ||
-			content.command === 'voice_downlink' || content.command === 'voice_unlisten' ||
+		(content.command === 'voice_listen' || content.command === 'voice_unlisten' ||
 			content.command === 'voice_offer_store' || content.command === 'voice_offer_fetch') &&
 		typeof content.sessionId === 'string'
 	) {
@@ -2497,8 +2490,7 @@ export const checkSign = (message: string, signMess: string) => {
 		// here would recover and expose the initiator's business wallet to the
 		// mailbox node.
 		if (
-			(obj.command === 'voice_listen' || obj.command === 'voice_uplink' ||
-				obj.command === 'voice_downlink' || obj.command === 'voice_unlisten' ||
+			(obj.command === 'voice_listen' || obj.command === 'voice_unlisten' ||
 				obj.command === 'voice_offer_store' || obj.command === 'voice_offer_fetch') &&
 			typeof obj.sessionId === 'string' && obj.sessionId.length >= 16
 		) {
