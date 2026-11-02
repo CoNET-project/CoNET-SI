@@ -2787,6 +2787,82 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
 const gossipListeningPool: Map<string, livenessListeningPoolObj> = new Map()
 
 /**
+ * Old clients (no `streamKey`) are not served, but refusing them makes them
+ * retry at once through the next entry: iOS SDK 0.1.7 walks every entry, then
+ * waits 6 s (about 140 listens a minute per device). All released clients
+ * treat HTTP 200 + SSE headers as "connected" and stay while any frame arrives
+ * within their idle timeout (120 s native, 240 s web). So we hold the stream:
+ * headers plus a plain keepalive every 50–90 s, and nothing else. It is not in
+ * the mailbox pool: no messages, no offline flush, not online. Their messages
+ * stay stored (and pushed) until they upgrade. Limits are per mailbox wallet
+ * (from the signed command), never per source IP: the source is the entry.
+ * Over the limit: hold 30 s without a response, then close.
+ */
+const LEGACY_HOLD_PER_WALLET = 4
+const LEGACY_HOLD_MAX = 3000
+const LEGACY_REFUSE_DELAY_MS = 30_000
+const legacyMailboxHolds = new Map<string, Set<Socket | TLSSocket>>()
+let legacyMailboxHoldCount = 0
+let legacyMailboxHoldLogAt = 0
+
+const holdLegacyMailboxListen = (res: TLSSocket | Socket, wallet: string): void => {
+	const s = res as Socket
+	try { s.setTimeout(0) } catch { /* ignore */ }
+	const key = String(wallet || '').toLowerCase()
+	const holds = legacyMailboxHolds.get(key) ?? new Set<Socket | TLSSocket>()
+	if (holds.size >= LEGACY_HOLD_PER_WALLET || legacyMailboxHoldCount >= LEGACY_HOLD_MAX) {
+		const timer = setTimeout(() => distorySocket(s), LEGACY_REFUSE_DELAY_MS)
+		s.once('close', () => clearTimeout(timer))
+		return
+	}
+	holds.add(res)
+	legacyMailboxHolds.set(key, holds)
+	legacyMailboxHoldCount++
+	let beatTimer: ReturnType<typeof setTimeout> | undefined
+	let released = false
+	const release = () => {
+		if (released) return
+		released = true
+		if (beatTimer) clearTimeout(beatTimer)
+		holds.delete(res)
+		if (!holds.size) legacyMailboxHolds.delete(key)
+		legacyMailboxHoldCount--
+	}
+	s.once('close', release)
+	s.once('error', release)
+	const now = Date.now()
+	if (now - legacyMailboxHoldLogAt > 60_000) {
+		legacyMailboxHoldLogAt = now
+		logger(Colors.yellow(`mailbox_listen without stream key held (old client); held=${legacyMailboxHoldCount}`))
+	}
+	const headers =
+		`HTTP/1.1 200 OK\r\n` +
+		`Date: ${new Date().toUTCString()}\r\n` +
+		`Content-Type: text/event-stream; charset=utf-8\r\n` +
+		`Cache-Control: no-cache, no-transform\r\n` +
+		`Connection: keep-alive\r\n` +
+		`X-Accel-Buffering: no\r\n` +
+		`Access-Control-Allow-Origin: *\r\n\r\n`
+	try {
+		s.write(headers + mailboxSseFrame({ type: 'mailbox_keepalive', ts: now }))
+	} catch {
+		release()
+		return
+	}
+	const schedule = () => {
+		beatTimer = setTimeout(() => {
+			if (!writeLivenessSseJson(s, { type: 'mailbox_keepalive', ts: Date.now() })) {
+				release()
+				try { s.destroy() } catch { /* ignore */ }
+				return
+			}
+			schedule()
+		}, 50_000 + Math.floor(Math.random() * 40_000))
+	}
+	schedule()
+}
+
+/**
  * Dedicated Mailbox B SSE registration.
  *
  * Unlike the legacy mining/chat pool, the key is an SSE instance rather than
@@ -2806,8 +2882,7 @@ const addIpaddressToMailboxListeningPool = async (
 	// recipient key ID to the relaying entry. Older clients are refused.
 	const streamKey = parseMailboxStreamKey(streamKeyRaw)
 	if (!streamKey) {
-		logger(Colors.yellow(`mailbox_listen refused: no stream key ${ipaddress}`))
-		return distorySocket(s)
+		return holdLegacyMailboxListen(s, wallet)
 	}
 	try { s.setTimeout(0) } catch { /* ignore */ }
 	const instanceId = String(requestedInstanceId || uuidV4(ethers.randomBytes(16)))
