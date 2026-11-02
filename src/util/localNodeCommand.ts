@@ -2352,8 +2352,10 @@ export const forwardEncryptedSocket = async (
 
 
 	if ( !_route ) {
+		// A clear failure, so the sender tries another entry: an empty 200 here
+		// looked like success and the message was lost silently.
 		logger (Colors.magenta('forwardEncryptedText can not find router for routed key'))
-		return response200Html(socket, JSON.stringify({}))
+		return response200Html(socket, JSON.stringify({ ok: false, error: 'no_route' }))
 	}
 
         if (_route === nodeIpAddr) {
