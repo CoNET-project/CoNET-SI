@@ -14,7 +14,7 @@ import { ethers } from 'ethers'
 import Colors from 'colors/safe'
 import { logger } from './logger'
 import { distorySocket, response200Html } from './htmlResponse'
-import { isLivenessListenSocketStale, notifyVoiceCallPush } from './util'
+import { isLivenessListenSocketStale } from './util'
 
 const VOICE_IDLE_MS = 2 * 60 * 1000
 const VOICE_SWEEP_MS = 30_000
@@ -52,11 +52,6 @@ type VoiceSession = {
 
 const sessions = new Map<string, VoiceSession>()
 let sweepTimer: ReturnType<typeof setTimeout> | undefined
-
-const lowerAddress = (value: unknown): string => {
-	if (typeof value !== 'string' || !ethers.isAddress(value)) return ''
-	return value.toLowerCase()
-}
 
 const validSessionId = (value: unknown): value is string =>
 	typeof value === 'string' && VOICE_SESSION_RE.test(value.trim())
@@ -184,36 +179,9 @@ export const handleVoiceListen = async (
 	sessions.set(sessionId, session)
 	scheduleSweep()
 	logger(Colors.cyan(`voice listen attached session=${sessionId}${writeKey ? ' v2' : ''}`))
-
-	// The caller's mailbox is the only component that wakes native devices.
-	// The PWA never calls /api/voiceCallPush directly, so the API sees the
-	// mailbox node as the network source rather than the caller's IP.
-	// relayVoiceOfferArmor already stored the attached user-PGP offer on the
-	// callee mailbox before this push.
-	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
-	const calleeEoa = lowerAddress(command.targetWallet)
-	const expiresAt = Number(command.expiresAt)
-	const pushTimestamp = Number(command.pushTimestamp)
-	if (
-		callId &&
-		calleeEoa &&
-		Number.isFinite(expiresAt) &&
-		expiresAt > Date.now() &&
-		expiresAt <= Date.now() + 10 * 60_000 &&
-		validTimestamp(pushTimestamp)
-	) {
-		notifyVoiceCallPush({
-			callId,
-			sessionId,
-			calleeEoa,
-			expiresAt,
-			timestamp: pushTimestamp,
-		})
-	} else if (callId || calleeEoa) {
-		logger(Colors.yellow(
-			`voiceCallPush skipped callId=${callId ? 'yes' : 'no'} callee=${calleeEoa ? 'yes' : 'no'} expiresOk=${Number.isFinite(expiresAt) && expiresAt > Date.now() && expiresAt <= Date.now() + 10 * 60_000} tsOk=${validTimestamp(pushTimestamp)}`
-		))
-	}
+	// Only the callee's own mailbox rings the callee (`voice_offer_store` with
+	// push: 1). Legacy wake fields (`targetWallet`, `offerArmor`, `callId`) are
+	// ignored here: the session node must not learn who is being called.
 }
 
 export const handleVoiceUnlisten = (

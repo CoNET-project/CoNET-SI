@@ -44,6 +44,7 @@ import {access, constants} from 'fs/promises'
 
 import { getClientWalletAddress, notifyVoiceCallPush, routerInfo, checkPayment, getGuardianNodeWallet, CoNET_CancunRPC, putUserMiningToPaymendUser, getAllNodes, requestGuardianNodeRefresh, startGuardianNodeWatcher, isMyRoute, forWardPGPMessageToClient, isLivenessListenSocketStale, tryGetLocal, removeLocalByArmorHash, tickPendingDeliveryAcks } from '../util/util'
 import {socks5Connect_v2 as socks5ConnectV2} from './socks5Connect_v2'
+import { mailboxSseFrame, parseMailboxStreamKey } from './mailboxStream'
 import { once } from 'events'
 import P from 'phin'
 import epoch_info_ABI from './epoch_info_managerABI.json'
@@ -1051,6 +1052,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 				wallet,
 				socket,
 				(command as any).instanceId,
+				(command as any).streamKey,
 			)
 		}
 
@@ -1079,16 +1081,7 @@ export const localNodeCommandSocket = async (socket: Socket, headers: string[], 
 		}
 
 		case 'voice_listen': {
-			const voiceCommand = command as unknown as Record<string, unknown>
-			// Offer relay is best-effort. Blocking listen/push on offer forward
-			// prevented CallKit VoIP wake when the callee mailbox was briefly
-			// unreachable — the caller UI still showed Ringing after a client
-			// timeout, but APNs never fired because voice_listen never attached.
-			const offerDelivered = await relayVoiceOfferArmor(voiceCommand, wallet)
-			if (!offerDelivered) {
-				logger(Colors.yellow(`voice offer relay best-effort failed; still attaching listen for ${wallet}`))
-			}
-			return handleVoiceListen(socket, voiceCommand, wallet)
+			return handleVoiceListen(socket, command as unknown as Record<string, unknown>, wallet)
 		}
 
 		case 'voice_uplink':
@@ -1766,8 +1759,8 @@ const asPgpMessageArmor = (text: string): string | null => {
 	return trimmed.slice(0, end + '-----END PGP MESSAGE-----'.length)
 }
 
-/** Mailbox work: `{ data: <user-PGP armor> }` encrypted to this node's route PGP. */
-const tryParseMailboxWorkEnvelope = (plain: string): { data: string } | null => {
+/** Mailbox work: `{ data: <user-PGP armor>, NoPush?: true }` encrypted to this node's route PGP. */
+const tryParseMailboxWorkEnvelope = (plain: string): { data: string; NoPush: boolean } | null => {
 	const trimmed = String(plain || '').trim()
 	if (!trimmed) {
 		return null
@@ -1785,7 +1778,7 @@ const tryParseMailboxWorkEnvelope = (plain: string): { data: string } | null => 
 	if (!rec || typeof rec !== 'object' || Array.isArray(rec)) {
 		return null
 	}
-	const row = rec as { data?: unknown; message?: unknown; signMessage?: unknown }
+	const row = rec as { data?: unknown; message?: unknown; signMessage?: unknown; NoPush?: unknown }
 	if (typeof row.message === 'string' && row.signMessage) {
 		return null
 	}
@@ -1796,7 +1789,7 @@ const tryParseMailboxWorkEnvelope = (plain: string): { data: string } | null => 
 	if (!inner) {
 		return null
 	}
-	return { data: inner }
+	return { data: inner, NoPush: row.NoPush === true }
 }
 
 const decryptedPayloadToUtf8 = (data: unknown): string => {
@@ -2043,8 +2036,8 @@ export const postOpenpgpRouteSocket = async (
 			if (workKeyID === pgpPublicKeyID) {
 				return terminateByEnd(socket, 'same-node inner PGP after mailbox work unwrap')
 			}
-			logger(Colors.blue(`postOpenpgpRouteSocket mailbox work unwrap; inner key ${workKeyID} ${socket.remoteAddressShow}`))
-			return forwardEncryptedSocket(socket, mailboxWork.data, workKeyID, headers, wallet)
+			logger(Colors.blue(`postOpenpgpRouteSocket mailbox work unwrap; inner key ${workKeyID} NoPush=${mailboxWork.NoPush} ${socket.remoteAddressShow}`))
+			return forwardEncryptedSocket(socket, mailboxWork.data, workKeyID, headers, wallet, mailboxWork.NoPush)
 		} catch (ex: any) {
 			logger(Colors.red(`mailbox work unwrap failed ${socket.remoteAddressShow} ${ex?.message || ''}`))
 			return distorySocket(socket)
@@ -2092,15 +2085,6 @@ export const postOpenpgpRouteSocket = async (
 
 const VOICE_OFFER_ARMOR_MAX = 48_000
 
-const findGuardianNodeByIp = (ip: string): nodeInfo | null => {
-	const want = String(ip || '').trim()
-	if (!want) return null
-	for (const n of routerInfo.values()) {
-		if (n.ipaddress === want) return n
-	}
-	return null
-}
-
 const handleVoiceOfferStore = async (
 	socket: any,
 	command: Record<string, unknown>,
@@ -2115,26 +2099,63 @@ const handleVoiceOfferStore = async (
 	} else {
 		logger(Colors.yellow(`voice_offer_store rejected callId=${String(callId).slice(0, 32)}`))
 	}
-	// v2 wake: this is the callee's own mailbox, so it finds the callee from
-	// the offer's recipient key ID and rings the device itself. The caller
-	// then sends voice_listen without the callee wallet. `pushed` tells the
-	// caller it may drop the legacy wake fields (old nodes never return it).
-	const pushed = ok && Number(command.push) === 1
-		? await pushVoiceCallFromOffer(callId.trim(), sessionId.trim(), offerArmor, expiresAt, Number(command.pushTimestamp))
-		: false
+	// This is the callee's own mailbox (the only path for an offer). It hands
+	// the offer to the callee's live sessions and offline store, then rings the
+	// callee, whom it finds from the offer's recipient key ID. The caller sends
+	// one command; no other node learns who is being called.
+	let delivered = false
+	let pushed = false
+	if (ok) {
+		const keyId = await readOfferRecipientKeyId(offerArmor)
+		if (keyId) {
+			delivered = await deliverVoiceOfferLocally(offerArmor, keyId)
+			if (Number(command.push) === 1) {
+				pushed = await pushVoiceCallFromOffer(callId.trim(), sessionId.trim(), keyId, expiresAt, Number(command.pushTimestamp))
+			}
+		}
+	}
 	return response200Html(socket, JSON.stringify({
 		ok,
 		error: ok ? undefined : 'invalid_voice_offer_store',
 		callId: callId.trim(),
 		sessionId: sessionId.trim(),
+		...(delivered ? { delivered: true } : {}),
 		...(pushed ? { pushed: true } : {}),
 	}))
+}
+
+const readOfferRecipientKeyId = async (offerArmor: string): Promise<string> => {
+	if (!offerArmor || offerArmor.length > VOICE_OFFER_ARMOR_MAX) return ''
+	try {
+		const message = await readMessage({ armoredMessage: offerArmor })
+		return getSingleEncryptionKeyId(message.getEncryptionKeyIDs()) || ''
+	} catch {
+		logger(Colors.yellow('voice_offer_store: offer is not OpenPGP'))
+		return ''
+	}
+}
+
+/** Offer is callee user-PGP ciphertext: store it (no chat push) and write it to live sessions. */
+const deliverVoiceOfferLocally = async (offerArmor: string, keyId: string): Promise<boolean> => {
+	const [route] = await getRoute(keyId)
+	if (route !== nodeIpAddr) {
+		logger(Colors.yellow(`voice_offer_store: callee ${keyId} is not on this mailbox; index only`))
+		return false
+	}
+	saveLocal(offerArmor, keyId, { skipPush: true })
+	const targets = findMailboxClientsByPgpKeyId(keyId)
+		.filter((client) => !isLivenessListenSocketStale(client.res))
+	for (const client of targets) {
+		forWardPGPMessageToClient(offerArmor, keyId, client, () => {})
+	}
+	logger(Colors.cyan(`voice_offer_store delivered ${keyId} live=${targets.length}`))
+	return true
 }
 
 const pushVoiceCallFromOffer = async (
 	callId: string,
 	sessionId: string,
-	offerArmor: string,
+	keyId: string,
 	expiresAt: number | undefined,
 	pushTimestamp: number,
 ): Promise<boolean> => {
@@ -2142,9 +2163,6 @@ const pushVoiceCallFromOffer = async (
 	if (!expiresAt || expiresAt <= now || expiresAt > now + 10 * 60_000) return false
 	if (!Number.isFinite(pushTimestamp) || Math.abs(Math.floor(now / 1000) - pushTimestamp) > 10 * 60) return false
 	try {
-		const message = await readMessage({ armoredMessage: offerArmor })
-		const keyId = getSingleEncryptionKeyId(message.getEncryptionKeyIDs()) || ''
-		if (!keyId) return false
 		const calleeEoa = await getClientWalletAddress(keyId)
 		if (!calleeEoa) {
 			logger(Colors.yellow(`voice_offer_store push: no wallet for ${keyId}`))
@@ -2180,219 +2198,6 @@ const handleVoiceOfferFetch = async (
 		expiresAt: entry.expiresAt,
 		offerArmor: entry.offerArmor,
 	}))
-}
-
-/**
- * Index opaque offerArmor on the callee mailbox by callId+sessionId.
- * Encrypted to that mailbox's route PGP (capability: sessionId ≥ 16).
- */
-const postVoiceOfferStoreToRemoteMailbox = async (
-	ip: string,
-	callId: string,
-	sessionId: string,
-	expiresAt: number | undefined,
-	offerArmor: string,
-	nodeWallet: ethers.Wallet,
-): Promise<boolean> => {
-	const node = findGuardianNodeByIp(ip)
-	if (!node?.pgpArmored) {
-		logger(Colors.yellow(`voice_offer_store remote: no route PGP for ip=${ip}`))
-		return false
-	}
-	const payload: Record<string, unknown> = {
-		command: 'voice_offer_store',
-		callId,
-		sessionId,
-		offerArmor,
-		timestamp: Math.floor(Date.now() / 1000),
-	}
-	if (typeof expiresAt === 'number' && Number.isFinite(expiresAt) && expiresAt > 0) {
-		payload.expiresAt = expiresAt
-	}
-	try {
-		// Peel path: JSON.parse(Buffer.from(decryptedRaw, 'base64')) — must match EncryptePGPMessage.
-		const plaintext = Buffer.from(JSON.stringify(payload)).toString('base64')
-		const armored = await encrypt({
-			message: await createMessage({ text: plaintext }),
-			encryptionKeys: await readKey({ armoredKey: node.pgpArmored }),
-			config: { preferredCompressionAlgorithm: enums.compression.zlib },
-		})
-		const armorStr = typeof armored === 'string' ? armored : String(armored)
-		let storeKeyId = ''
-		try {
-			const msg = await readMessage({ armoredMessage: armorStr })
-			storeKeyId = getSingleEncryptionKeyId(msg.getEncryptionKeyIDs()) || ''
-		} catch {
-			storeKeyId = ''
-		}
-		if (!storeKeyId) {
-			logger(Colors.yellow('voice_offer_store remote: could not read store armor key id'))
-			return false
-		}
-		const hops = await signAndAppendHop([], nodeWallet, storeKeyId, armorStr)
-		if (!hops) {
-			logger(Colors.yellow(`voice_offer_store remote hop-sig refused ${storeKeyId}`))
-			return false
-		}
-		const ok = await postUserPgpToRemoteMailbox(ip, armorStr, hopSigsHeaderLine(hops))
-		if (ok) {
-			logger(Colors.cyan(`voice_offer_store remote ok callId=${callId} sessionId=${sessionId} ip=${ip}`))
-		} else {
-			logger(Colors.yellow(`voice_offer_store remote http/body fail callId=${callId} ip=${ip}`))
-		}
-		return ok
-	} catch (ex) {
-		logger(Colors.yellow(`voice_offer_store remote failed: ${(ex as Error)?.message ?? String(ex)}`))
-		return false
-	}
-}
-
-/**
- * Outgoing voice_listen may carry the callee's user-PGP offer armor.
- * This mailbox forwards that ciphertext and does not decrypt it.
- * Also indexes by callId+sessionId so a killed native shell can fetch
- * offerArmor without a live PWA (voice_offer_fetch).
- */
-const relayVoiceOfferArmor = async (
-	command: Record<string, unknown>,
-	nodeWallet: ethers.Wallet,
-): Promise<boolean> => {
-	const raw = typeof command.offerArmor === 'string' ? command.offerArmor : ''
-	if (!raw) return true
-	if (raw.length > VOICE_OFFER_ARMOR_MAX || !raw.includes('-----BEGIN PGP MESSAGE-----')) {
-		logger(Colors.yellow('voice offer armor rejected'))
-		return false
-	}
-	const callId = typeof command.callId === 'string' ? command.callId.trim() : ''
-	const sessionId = typeof command.sessionId === 'string' ? command.sessionId.trim() : ''
-	const expiresAt = typeof command.expiresAt === 'number' ? command.expiresAt : undefined
-	let keyId = ''
-	try {
-		const message = await readMessage({ armoredMessage: raw })
-		keyId = getSingleEncryptionKeyId(message.getEncryptionKeyIDs()) || ''
-	} catch {
-		logger(Colors.yellow('voice offer armor is not OpenPGP'))
-		return false
-	}
-	if (!keyId) return false
-	const [route] = await getRoute(keyId)
-	if (!route) {
-		logger(Colors.yellow(`voice offer no mailbox for ${keyId}`))
-		return false
-	}
-	if (route === nodeIpAddr) {
-		saveLocal(raw, keyId, { skipPush: true })
-		if (callId && sessionId) {
-			const indexed = storeVoiceOffer(callId, sessionId, raw, expiresAt)
-			if (!indexed) {
-				logger(Colors.yellow(`voice offer local index skipped callId=${callId}`))
-			}
-		}
-		const mailboxClients = findMailboxClientsByPgpKeyId(keyId)
-			.filter((client) => !isLivenessListenSocketStale(client.res))
-		const legacy = findListenClientByPgpKeyId(keyId)
-		const targets = mailboxClients.length
-			? mailboxClients
-			: (legacy && !isLivenessListenSocketStale(legacy.res) ? [legacy] : [])
-		for (const client of targets) {
-			forWardPGPMessageToClient(raw, keyId, client, () => {})
-		}
-		logger(Colors.cyan(`voice offer stored on this mailbox ${keyId} live=${targets.length}`))
-		return true
-	}
-	const hops = await signAndAppendHop([], nodeWallet, keyId, raw)
-	if (!hops) {
-		logger(Colors.yellow(`voice offer hop-sig refused ${keyId}`))
-		return false
-	}
-	const hopLine = hopSigsHeaderLine(hops)
-	let ok = false
-	for (let attempt = 1; attempt <= 2 && !ok; attempt++) {
-		ok = await postUserPgpToRemoteMailbox(route, raw, hopLine)
-		if (!ok) logger(Colors.yellow(`voice offer forward attempt ${attempt} failed ${keyId}`))
-	}
-	if (ok && callId && sessionId) {
-		const indexedRemote = await postVoiceOfferStoreToRemoteMailbox(
-			route,
-			callId,
-			sessionId,
-			expiresAt,
-			raw,
-			nodeWallet,
-		)
-		if (!indexedRemote) {
-			logger(Colors.yellow(`voice_offer_store remote best-effort failed callId=${callId}`))
-		}
-	}
-	logger(Colors.cyan(`voice offer forwarded ${keyId} ok=${ok}`))
-	return ok
-}
-
-const postUserPgpToRemoteMailbox = (ip: string, armor: string, hopLine: string): Promise<boolean> => {
-	return new Promise((resolve) => {
-		const body = JSON.stringify({ data: armor })
-		const raw = otherRequestForNet(body, ip, 80, [hopLine])
-		let settled = false
-		let writeFinished = false
-		let responseBuf = ''
-		const finish = (ok: boolean) => {
-			if (settled) return
-			settled = true
-			clearTimeout(timer)
-			resolve(ok)
-		}
-		/** HTTP 200 + empty body (Myself offer forward) or JSON without ok:false. */
-		const evaluateResponse = (): boolean => {
-			const statusMatch = /^HTTP\/1\.[01]\s+(\d{3})/i.exec(responseBuf)
-			if (!statusMatch) return false
-			const status = Number(statusMatch[1])
-			if (status !== 200) return false
-			const sep = responseBuf.indexOf('\r\n\r\n')
-			const bodyText = sep >= 0 ? responseBuf.slice(sep + 4).trim() : ''
-			if (!bodyText) return true
-			try {
-				const parsed = JSON.parse(bodyText) as { ok?: unknown }
-				if (parsed && typeof parsed === 'object' && 'ok' in parsed) {
-					return parsed.ok === true
-				}
-			} catch {
-				// Non-JSON 200 (nginx-mimic HTML) must not count as success.
-				return false
-			}
-			return true
-		}
-		const conn = createConnection(80, ip, () => {
-			conn.write(raw, (err) => {
-				if (settled || err) {
-					if (!settled) {
-						try { conn.destroy() } catch { /* ignore */ }
-						finish(false)
-					}
-					return
-				}
-				writeFinished = true
-				// Half-close after the body. destroy() is RST and drops bytes
-				// the callee has not read; the old 1.5s timer still returned true.
-				conn.end()
-			})
-		})
-		const timer = setTimeout(() => {
-			finish(false)
-			try { conn.destroy() } catch { /* ignore */ }
-		}, 6_000)
-		conn.on('data', (chunk: Buffer) => {
-			responseBuf += chunk.toString('utf8')
-		})
-		conn.once('end', () => {
-			if (!writeFinished) {
-				finish(false)
-				return
-			}
-			finish(evaluateResponse())
-		})
-		conn.once('close', () => { if (!settled) finish(false) })
-		conn.once('error', () => { if (!writeFinished) finish(false) })
-	})
 }
 
 const socketForward = (
@@ -2560,106 +2365,57 @@ export const forwardEncryptedSocket = async (
         // Healthy chat SSE can stay open for minutes (clients keep seeing epoch heartbeats).
         // Do NOT expire by connectedAt wall-clock — that stored armor and skipped live
         // forWard while the listing heartbeat pipe was still writable.
-        const evictListenClient = (c: livenessListeningPoolObj, reason: string) => {
-            logger(`liveness listener evicted: ${reason}`)
-            const pgpIds = [gpgPublicKeyID, c.pgpKeyId].filter(Boolean) as string[]
-            for (const id of pgpIds) {
-                livenessListeningPGPKeyIDPool.delete(id)
-                livenessListeningPGPKeyIDPool.delete(normalizeListenPgpKeyId(id))
-            }
-            livenessListeningPool.delete(c.wallet)
-            try {
-                const sock = c.res as Socket
-                if (!sock.destroyed) sock.destroy()
-            } catch {}
-        }
-
+        // Only `mailbox_listen` sessions (sealed stream) receive chat ciphertext.
+        // The legacy `mining` + listenKind 'chat' pool gets none: its frames are
+        // plain and would show the recipient key ID to the relaying entry.
         const mailboxClients = findMailboxClientsByPgpKeyId(gpgPublicKeyID)
             .filter((c) => !isLivenessListenSocketStale(c.res))
-        const legacyClient = mailboxClients.length
-            ? undefined
-            : findListenClientByPgpKeyId(gpgPublicKeyID)
-        const listenUnusable = mailboxClients.length === 0 &&
-            (!legacyClient || isLivenessListenSocketStale(legacyClient.res))
 
         // Always saveLocal first. When !skipPush, APNs/push fires immediately (SSE online or
         // offline); Beamio API delivers only if pushDevice is registered. skipPush (delivery
         // receipt): durable only — never native icon / APNs queue.
         await saveLocal(encryptedText, gpgPublicKeyID, {
-            alreadyOffline: listenUnusable,
+            alreadyOffline: mailboxClients.length === 0,
             skipPush,
         })
 
-        if (mailboxClients.length === 0 && !legacyClient) {
+        if (mailboxClients.length === 0) {
             logger('liveness listener offline')
             return
         }
-
-        if (mailboxClients.length) {
-            const waitRunningBlockProcess = async () => {
-                while (stratlivenessV2Process) {
-                    await new Promise(resolve => setTimeout(resolve, 1000))
-                }
-            }
-            await waitRunningBlockProcess()
-
-            const deliver = (client: livenessListeningPoolObj) => new Promise<boolean>((resolve) => {
-                forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, (ok) => {
-                    const poolKey = `${client.wallet}:${client.instanceId || ''}`
-                    if (!ok) {
-                        mailboxListeningPool.delete(poolKey)
-                        const clients = client.pgpKeyId
-                            ? mailboxListeningPGPKeyIDPool.get(normalizeListenPgpKeyId(client.pgpKeyId))
-                            : undefined
-                        clients?.delete(poolKey)
-                        if (clients && clients.size === 0) {
-                            mailboxListeningPGPKeyIDPool.delete(normalizeListenPgpKeyId(client.pgpKeyId!))
-                        }
-                        try {
-                            const sock = client.res as Socket
-                            if (!sock.destroyed) sock.destroy()
-                        } catch {}
-                    }
-                    resolve(ok)
-                })
-            })
-            const results = await Promise.all(mailboxClients.map(deliver))
-            logger(`Mailbox fan-out: ${results.filter(Boolean).length}/${results.length} sessions accepted`)
-            return
-        }
-
-        const client = legacyClient!
-        if (isLivenessListenSocketStale(client.res)) {
-            evictListenClient(client, 'has STALE client')
-            return
-        }
-
-        logger('liveness listener has active client')
-        livenessListeningPool.delete(client.wallet)
 
         const waitRunningBlockProcess = async () => {
             while (stratlivenessV2Process) {
                 await new Promise(resolve => setTimeout(resolve, 1000))
             }
         }
-
         await waitRunningBlockProcess()
 
-        // Best-effort live delivery; offline copy + push already handled in saveLocal.
-        forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, async (ok) => {
-            if (ok && client) {
-                logger('forWardPGPMessageToClient SUCCESS')
-                livenessListeningPool.set(client.wallet, client)
-                return
-            }
-            logger('forWardPGPMessageToClient FAIL — already saveLocal (+ push if !skipPush); evict')
-            evictListenClient(client, 'has dead forward')
-            // Do not notifyOfflineDeliveryImmediate again — saveLocal already pushed.
+        const deliver = (client: livenessListeningPoolObj) => new Promise<boolean>((resolve) => {
+            forWardPGPMessageToClient(encryptedText, gpgPublicKeyID, client, (ok) => {
+                const poolKey = `${client.wallet}:${client.instanceId || ''}`
+                if (!ok) {
+                    mailboxListeningPool.delete(poolKey)
+                    const clients = client.pgpKeyId
+                        ? mailboxListeningPGPKeyIDPool.get(normalizeListenPgpKeyId(client.pgpKeyId))
+                        : undefined
+                    clients?.delete(poolKey)
+                    if (clients && clients.size === 0) {
+                        mailboxListeningPGPKeyIDPool.delete(normalizeListenPgpKeyId(client.pgpKeyId!))
+                    }
+                    try {
+                        const sock = client.res as Socket
+                        if (!sock.destroyed) sock.destroy()
+                    } catch {}
+                }
+                resolve(ok)
+            })
         })
-
+        const results = await Promise.all(mailboxClients.map(deliver))
+        logger(`Mailbox fan-out: ${results.filter(Boolean).length}/${results.length} sessions accepted`)
         return
     }
-   
+
 
 	//logger(Colors.blue(`forwardEncryptedSocket ${gpgPublicKeyID}:${wallet} to node ${_route}`))
 
@@ -2873,11 +2629,11 @@ function findMailboxClientsByPgpKeyId(gpgPublicKeyID: string): livenessListening
 	)
 }
 
-const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>): boolean => {
+const writeLivenessSseJson = (res: Socket | TLSSocket, obj: Record<string, unknown>, streamKey?: Buffer): boolean => {
 	const s = res as Socket
 	if (isLivenessListenSocketStale(s)) return false
 	try {
-		return s.write(`data: ${JSON.stringify(obj)}\r\n\r\n`)
+		return s.write(mailboxSseFrame(obj, streamKey))
 	} catch {
 		return false
 	}
@@ -2892,27 +2648,19 @@ setUdpServerChatNotify((serverWallet, frame) => {
 	if (mailboxClients.length) {
 		let accepted = false
 		for (const client of mailboxClients) {
-			accepted = writeLivenessSseJson(client.res, frame) || accepted
+			accepted = writeLivenessSseJson(client.res, frame, client.streamKey) || accepted
 		}
 		return accepted
 	}
-	let client = livenessListeningPool.get(serverWallet)
-	if (!client) {
-		try {
-			client = livenessListeningPool.get(ethers.getAddress(serverWallet))
-		} catch {
-			client = undefined
-		}
-	}
-	if (!client || client.kind === 'mining') return false
-	if (isLivenessListenSocketStale(client.res)) return false
-	return writeLivenessSseJson(client.res, frame)
+	// No legacy chat pool: its frames are not sealed.
+	return false
 })
 
 /** Write offline PGP frames; returns lines not confirmed written (caller must rollback). */
 async function writeLinesWithBackpressure(
     res: TLSSocket|Socket,
-    lines: string[]
+    lines: string[],
+    streamKey?: Buffer,
 ): Promise<string[]> {
     const s = res as Socket
     for (let i = 0; i < lines.length; i++) {
@@ -2922,9 +2670,8 @@ async function writeLinesWithBackpressure(
         const line = lines[i]
         // SSE `data:` prefix — matches handshake/keepalive; raw JSON is dropped by
         // text/event-stream proxies so offline flush never reaches the client.
-        const data = `data: ${JSON.stringify({ data: line })}\r\n\r\n`
+        const data = mailboxSseFrame({ data: line }, streamKey)
         const ok = s.write(data)
-        logger(`writeLinesWithBackpressure try send ${line.slice(0, 48)}`)
         if (!ok) {
             logger(`writeLinesWithBackpressure in 背压：等待缓冲区排空`)
             try {
@@ -3026,29 +2773,12 @@ const addIpaddressToLivenessListeningPool = async (ipaddress: string, wallet: st
     //  first data
 	await testMinerCOnnecting (s, responseData, wallet, ipaddress)
 
-    logger(`======================================= addIpaddressToLivenessListeningPool User ${wallet} has PGP KeyID = ${keyID} `)
-    if (keyID) {
-        logger(`======================================= try to get ${keyID}:${wallet}  offline datas`)
-        
-        const data = tryGetLocal(keyID)
-        logger(`======================================= User ${keyID}:${wallet} has offline datas = ${data.length}`)
-    
-        if (data.length) {
-            const unsent = await writeLinesWithBackpressure(res, data)
-            // Keep the claimed copy: a socket write is not delivery. Each message
-            // leaves storage only on its gossip_delivery_ack; anything not ACKed
-            // is flushed again on the next listen (clients dedupe by sendId).
-            if (unsent.length) {
-                logger(`======================================= User ${keyID} offline flush incomplete unsent=${unsent.length} — kept for next listen`)
-            }
-        }
-        logger(`======================================= User ${keyID} success all offline data!`)
-        if ((res as Socket).destroyed || (res as any).writableEnded) return 
-        logger(`Client ${wallet} has PGPKey ID ${keyID} for this Node add to online Pool!`)
+    // Chat ciphertext (offline or live) goes only to `mailbox_listen` sessions,
+    // whose frames are sealed. This legacy pool keeps presence and mining only.
+    if (keyID && !((res as Socket).destroyed || (res as any).writableEnded)) {
         livenessListeningPGPKeyIDPool.set(keyID, obj)
-
     }
-   
+
     livenessListeningPool.set (wallet, obj)
 
     
@@ -3069,8 +2799,16 @@ const addIpaddressToMailboxListeningPool = async (
 	nodeWallet: ethers.Wallet,
 	res: TLSSocket|Socket,
 	requestedInstanceId?: string,
+	streamKeyRaw?: unknown,
 ) => {
 	const s = res as Socket
+	// Only sealed listens: without a stream key every frame would show the
+	// recipient key ID to the relaying entry. Older clients are refused.
+	const streamKey = parseMailboxStreamKey(streamKeyRaw)
+	if (!streamKey) {
+		logger(Colors.yellow(`mailbox_listen refused: no stream key ${ipaddress}`))
+		return distorySocket(s)
+	}
 	try { s.setTimeout(0) } catch { /* ignore */ }
 	const instanceId = String(requestedInstanceId || uuidV4(ethers.randomBytes(16)))
 	const poolKey = `${wallet}:${instanceId}`
@@ -3084,6 +2822,7 @@ const addIpaddressToMailboxListeningPool = async (
 		connectedAt: Date.now(),
 		pgpKeyId: keyID || undefined,
 		kind: 'mailbox',
+		streamKey,
 	}
 
 	const returnData = {
@@ -3102,7 +2841,7 @@ const addIpaddressToMailboxListeningPool = async (
 		`Connection: keep-alive\r\n` +
 		`X-Accel-Buffering: no\r\n` +
 		`Access-Control-Allow-Origin: *\r\n\r\n`
-	const responseData = sseHeaders + `data: ${JSON.stringify(returnData)}\r\n\r\n`
+	const responseData = sseHeaders + mailboxSseFrame(returnData, streamKey)
 
 	const remove = (reason: string) => {
 		logger(Colors.grey(`Mailbox session ${poolKey} ${reason}`))
@@ -3125,7 +2864,7 @@ const addIpaddressToMailboxListeningPool = async (
 		const data = tryGetLocal(keyID)
 		if (data.length) {
 			// Keep the claimed copy until each message is ACKed (see tryGetLocal).
-			await writeLinesWithBackpressure(res, data)
+			await writeLinesWithBackpressure(res, data, streamKey)
 		}
 	}
 	if (s.destroyed || (s as any).writableEnded) return
@@ -3145,7 +2884,7 @@ const addIpaddressToMailboxListeningPool = async (
 				remove('keepalive found stale')
 				return
 			}
-			if (!writeLivenessSseJson(res, { type: 'mailbox_keepalive', ts: Date.now() })) {
+			if (!writeLivenessSseJson(res, { type: 'mailbox_keepalive', ts: Date.now() }, streamKey)) {
 				remove('keepalive write failed')
 				return
 			}

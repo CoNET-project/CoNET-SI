@@ -267,4 +267,6 @@ interface livenessListeningPoolObj {
 	kind?: 'chat' | 'mailbox' | 'mining'
 	/** Mailbox reliability keepalive timer; cleared when the SSE closes. */
 	keepaliveTimer?: NodeJS.Timeout
+	/** `mailbox_listen` stream key: every frame on this SSE is sealed with it. */
+	streamKey?: Buffer
 }

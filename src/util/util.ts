@@ -25,6 +25,7 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs'
 import { webcrypto as crypto } from 'crypto'
+import { mailboxSseFrame } from './mailboxStream'
 
 
 export const CoNET_CancunRPC = 'https://cancun-rpc.conet.network'
@@ -851,6 +852,13 @@ export const saveLocal = (pgpMessage: string, clentKeyID: string, opts?: SaveLoc
         }
     }
 
+    // A sender that retries after an unanswered POST may deliver the same
+    // ciphertext twice: keep one copy and push once.
+    if (list.includes(pgpMessage)) {
+        logger(`${clentKeyID} saveLocal duplicate ciphertext — already stored, no second push`)
+        return hashPgpArmor(pgpMessage)
+    }
+
     // 追加 pgpMessage
     list.push(pgpMessage)
 
@@ -938,7 +946,9 @@ export const forWardPGPMessageToClient = (
 ) => {
 	// Must be SSE `data:` frames (same as handshake/keepalive). Raw JSON without
 	// the prefix is dropped by nginx/event-stream proxies → client never decrypts.
-	const data = `data: ${JSON.stringify({ data: pgpMessage })}\r\n\r\n`
+	// Sealed with the session's stream key, so the relaying entry cannot read
+	// the recipient key ID from the armor.
+	const data = mailboxSseFrame({ data: pgpMessage }, clent.streamKey)
 	const res = clent.res as Socket
 
 	if (isLivenessListenSocketStale(res)) {
