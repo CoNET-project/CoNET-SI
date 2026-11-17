@@ -10,7 +10,7 @@ import {abi as GuardianNodesV2ABI} from './GuardianNodesV2.json'
 import openPGPContractAbi from './GuardianNodesInfoV3.json'
 import type {RequestOptions} from 'http'
 import {request} from 'http'
-import P from 'phin'
+import { postBeamioApi } from './beamioApi'
 import { mapLimit } from 'async'
 import {readKey, createMessage, enums, encrypt} from 'openpgp'
 import { getServerIPV4Address } from './localNodeCommand'
@@ -563,7 +563,6 @@ export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
 				logger(Colors.yellow('notifyOfflineChat skip: nodePrivatekey not initialized'))
 				return
 			}
-			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
 			const eoa = await getClientWalletAddress(pgpKeyId)
 			if (!eoa) {
 				logger(Colors.yellow(`notifyOfflineChat skip: no EOA for pgpKeyId=${pgpKeyId}`))
@@ -578,14 +577,7 @@ export const notifyOfflineChatPush = (pgpKeyId: string, count = 1): void => {
 			].join('\n')
 			const wallet = new ethers.Wallet(nodePrivatekey)
 			const signature = await wallet.signMessage(message)
-			const res = await P({
-				url: `${apiBase}/api/notifyOfflineChat`,
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				data: JSON.stringify({ pgpKeyId, eoa, timestamp, signature, count: safeCount }),
-				parse: 'json',
-				timeout: 8_000,
-			})
+			const res = await postBeamioApi('/api/notifyOfflineChat', { pgpKeyId, eoa, timestamp, signature, count: safeCount }, 8_000)
 			const status = res.statusCode || 0
 			if (status < 200 || status >= 300) {
 				logger(Colors.yellow(`notifyOfflineChat HTTP ${status} for ${eoa}`))
@@ -620,15 +612,7 @@ export const notifyVoiceCallPush = (payload: {
 				`nodeWallet:${nodeWallet.address.toLowerCase()}`,
 			].join('\n')
 			const signature = await nodeWallet.signMessage(message)
-			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
-			const res = await P({
-				url: `${apiBase}/api/voiceCallPush`,
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				data: JSON.stringify({ ...payload, nodeWallet: nodeWallet.address, signature }),
-				parse: 'json',
-				timeout: 8_000,
-			})
+			const res = await postBeamioApi('/api/voiceCallPush', { ...payload, nodeWallet: nodeWallet.address, signature }, 8_000)
 			if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
 				logger(Colors.yellow(`voiceCallPush HTTP ${res.statusCode} callId=${payload.callId}`))
 			} else {
@@ -658,15 +642,7 @@ export const queryNativeWakeable = async (eoa: string): Promise<boolean | null> 
 			`timestamp:${timestamp}`,
 		].join('\n')
 		const signature = await nodeWallet.signMessage(message)
-		const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
-		const res = await P({
-			url: `${apiBase}/api/nativeWakeable`,
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			data: JSON.stringify({ eoa: eoaNorm, timestamp, signature }),
-			parse: 'json',
-			timeout: 8_000,
-		})
+		const res = await postBeamioApi('/api/nativeWakeable', { eoa: eoaNorm, timestamp, signature }, 8_000)
 		if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
 			logger(Colors.yellow(`nativeWakeable HTTP ${res.statusCode} eoa=${eoaNorm}`))
 			return null
@@ -699,24 +675,16 @@ export const notifyPushDeviceRegistration = (payload: {
 }): void => {
 	void (async () => {
 		try {
-			const apiBase = (process.env.BEAMIO_API_BASE || 'https://beamio.app').replace(/\/$/, '')
-			const res = await P({
-				url: `${apiBase}/api/registerPushDevice`,
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				data: JSON.stringify({
-					eoa: payload.eoa,
-					deviceToken: payload.deviceToken,
-					platform: payload.platform,
-					bundleId: payload.bundleId,
-					pgpKeyId: payload.pgpKeyId,
-					timestamp: payload.timestamp,
-					signature: payload.signature,
-					capabilities: payload.capabilities,
-				}),
-				parse: 'json',
-				timeout: 8_000,
-			})
+			const res = await postBeamioApi('/api/registerPushDevice', {
+				eoa: payload.eoa,
+				deviceToken: payload.deviceToken,
+				platform: payload.platform,
+				bundleId: payload.bundleId,
+				pgpKeyId: payload.pgpKeyId,
+				timestamp: payload.timestamp,
+				signature: payload.signature,
+				capabilities: payload.capabilities,
+			}, 8_000)
 			if ((res.statusCode || 0) < 200 || (res.statusCode || 0) >= 300) {
 				logger(Colors.yellow(`push device registration HTTP ${res.statusCode} eoa=${payload.eoa}`))
 			} else {

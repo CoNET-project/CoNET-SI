@@ -1,7 +1,7 @@
 import type {Socket} from 'net'
 import { logger } from './logger'
 
-/** Browser clients (beamio.app / SilentPassUI) need ACAO on error paths too — otherwise Chrome reports a CORS error instead of HTTP 404/402. */
+/** Browser clients (beamio.ca / SilentPassUI) need ACAO on error paths too — otherwise Chrome reports a CORS error instead of HTTP 404/402. */
 const CORS_HEADERS =
 	'Access-Control-Allow-Origin: *\r\n' +
 	'Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS\r\n' +
