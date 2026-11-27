@@ -20,7 +20,9 @@
 	"homepage": "https://conet.network",
 	"scripts": {
 		"build": "tsc --project tsconfig.json && npm run copy",
-		"copy": "copyfiles -f src/endpoint/index.html dist/endpoint"
+		"copy": "copyfiles -f src/endpoint/index.html dist/endpoint",
+		"check:no-key-logging": "node scripts/check-no-key-logging.mjs",
+		"test:no-key-logging": "node --test scripts/test-no-key-logging.cjs"
 	},
 	"bin": {
 		"conet-mvp-si": "dist/cli.js"

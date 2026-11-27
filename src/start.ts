@@ -8,6 +8,7 @@ import Colors, { inverse } from 'colors/safe'
 import {exec} from 'node:child_process'
 import {inspect} from 'node:util'
 import {startExpressServer, stopServer} from './endpoint/sslManager'
+import { setupSummary } from './util/setupSummary'
 
 const sslExpiration = 1000 * 60 * 60 * 24 * 30
 
@@ -77,7 +78,7 @@ if (Cluster.isPrimary) {
 
 		}
 		logger(Colors.magenta(`Didn't init SSL Certificate! Try `))
-		logger(inspect(initData, false, 3, true))
+		logger(inspect(setupSummary(initData), false, 3, true))
 		startExpressServer()
 		await _sslCertificate(publicKeyID)
 		await testCertificateFiles()

@@ -15,6 +15,7 @@ import {createServer as createServerSSL, TLSSocket} from 'tls'
 import  { distorySocket } from '../util/htmlResponse'
 import {Wallet} from 'ethers'
 import {initPGPRouteManager} from '../util/util'
+import { setupSummary } from '../util/setupSummary'
 import {forwardToSolanaRpc, forwardToSilentpass, forwardTojup_ag, forwardToHome, forwardToBaseRpc } from './solanaRPC'
 //@ts-ignore
 import hexdump from 'hexdump-nodejs'
@@ -114,7 +115,7 @@ export const getDataPOST = async (socket: Socket, conet_si_server: conet_si_serv
     }
 
     if (!conet_si_server.initData?.pgpKeyObj?.privateKeyObj) {
-        logger(Colors.red(`this.initData?.pgpKeyObj?.privateKeyObj NULL ERROR \n`), inspect(conet_si_server.initData, false, 3, true), '\n');
+        logger(Colors.red(`getDataPOST: route PGP key not loaded yet; dropping request`), setupSummary(conet_si_server.initData));
         return distorySocket(socket)
     }
 
@@ -319,7 +320,7 @@ class conet_si_server {
 		}
 
 		if ( !this.initData?.keychain || this.initData?.passwd === undefined) {
-            logger ('initData?.keychain = ',this.initData?.keychain,'initData.passwd = ', this.initData?.passwd)
+            logger (Colors.red('node setup incomplete:'), setupSummary(this.initData))
 			throw new Error (`Error: have no setup data!\nPlease restart CoNET-SI with node dist/cli start!`)
 		}
 
@@ -350,8 +351,6 @@ class conet_si_server {
 		const wallet: Wallet = this.initData.keyObj
 		this.nodeWallet = wallet
 		logger(Colors.green(`Wallet address: ${wallet.address}`))
-
-        console.log(JSON.stringify(this.initData.pgpKey.privateKey))
 
 		const ssl = await testCertificateFiles ()
 		if (ssl) {

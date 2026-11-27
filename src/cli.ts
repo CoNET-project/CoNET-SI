@@ -176,7 +176,7 @@ if ( Cluster.isPrimary ) {
 			
 			const keyObj = await loadWalletAddress ( keychain, password )
 			const pgpKey = await generatePgpKey (keyObj.address, password)
-			logger (inspect (keychain, false, 3, true ))
+			logger (`wallet created: ${ keyObj.address }`)
 			setupInfo = {
 				keychain: keychain,
 				ipV4: GlobalIpAddress?.length ? GlobalIpAddress[0]:'',

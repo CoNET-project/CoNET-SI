@@ -214,14 +214,16 @@ export const regiestPrivateKey = ( privateKey: string, password: string ) => {
 
 	return new Promise (resolve => {
 		if ( !privateKey || privateKey.length < 50 ) {
-			logger (`regiestPrivateKey Error! !privateKey[${privateKey}] || [${ privateKey.length }]privateKey.length < 50 `)
+			// Never print the value: it is (part of) the route PGP private key.
+			logger (`regiestPrivateKey Error! route key armor missing or too short (length ${ privateKey?.length ?? 0 } < 50)`)
 			return resolve (false)
 		}
 		const cmd = `echo -n "${ privateKey }" | gpg ${ password ? '--pinentry-mode loopback --batch --passphrase ' + '"' + password + '"' : ''} --import`
 		
 		return  exec ( cmd, ( err, data, data1: string ) => {
 			if ( err  ) {
-				logger (Colors.red(`regiestPrivateKey exec command ERROR!\n`), Colors.grey (cmd))
+				// cmd and err.message both contain the private key and its passphrase: log the exit code only.
+				logger (Colors.red(`regiestPrivateKey gpg --import failed (exit code ${ (err as any).code ?? '?' })`))
 				return resolve (false)
 			}
 			logger (Colors.green(`regiestPrivateKey SUCCESS`))
